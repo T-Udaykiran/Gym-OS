@@ -182,9 +182,10 @@ function initSSEConnection() {
             if (currentTab === 'attendance') fetchAttendance();
             if (currentTab === 'reports') populateReportsTab();
         } else if (data.type === 'MEMBER_REGISTERED' || data.type === 'MEMBER_CREATED') {
-            showToast(`Member created: ${data.payload.name}!`, 'info');
+            showToast(`New registration pending approval: ${data.payload.name}!`, 'info');
             fetchDashboardStats();
             if (currentTab === 'members') fetchMembers();
+            if (currentTab === 'pending-approvals') fetchPendingApprovals();
         } else if (data.type === 'PAYMENT_RECORDED' || data.type === 'PAYMENT_REQUESTED' || data.type === 'PAYMENT_REJECTED') {
             if (data.type === 'PAYMENT_REQUESTED') {
                 showToast(`Payment approval requested by ${data.payload.name}!`, 'info');
@@ -295,6 +296,7 @@ function showTab(tabName) {
     if (tabName === 'settings') fetchGymSettings();
     if (tabName === 'reports') populateReportsTab();
     if (tabName === 'reminders') populateRemindersTab();
+    if (tabName === 'pending-approvals') fetchPendingApprovals();
 }
 
 function triggerGlobalSearch(query) {
@@ -321,7 +323,23 @@ async function fetchDashboardStats() {
         document.getElementById('statPendingAmountVal').innerText = `${formatINRCurrency(data.stats.pending_amount)} total`;
         document.getElementById('statExpiredCount').innerText = data.stats.expiring_members;
 
-        // Update nav badge count for pending approvals
+        // Update Pending Approvals KPI Card
+        const pendingCount = data.stats.pending_registrations_count || 0;
+        document.getElementById('statPendingApprovalsCount').innerText = pendingCount;
+        document.getElementById('statPendingApprovalsSub').innerText = `${pendingCount} Member${pendingCount === 1 ? '' : 's'} Waiting`;
+
+        // Update Sidebar Nav Badge for Pending Approvals
+        const approvalsBadgeEl = document.getElementById('pendingApprovalsBadge');
+        if (approvalsBadgeEl) {
+            if (pendingCount > 0) {
+                approvalsBadgeEl.innerText = pendingCount;
+                approvalsBadgeEl.style.display = 'inline-block';
+            } else {
+                approvalsBadgeEl.style.display = 'none';
+            }
+        }
+
+        // Update nav badge count for pending payments
         const badgeEl = document.getElementById('paymentsBadge');
         if (badgeEl) {
             if (data.stats.pending_approvals > 0) {
@@ -2056,6 +2074,156 @@ async function adminManualCheckOut(id) {
         }
     } catch (err) {
         console.error('Manual check-out error', err);
+        showToast('Network error, please try again.', 'error');
+    }
+}
+
+// ================= PENDING APPROVALS WORKFLOW CLIENT CODE =================
+
+let allPendingApprovals = [];
+
+async function fetchPendingApprovals() {
+    const container = document.getElementById('pendingApprovalsContainer');
+    const emptyState = document.getElementById('pendingApprovalsEmptyState');
+    
+    try {
+        const res = await fetch('/api/admin/pending-approvals');
+        allPendingApprovals = await res.json();
+        
+        renderPendingApprovals(allPendingApprovals);
+    } catch (err) {
+        console.error('Fetch pending approvals error:', err);
+        showToast('Failed to fetch pending approvals.', 'error');
+    }
+}
+
+function renderPendingApprovals(list) {
+    const container = document.getElementById('pendingApprovalsContainer');
+    const emptyState = document.getElementById('pendingApprovalsEmptyState');
+    const subheading = document.getElementById('pendingApprovalsSubheading');
+    
+    container.innerHTML = '';
+    
+    subheading.innerText = `${list.length} registration${list.length === 1 ? '' : 's'} waiting for owner review`;
+    
+    if (list.length === 0) {
+        container.style.display = 'none';
+        emptyState.style.display = 'flex';
+        return;
+    }
+    
+    container.style.display = 'grid';
+    emptyState.style.display = 'none';
+    
+    list.forEach(m => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        card.style.justifyContent = 'space-between';
+        card.style.padding = '24px';
+        card.style.borderRadius = '16px';
+        card.style.border = '1px solid var(--border-color)';
+        card.style.backgroundColor = 'var(--bg-card)';
+        card.style.boxShadow = 'var(--shadow-premium)';
+        
+        const initials = ((m.first_name ? m.first_name[0] : '') + (m.last_name ? m.last_name[0] : '')).toUpperCase() || 'M';
+        const avatarHtml = m.profile_photo 
+            ? `<img src="${m.profile_photo}" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover;" />`
+            : `<div style="width: 52px; height: 52px; border-radius: 50%; background-color: var(--accent-light); color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px;">${initials}</div>`;
+            
+        const regDate = m.joined_at ? new Date(m.joined_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+        
+        card.innerHTML = `
+            <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px;">
+                ${avatarHtml}
+                <div style="flex: 1;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <h4 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">${m.first_name} ${m.last_name}</h4>
+                        <span class="badge" style="background-color: var(--danger-light); color: var(--danger-dark); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;">Pending</span>
+                    </div>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin: 6px 0 0 0; display: flex; align-items: center; gap: 6px;">
+                        <svg style="width: 14px; height: 14px; transform: translateY(2px);" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21.8 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        <span style="margin-left: 2px;">${m.email}</span>
+                    </p>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin: 4px 0 0 0; display: flex; align-items: center; gap: 6px;">
+                        <svg style="width: 14px; height: 14px; transform: translateY(2px);" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                        </svg>
+                        <span style="margin-left: 2px;">${m.phone}</span>
+                    </p>
+                    <p style="font-size: 12px; color: var(--text-tertiary); margin: 8px 0 0 0;">Registered: ${regDate}</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <button class="btn btn-primary" style="flex: 1; padding: 8px 16px; font-size: 13px; font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 6px; background-color: var(--success); border-color: var(--success); color: white;" onclick="approvePendingMember(${m.id})">
+                    <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span>Approve</span>
+                </button>
+                <button class="btn btn-secondary" style="flex: 1; padding: 8px 16px; font-size: 13px; font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 6px; border-color: var(--danger); color: var(--danger); background: transparent;" onclick="rejectPendingMember(${m.id})">
+                    <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    <span>Reject</span>
+                </button>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function filterPendingApprovals() {
+    const q = document.getElementById('pendingSearch').value.toLowerCase().trim();
+    if (!q) {
+        renderPendingApprovals(allPendingApprovals);
+        return;
+    }
+    
+    const filtered = allPendingApprovals.filter(m => {
+        const name = `${m.first_name} ${m.last_name}`.toLowerCase();
+        return name.includes(q) || m.email.toLowerCase().includes(q) || m.phone.includes(q);
+    });
+    
+    renderPendingApprovals(filtered);
+}
+
+async function approvePendingMember(id) {
+    try {
+        const res = await fetch(`/api/admin/pending-approvals/${id}/approve`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Member approved successfully!', 'success');
+            fetchPendingApprovals();
+            fetchDashboardStats();
+        } else {
+            showToast(data.error || 'Failed to approve member.', 'error');
+        }
+    } catch (err) {
+        console.error('Approve member error:', err);
+        showToast('Network error, please try again.', 'error');
+    }
+}
+
+async function rejectPendingMember(id) {
+    const confirmed = confirm('Reject Request?\n\nAre you sure you want to reject this member request?');
+    if (!confirmed) return;
+    
+    try {
+        const res = await fetch(`/api/admin/pending-approvals/${id}/reject`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Member registration rejected.', 'info');
+            fetchPendingApprovals();
+            fetchDashboardStats();
+        } else {
+            showToast(data.error || 'Failed to reject member.', 'error');
+        }
+    } catch (err) {
+        console.error('Reject member error:', err);
         showToast('Network error, please try again.', 'error');
     }
 }

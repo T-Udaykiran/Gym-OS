@@ -111,6 +111,16 @@
                             <span id="paymentsBadge" class="badge-pending-approval" style="display: none; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; background-color: var(--danger-light); color: var(--danger-dark);">0</span>
                         </span>
                     </a></li>
+                <li class="nav-item" style="position: relative;"><a class="nav-link" data-tab="pending-approvals">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                            <span>Pending Approvals</span>
+                            <span id="pendingApprovalsBadge" class="badge-pending-approval" style="display: none; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; background-color: var(--danger-light); color: var(--danger-dark);">0</span>
+                        </span>
+                    </a></li>
                 <li class="nav-item"><a class="nav-link" data-tab="plans">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -336,6 +346,22 @@
                         <div class="kpi-value" id="statExpiredCount">9</div>
                         <span class="kpi-trend-growth growth-neutral" style="color: var(--warning);">
                             <span>Next 7 days</span>
+                        </span>
+                    </div>
+
+                    <!-- Pending Approvals -->
+                    <div class="kpi-card" style="cursor: pointer;" onclick="showTab('pending-approvals')">
+                        <div class="kpi-h-row">
+                            <span class="kpi-label">Pending Approvals</span>
+                            <div class="kpi-badge-icon" style="background-color: var(--danger-light); color: var(--danger-dark);">
+                                <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-value" id="statPendingApprovalsCount">0</div>
+                        <span class="kpi-trend-growth" style="color: var(--danger-dark); display: inline-flex; align-items: center; gap: 4px;">
+                            <span id="statPendingApprovalsSub">0 Members Waiting</span>
                         </span>
                     </div>
                 </div>
@@ -816,6 +842,42 @@
                         <div class="pagination-info" id="paymentPaginationInfo">Showing 0 to 0 of 0 entries</div>
                         <div class="pagination-controls" id="paymentPaginationControls"></div>
                     </div>
+                </div>
+            </section>
+
+            <!-- ================= TAB: PENDING APPROVALS ================= -->
+            <section id="pending-approvalsTab" class="tab-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div>
+                        <h3 style="font-size: 18px; font-weight:700; margin: 0;">Pending Member Approvals</h3>
+                        <p style="font-size: 13px; color: var(--text-tertiary); margin-top: 4px; margin-bottom: 0;" id="pendingApprovalsSubheading">0 registrations waiting for owner review</p>
+                    </div>
+                </div>
+
+                <div class="premium-filter-card card" style="margin-bottom: 24px; padding: 18px 24px;">
+                    <div style="display: flex; gap: 16px; align-items: center; width: 100%; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 250px; position: relative;">
+                            <input type="text" id="pendingSearch" class="custom-input" placeholder="Search by name, email, or phone..." style="width: 100%; height: 42px; padding-left: 36px; background-color: var(--bg-body); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px;" oninput="filterPendingApprovals()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="var(--text-tertiary)" stroke-width="2" style="position: absolute; left: 12px; top: 13px;">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pendingApprovalsContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+                    <!-- Dynamically populated cards -->
+                </div>
+                
+                <div id="pendingApprovalsEmptyState" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; text-align: center;">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background-color: var(--accent-light); color: var(--accent); display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h4 style="font-size: 16px; font-weight: 700; margin: 0; color: var(--text-primary);">All Caught Up!</h4>
+                    <p style="font-size: 13.5px; color: var(--text-tertiary); margin-top: 6px; max-width: 320px;">There are no pending member registrations waiting for approval.</p>
                 </div>
             </section>
 

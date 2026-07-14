@@ -75,7 +75,7 @@ def init_db():
         last_name TEXT NOT NULL,
         phone TEXT NOT NULL,
         emergency_contact TEXT,
-        status TEXT CHECK(status IN ('active', 'suspended', 'expired')) DEFAULT 'active',
+        status TEXT CHECK(status IN ('active', 'suspended', 'expired', 'pending', 'rejected')) DEFAULT 'pending',
         profile_photo TEXT,
         joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -242,128 +242,6 @@ def seed_data(conn):
     cursor.execute("INSERT INTO settings (key, value) VALUES ('gym_address', '123 Gym Street, Wellness City')")
     cursor.execute("INSERT INTO settings (key, value) VALUES ('qr_token', 'gymos-token-xyz-123')")
     
-    # 4. Add Default Plans
-    plans_data = [
-        ("Monthly Plan", 29.0, 1, "Full weights access, 1 fitness evaluation"),
-        ("Quarterly Plan", 79.0, 3, "Full weights access, 2 personal training sessions, locker access"),
-        ("Half-Yearly Plan", 149.0, 6, "Full weights + pool access, 4 personal training sessions, locker"),
-        ("Yearly Plan", 279.0, 12, "All-access premium pass, 10 personal training sessions, private locker, gym shirt")
-    ]
-    cursor.executemany(
-        "INSERT INTO plans (name, price, duration_months, benefits) VALUES (?, ?, ?, ?)",
-        plans_data
-    )
-    
-    # Let's retrieve plan IDs
-    cursor.execute("SELECT id, name, price, duration_months FROM plans")
-    plans = {row['name']: (row['id'], row['price'], row['duration_months']) for row in cursor.fetchall()}
-    
-    # 5. Add Members & Users
-    members_data = [
-        ("john@gmail.com", "John", "Doe", "+15550001", "+15550002", "active", "Monthly Plan", -10), # joined 10 days ago
-        ("jane@gmail.com", "Jane", "Smith", "+15550003", "+15550004", "active", "Quarterly Plan", -45), # joined 45 days ago
-        ("bob@gym.com", "Bob", "Johnson", "+15550005", "+15550006", "active", "Yearly Plan", -5),    # joined 5 days ago
-        ("sarah@outlook.com", "Sarah", "Connor", "+15550007", "+15550008", "suspended", "Monthly Plan", -60), # suspended, joined 2 months ago
-        ("david@gmail.com", "David", "Miller", "+15550009", "+15550010", "expired", "Monthly Plan", -35) # expired, joined 35 days ago
-    ]
-    
-    for email, fn, ln, phone, emergency, status, plan_name, start_offset in members_data:
-        # Create User
-        mbr_pw = hash_password("password123")
-        cursor.execute(
-            "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
-            (email, mbr_pw, "member")
-        )
-        u_id = cursor.lastrowid
-        
-        # Create Member
-        joined_date = (datetime.now() + timedelta(days=start_offset)).strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (u_id, fn, ln, phone, emergency, status, joined_date)
-        )
-        member_id = cursor.lastrowid
-        
-        # Assign Membership
-        plan_id, price, duration = plans[plan_name]
-        start_date = datetime.now() + timedelta(days=start_offset)
-        # If David, it starts 35 days ago and is only 1 month (30 days), so it expired 5 days ago
-        # If Sarah, it starts 60 days ago and is 1 month, so expired but status is suspended
-        # If John, starts 10 days ago, ends 20 days in the future
-        # If Jane, starts 45 days ago, ends 45 days in the future (Quarterly)
-        # If Bob, starts 5 days ago, ends 360 days in the future (Yearly)
-        end_date = start_date + timedelta(days=duration * 30)
-        
-        start_str = start_date.strftime("%Y-%m-%d")
-        end_str = end_date.strftime("%Y-%m-%d")
-        
-        # Override membership statuses appropriately
-        m_status = status
-        # If David: membership expired
-        if email == "david@gmail.com":
-            m_status = "expired"
-        
-        cursor.execute(
-            "INSERT INTO memberships (member_id, plan_id, status, start_date, end_date, price_paid, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (member_id, plan_id, m_status, start_str, end_str, price, joined_date)
-        )
-        membership_id = cursor.lastrowid
-        
-        # Make a Payment
-        pay_status = "paid"
-        if email == "david@gmail.com":
-            # Let's say David has a paid historical membership but has a pending/overdue renew payment
-            pay_status = "overdue"
-            
-        pay_date = joined_date if pay_status == "paid" else None
-        due_date = end_date.strftime("%Y-%m-%d") if pay_status == "overdue" else None
-        rnd_receipt = f"RC-{int(datetime.now().timestamp())}-{member_id}"
-        
-        cursor.execute(
-            "INSERT INTO payments (membership_id, member_id, amount, status, payment_date, due_date, receipt_number, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (membership_id, member_id, price, pay_status, pay_date, due_date, rnd_receipt, joined_date)
-        )
-        
-        # Seed Checkins
-        if status == "active":
-            # Active members have some check-in history
-            # e.g., John checked in 3 days ago, 2 days ago, and 1 day ago (streak of 3!)
-            for days_ago in [3, 2, 1]:
-                check_time = (datetime.now() - timedelta(days=days_ago, hours=4)).strftime("%Y-%m-%d %H:%M:%S")
-                cursor.execute(
-                    "INSERT INTO attendance (member_id, check_in_time, status) VALUES (?, ?, ?)",
-                    (member_id, check_time, "success")
-                )
-            
-            # Let's add today's check-in for John (so check-in dashboard count is active!)
-            # But let Bob not checked-in today, and Jane checked-in today.
-            if fn == "John":
-                check_time = (datetime.now() - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
-                cursor.execute(
-                    "INSERT INTO attendance (member_id, check_in_time, status) VALUES (?, ?, ?)",
-                    (member_id, check_time, "success")
-                )
-            if fn == "Jane":
-                # Checked in today 1 hour ago
-                check_time = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-                cursor.execute(
-                    "INSERT INTO attendance (member_id, check_in_time, status) VALUES (?, ?, ?)",
-                    (member_id, check_time, "success")
-                )
-                
-        # Welcome notifications
-        cursor.execute(
-            "INSERT INTO notifications (user_id, type, message, read_status) VALUES (?, 'welcome', ?, 0)",
-            (u_id, f"Welcome to GymOS, {fn}! Your membership is active.")
-        )
-        
-        # Expiry notifications
-        if email == "david@gmail.com":
-            cursor.execute(
-                "INSERT INTO notifications (user_id, type, message, read_status) VALUES (?, 'expiry', ?, 0)",
-                (u_id, "Your Monthly Plan membership contains expired parameters. Please renew.")
-            )
-            
     conn.commit()
     print("Database seeding completed.")
 

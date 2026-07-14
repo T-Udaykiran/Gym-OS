@@ -1,2 +1,2 @@
-# Gym-OS
-
+# GymOS
+GymOS by Vikartha

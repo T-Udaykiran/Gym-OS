@@ -156,11 +156,13 @@
                             </div>
                         </div>
 
-                        <h2 style="font-size: 22px; font-weight: 800; color: #fff; text-align: center; margin: 0;">Verification Pending</h2>
-                        <p style="font-size: 13.5px; color: rgba(255,255,255,0.5); text-align: center; margin-top: 10px; line-height: 1.5; padding: 0 10px;">Your verification is being reviewed. Please contact the gym owner for approval or wait for confirmation.</p>
+                        <h2 id="pendingTitle" style="font-size: 22px; font-weight: 800; color: #fff; text-align: center; margin: 0;">Verification Pending</h2>
+                        <p id="pendingText" style="font-size: 13.5px; color: rgba(255,255,255,0.5); text-align: center; margin-top: 10px; line-height: 1.5; padding: 0 10px;">Your registration has been submitted. Please wait until the gym owner approves your request.</p>
                     </div>
 
-                    <button class="auth-capsule-btn secondary-btn" style="border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff;" onclick="simulateOwnerVerificationGlow()">Contact Owner</button>
+                    <div id="pendingActionArea" style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
+                        <button id="pendingBtn" class="auth-capsule-btn secondary-btn" style="border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff;" onclick="simulateOwnerVerificationGlow()">Contact Owner</button>
+                    </div>
                 </div>
 
                 <!-- 5b. REGISTRATION PENDING APPROVAL SCREEN (STAY HERE UNTIL APPROVED) -->
@@ -329,7 +331,6 @@
                 <header class="app-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: #0b0b0b; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
                     <div class="app-identity" style="display: flex; align-items: center; gap: 8px;">
                         <div class="app-logo" style="background: var(--accent); color: #111; font-weight: 900; font-size: 16px; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">G</div>
-                        <div class="app-name" style="font-size: 16px; font-weight: 800; letter-spacing: 0.05em; color: var(--text-primary);">GYMOS</div>
                     </div>
 
                     <div class="notif-bell" style="background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;" onclick="toggleNotificationsPanel()">
@@ -909,6 +910,8 @@
                             </div>
                         </div>
 
+
+
                         <!-- SCREEN 8: ACTIVITY CALENDAR -->
                         <div id="subScreenCalendar" class="activity-screen-sub">
                             <div class="activity-sub-header">
@@ -957,6 +960,140 @@
                                     <!-- Dynamic insights cards -->
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- SCREEN 7: LEADERBOARD -->
+                    <!-- SCREEN 7: LEADERBOARD -->
+                    <div id="leadersScreen" class="mobile-screen" style="background: #0b0b0c; padding: 24px 20px 100px;">
+                        <!-- Header -->
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; margin-top: 4px;">
+                            <div>
+                                <h1 style="font-size: 26px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin: 0;">LeaderBoard</h1>
+                                <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 4px; margin-bottom: 0;">Stay active. Earn points.</p>
+                            </div>
+                            <button class="auth-capsule-btn secondary-btn" style="min-height: 32px; font-size: 12px; padding: 0 16px; border-radius: 20px; border-color: rgba(255,255,255,0.15); width: auto; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.25);" onclick="showLeaderboardGuide()">How it Works?</button>
+                        </div>
+
+                        <!-- Tabs toggle period selector -->
+                        <div style="margin-bottom: 24px;">
+                            <div style="display: flex; background: #1c1c1e; border-radius: 24px; padding: 4px; border: 1px solid rgba(255,255,255,0.05);">
+                                <button id="btnLeadWeekly" style="flex: 1; border: none; outline: none; border-radius: 20px; font-size: 13px; font-weight: 700; padding: 10px 0; cursor: pointer; transition: all 0.2s; background: #dfff00; color: #000;" onclick="setLeaderboardPeriod('weekly')">Weekly</button>
+                                <button id="btnLeadMonthly" style="flex: 1; border: none; outline: none; border-radius: 20px; font-size: 13px; font-weight: 700; padding: 10px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.5);" onclick="setLeaderboardPeriod('monthly')">Monthly</button>
+                                <button id="btnLeadAll" style="flex: 1; border: none; outline: none; border-radius: 20px; font-size: 13px; font-weight: 700; padding: 10px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.5);" onclick="setLeaderboardPeriod('all')">All Time</button>
+                            </div>
+                        </div>
+
+                        <!-- MAIN LEADERBOARD CONTENT WRAPPER -->
+                        <div id="leaderboardMainContent" style="display: none; flex-direction: column;">
+                            <!-- PODIUM CONTAINER -->
+                            <div id="leaderboardPodiumBox" style="display: flex; justify-content: center; align-items: flex-end; gap: 12px; margin: 16px 0 28px; padding: 0 8px; height: 220px; position: relative; flex-shrink: 0;">
+                                <!-- Rank 2 (Left) -->
+                                <div id="podiumRank2" style="display: flex; flex-direction: column; align-items: center; width: 90px; justify-content: flex-end;">
+                                    <div style="position: relative; margin-bottom: 8px;">
+                                        <img id="podiumRank2Img" src="" style="width: 58px; height: 58px; border-radius: 50%; border: 3.5px solid #8e8e93; object-fit: cover;">
+                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #8e8e93; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">2</div>
+                                    </div>
+                                    <span id="podiumRank2Name" style="font-size: 12px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
+                                    <span id="podiumRank2Count" style="font-size: 9.5px; color: #8e8e93; text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px; text-align: center;"></span>
+                                    <!-- Podium Stand column outline -->
+                                    <div style="width: 72px; height: 50px; border: 1.5px solid #8e8e93; border-bottom: none; border-radius: 12px 12px 0 0; background: linear-gradient(180deg, rgba(142, 142, 147, 0.08) 0%, transparent 100%); margin-top: 10px; flex-shrink: 0;"></div>
+                                </div>
+
+                                <!-- Rank 1 (Center - Raised) -->
+                                <div id="podiumRank1" style="display: flex; flex-direction: column; align-items: center; width: 100%; justify-content: flex-end; z-index: 1;">
+                                    <div style="position: relative; margin-bottom: 8px;">
+                                        <img id="podiumRank1Img" src="" style="width: 72px; height: 72px; border-radius: 50%; border: 4px solid #dfff00; object-fit: cover;">
+                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; background: #dfff00; border-radius: 50%; color: #000; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
+                                    </div>
+                                    <span id="podiumRank1Name" style="font-size: 13px; font-weight: 800; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
+                                    <span id="podiumRank1Count" style="font-size: 10px; color: #dfff00; text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px; text-align: center;"></span>
+                                    <!-- Podium Stand column outline -->
+                                    <div style="width: 80px; height: 75px; border: 1.5px solid #dfff00; border-bottom: none; border-radius: 12px 12px 0 0; background: linear-gradient(180deg, rgba(223, 255, 0, 0.08) 0%, transparent 100%); margin-top: 10px; flex-shrink: 0;"></div>
+                                </div>
+
+                                <!-- Rank 3 (Right) -->
+                                <div id="podiumRank3" style="display: flex; flex-direction: column; align-items: center; width: 90px; justify-content: flex-end;">
+                                    <div style="position: relative; margin-bottom: 8px;">
+                                        <img id="podiumRank3Img" src="" style="width: 58px; height: 58px; border-radius: 50%; border: 3.5px solid #cd7f32; object-fit: cover;">
+                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #cd7f32; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">3</div>
+                                    </div>
+                                    <span id="podiumRank3Name" style="font-size: 12px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
+                                    <span id="podiumRank3Count" style="font-size: 9.5px; color: #cd7f32; text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px; text-align: center;"></span>
+                                    <!-- Podium Stand column outline -->
+                                    <div style="width: 72px; height: 40px; border: 1.5px solid #cd7f32; border-bottom: none; border-radius: 12px 12px 0 0; background: linear-gradient(180deg, rgba(205, 127, 50, 0.08) 0%, transparent 100%); margin-top: 10px; flex-shrink: 0;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Keep it up card -->
+                            <div style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 16px 20px; text-align: left; margin-bottom: 24px; flex-shrink: 0;">
+                                <h4 style="font-size: 14px; font-weight: 900; color: #fff; margin: 0 0 6px 0; letter-spacing: 0.04em; text-transform: uppercase;">KEEP IT UP!</h4>
+                                <p id="leaderboardMotivateText" style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin: 0; line-height: 1.5;"></p>
+                            </div>
+
+                            <!-- Dynamic List Rows rank 4+ -->
+                            <div style="display: flex; flex-direction: column; gap: 14px;" id="leaderboardListContainer">
+                                <!-- Dynamic rows -->
+                            </div>
+                        </div>
+
+                        <!-- EMPTY STATE CONTAINER -->
+                        <div id="leaderboardEmptyState" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 80px 20px; text-align: center; box-sizing: border-box;">
+                            <div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255, 255, 255, 0.03); border: 1.5px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="rgba(255, 255, 255, 0.4)" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            </div>
+                            <h2 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 8px 0;">No Leaderboard Yet</h2>
+                            <p style="font-size: 14px; color: rgba(255, 255, 255, 0.5); line-height: 1.5; margin: 0 0 32px 0; max-width: 260px;">The leaderboard will appear once members start checking in.</p>
+                            <button class="auth-capsule-btn primary-btn" style="width: 200px; background: #dfff00; color: #000; font-weight: 800; border: none; height: 44px; border-radius: 22px; cursor: pointer;" onclick="switchMobileNav('scan')">Scan QR</button>
+                        </div>
+
+                        <!-- SCREEN 7B: HOW IT WORKS GUIDE (AS OVERLAY INSIDE LEADERS SCREEN) -->
+                        <div id="subScreenLeaderboardGuide" style="display: none; position: absolute; inset: 0; padding: 24px 20px 40px; background: #0b0b0c; height: 100%; overflow-y: auto; z-index: 20; box-sizing: border-box;">
+                            <!-- Header -->
+                            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 28px;">
+                                <button class="activity-sub-back-btn" onclick="hideLeaderboardGuide()" style="margin: 0; padding: 4px; border: none; background: transparent; cursor: pointer; color: #fff;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span style="font-size: 16px; font-weight: 800; color: #fff;">Leaderboard Guide</span>
+                            </div>
+
+                            <!-- Guide Items List -->
+                            <div style="display: flex; flex-direction: column; gap: 24px; margin-bottom: 36px;">
+                                <!-- Item 1 -->
+                                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                                    <div style="width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dfff00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 14.5px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Point System</h4>
+                                        <p style="font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.45; margin: 0;">Every unique check-in earns you points. Keep active and level up.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Item 2 -->
+                                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                                    <div style="width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dfff00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 14.5px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Streak Bonuses</h4>
+                                        <p style="font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.45; margin: 0;">Maintain a weekly check-in streak to boost your scores rapidly.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Item 3 -->
+                                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                                    <div style="width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dfff00" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 14.5px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Rank Reset</h4>
+                                        <p style="font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.45; margin: 0;">Weekly leaderboards reset every Sunday at midnight IST.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="auth-capsule-btn primary-btn" style="width: 100%;" onclick="hideLeaderboardGuide()">GOT IT, LET'S GO</button>
                         </div>
                     </div>
 

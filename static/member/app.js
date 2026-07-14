@@ -11,6 +11,85 @@ const memberLoginForm = document.getElementById('authLoginForm') || document.get
 const memberRegisterForm = document.getElementById('authRegisterForm') || document.getElementById('memberRegisterForm');
 const authErrorMsg = document.getElementById('authLoginError') || document.getElementById('authErrorMsg');
 
+// ==========================================
+// Leaderboard Repository & Data Abstraction
+// ==========================================
+class LeaderboardRepository {
+    async fetchWeekly() { throw new Error("Not implemented"); }
+    async fetchMonthly() { throw new Error("Not implemented"); }
+    async fetchAllTime() { throw new Error("Not implemented"); }
+    async fetchMemberRanks() { throw new Error("Not implemented"); }
+}
+
+class LocalDbLeaderboardRepository extends LeaderboardRepository {
+    constructor() {
+        super();
+        this._cachedData = null;
+    }
+    
+    clearCache() {
+        this._cachedData = null;
+    }
+    
+    async _getRawData() {
+        if (this._cachedData) {
+            return this._cachedData;
+        }
+        if (activityDataGlobal) {
+            this._cachedData = {
+                weekly: activityDataGlobal.leaderboard_weekly || [],
+                monthly: activityDataGlobal.leaderboard_monthly || [],
+                allTime: activityDataGlobal.leaderboard_all || [],
+                weeklyRank: activityDataGlobal.weekly_rank || 0,
+                monthlyRank: activityDataGlobal.monthly_rank || 0,
+                allTimeRank: activityDataGlobal.all_time_rank || 0
+            };
+            return this._cachedData;
+        }
+        const res = await fetch('/api/member/activity');
+        if (res.status === 403) {
+            const errData = await res.json();
+            alert(errData.error || 'Your account is suspended.');
+            logoutMemberApp();
+            return {};
+        }
+        const data = await res.json();
+        activityDataGlobal = data;
+        this._cachedData = {
+            weekly: data.leaderboard_weekly || [],
+            monthly: data.leaderboard_monthly || [],
+            allTime: data.leaderboard_all || [],
+            weeklyRank: data.weekly_rank || 0,
+            monthlyRank: data.monthly_rank || 0,
+            allTimeRank: data.all_time_rank || 0
+        };
+        return this._cachedData;
+    }
+
+    async fetchWeekly() {
+        const data = await this._getRawData();
+        return data.weekly || [];
+    }
+    async fetchMonthly() {
+        const data = await this._getRawData();
+        return data.monthly || [];
+    }
+    async fetchAllTime() {
+        const data = await this._getRawData();
+        return data.allTime || [];
+    }
+    async fetchMemberRanks() {
+        const data = await this._getRawData();
+        return {
+            weeklyRank: data.weeklyRank || 0,
+            monthlyRank: data.monthlyRank || 0,
+            allTimeRank: data.allTimeRank || 0
+        };
+    }
+}
+
+const leaderboardRepo = new LocalDbLeaderboardRepository();
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     updateSimulatorClock();
@@ -118,6 +197,7 @@ function switchMobileNav(tabName) {
             renderLeaderboardSubScreen();
         }, 100);
     }
+    }
     if (targetTab === 'payments') { renderBillingBills(); fetchAndRenderPlans(); }
     if (targetTab === 'profile') populateProfileFields();
 
@@ -136,9 +216,25 @@ async function checkMemberSession() {
         const res = await fetch('/api/auth/me');
         const data = await res.json();
         if (data.user && data.user.role === 'member') {
-            memberAuthWrapper.style.display = 'none';
-            memberAppWrapper.style.display = 'flex';
-            fetchDashboardData();
+            const memberDetails = data.user.member_details;
+            if (memberDetails && memberDetails.status === 'pending') {
+                memberAuthWrapper.style.display = 'flex';
+                memberAppWrapper.style.display = 'none';
+                hideAllAuthViews();
+                document.getElementById('authPendingView').style.display = 'flex';
+                connectMemberSse(memberDetails.id || data.user.member_id);
+            } else if (memberDetails && memberDetails.status === 'rejected') {
+                memberAuthWrapper.style.display = 'flex';
+                memberAppWrapper.style.display = 'none';
+                hideAllAuthViews();
+                document.getElementById('authLoginView').style.display = 'flex';
+                document.getElementById('authLoginError').innerText = 'Your registration request was rejected. Please contact your gym.';
+                document.getElementById('authLoginError').style.display = 'block';
+            } else {
+                memberAuthWrapper.style.display = 'none';
+                memberAppWrapper.style.display = 'flex';
+                fetchDashboardData();
+            }
         } else {
             memberAuthWrapper.style.display = 'flex';
             memberAppWrapper.style.display = 'none';
@@ -893,6 +989,59 @@ function hideAllAuthViews() {
     });
 }
 
+let currentMemberId = null;
+let sseSource = null;
+
+function connectMemberSse(memberId) {
+    if (sseSource) {
+        sseSource.close();
+    }
+    currentMemberId = memberId;
+    sseSource = new EventSource('/api/stream');
+    sseSource.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        if (data.type === 'MEMBER_STATUS_CHANGED') {
+            const payload = data.payload;
+            if (payload.member_id === currentMemberId) {
+                if (payload.status === 'active') {
+                    document.getElementById('pendingTitle').innerText = '🎉 Congratulations!';
+                    document.getElementById('pendingText').innerText = 'Your account has been approved.';
+                    
+                    const actionArea = document.getElementById('pendingActionArea');
+                    actionArea.innerHTML = `
+                        <button class="auth-capsule-btn primary-btn" style="margin-top: 10px;" onclick="showPersonalizeView()">Continue</button>
+                    `;
+                    showMobileToast('Your registration was approved!', 'success');
+                } else if (payload.status === 'rejected') {
+                    // Update Pending View to Rejected
+                    document.getElementById('pendingTitle').innerText = 'Registration Rejected';
+                    document.getElementById('pendingTitle').style.color = '#ff4a4a';
+                    document.getElementById('pendingText').innerText = 'Your registration request was rejected. Please contact your gym.';
+                    
+                    const actionArea = document.getElementById('pendingActionArea');
+                    actionArea.innerHTML = `
+                        <button class="auth-capsule-btn secondary-btn" style="border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff;" onclick="showLoginView()">Back to Login</button>
+                    `;
+                    showMobileToast('Your registration was rejected.', 'error');
+                }
+            }
+        }
+    };
+    sseSource.onerror = function() {
+        console.log('SSE connection closed or lost.');
+    };
+}
+
+function proceedToMemberApp() {
+    if (sseSource) {
+        sseSource.close();
+        sseSource = null;
+    }
+    memberAuthWrapper.style.display = 'none';
+    memberAppWrapper.style.display = 'flex';
+    fetchDashboardData();
+}
+
 function togglePasswordInput(inputId) {
     const el = document.getElementById(inputId);
     if (el) {
@@ -1158,14 +1307,18 @@ function confirmWeightPicker() {
     closeWeightPicker();
 }
 
-async function submitPersonalizedDataAndComplete() {
+function submitPersonalizedDataAndComplete() {
+    showMobileToast('Profile personalized successfully!', 'success');
+    proceedToMemberApp();
+}
+
+async function submitRegistrationAndShowPending() {
     if (!tempRegisterData) {
         showMobileToast('Registration data not found.', 'error');
         showRegisterView();
         return;
     }
     
-    // Complete registration
     try {
         const res = await fetch('/api/auth/register', {
             method: 'POST',
@@ -1183,7 +1336,8 @@ async function submitPersonalizedDataAndComplete() {
             showRegisterView();
         }
     } catch (err) {
-        showMobileToast('Request failed. Cannot connect to database.', 'error');
+        console.error('Registration submit error:', err);
+        showMobileToast('Error: ' + err.message, 'error');
         showRegisterView();
     }
 }
@@ -1218,6 +1372,17 @@ function setupAuthForms() {
                     memberAppWrapper.style.display = 'flex';
                     showMobileToast('Welcome back!', 'success');
                     fetchDashboardData();
+                } else if (res.status === 403 && data.status === 'pending') {
+                    // Navigate to pending view
+                    hideAllAuthViews();
+                    document.getElementById('authPendingView').style.display = 'flex';
+                    document.getElementById('pendingTitle').innerText = 'Verification Pending';
+                    document.getElementById('pendingTitle').style.color = '#fff';
+                    document.getElementById('pendingText').innerText = 'Your registration has been submitted. Please wait until the gym owner approves your request.';
+                    document.getElementById('pendingActionArea').innerHTML = `
+                        <button id="pendingBtn" class="auth-capsule-btn secondary-btn" style="border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff;" onclick="simulateOwnerVerificationGlow()">Contact Owner</button>
+                    `;
+                    connectMemberSse(data.member_id);
                 } else {
                     errBanner.innerText = data.error || 'Invalid credentials';
                     errBanner.style.display = 'block';
@@ -1509,6 +1674,7 @@ let selectedTimelineLog = null;
 
 async function fetchActivityData() {
     try {
+        leaderboardRepo.clearCache();
         const res = await fetch('/api/member/activity');
         if (res.status === 403) {
             const errData = await res.json();
@@ -1520,6 +1686,9 @@ async function fetchActivityData() {
         const data = await res.json();
         activityDataGlobal = data;
         populateActivityDashboard(data);
+        if (currentMobileTab === 'leaders') {
+            renderLeaderboardSubScreen();
+        }
     } catch (err) {
         console.error('Fetch activity data failed', err);
         showMobileToast('Failed to load activity logs.', 'error');
@@ -2105,7 +2274,7 @@ function renderAchievementsSubScreen() {
     document.getElementById('achievementProgressText').innerText = `${unlockedCount} / ${achievements.length} Unlocked`;
 }
 
-function renderLeaderboardSubScreen() {
+async function renderLeaderboardSubScreen() {
     const container = document.getElementById('leaderboardListContainer');
     if (!container) return;
     container.innerHTML = '';
@@ -2125,82 +2294,59 @@ function renderLeaderboardSubScreen() {
             currentMemberRank = activityDataGlobal.all_time_rank || 0;
         }
     }
+    }
     
-    const defaultPodium = [
-        { first_name: 'Alex', last_name: 'Chen', checkin_count: 42, profile_photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop' },
-        { first_name: 'Sam', last_name: 'Smith', checkin_count: 38, profile_photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop' },
-        { first_name: 'Jo', last_name: 'Rodriguez', checkin_count: 35, profile_photo: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop' }
-    ];
-
     // Populate Rank 1
-    const r1 = leaderboard.find(u => u.rank === 1) || defaultPodium[0];
-    document.getElementById('podiumRank1Name').innerText = `${r1.first_name} ${r1.last_name}`;
-    document.getElementById('podiumRank1Count').innerText = `${r1.checkin_count || r1.points || 0} CHECK-INS`;
-    document.getElementById('podiumRank1Img').src = r1.profile_photo || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop';
+    const r1 = leaderboard.find(u => u.rank === 1);
+    const p1 = document.getElementById('podiumRank1');
+    if (r1) {
+        if (p1) p1.style.visibility = 'visible';
+        document.getElementById('podiumRank1Name').innerText = `${r1.first_name} ${r1.last_name}`;
+        document.getElementById('podiumRank1Count').innerText = `${r1.checkin_count || r1.points || 0} CHECK-INS`;
+        document.getElementById('podiumRank1Img').src = r1.profile_photo || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop';
+    } else {
+        if (p1) p1.style.visibility = 'hidden';
+    }
 
     // Populate Rank 2
-    const r2 = leaderboard.find(u => u.rank === 2) || defaultPodium[1];
-    document.getElementById('podiumRank2Name').innerText = `${r2.first_name} ${r2.last_name}`;
-    document.getElementById('podiumRank2Count').innerText = `${r2.checkin_count || r2.points || 0} CHECK-INS`;
-    document.getElementById('podiumRank2Img').src = r2.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+    const r2 = leaderboard.find(u => u.rank === 2);
+    const p2 = document.getElementById('podiumRank2');
+    if (r2) {
+        if (p2) p2.style.visibility = 'visible';
+        document.getElementById('podiumRank2Name').innerText = `${r2.first_name} ${r2.last_name}`;
+        document.getElementById('podiumRank2Count').innerText = `${r2.checkin_count || r2.points || 0} CHECK-INS`;
+        document.getElementById('podiumRank2Img').src = r2.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+    } else {
+        if (p2) p2.style.visibility = 'hidden';
+    }
 
     // Populate Rank 3
-    const r3 = leaderboard.find(u => u.rank === 3) || defaultPodium[2];
-    document.getElementById('podiumRank3Name').innerText = `${r3.first_name} ${r3.last_name}`;
-    document.getElementById('podiumRank3Count').innerText = `${r3.checkin_count || r3.points || 0} CHECK-INS`;
-    document.getElementById('podiumRank3Img').src = r3.profile_photo || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop';
+    const r3 = leaderboard.find(u => u.rank === 3);
+    const p3 = document.getElementById('podiumRank3');
+    if (r3) {
+        if (p3) p3.style.visibility = 'visible';
+        document.getElementById('podiumRank3Name').innerText = `${r3.first_name} ${r3.last_name}`;
+        document.getElementById('podiumRank3Count').innerText = `${r3.checkin_count || r3.points || 0} CHECK-INS`;
+        document.getElementById('podiumRank3Img').src = r3.profile_photo || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop';
+    } else {
+        if (p3) p3.style.visibility = 'hidden';
+    }
 
     // Update Keep it up motivational banner text
     const motivateText = document.getElementById('leaderboardMotivateText');
-    if (currentMemberRank === 0) {
-        motivateText.innerText = "Check in to see where you rank on the leaderboard!";
-    } else if (currentMemberRank <= 10) {
-        motivateText.innerText = `🔥 Amazing! You are ranked #${currentMemberRank} in the Top 10! Keep defending your spot.`;
-    } else {
-        const diff = currentMemberRank - 10;
-        motivateText.innerText = `You're just ${diff} more check-ins away from reaching the Top 10!`;
+    if (motivateText) {
+        if (currentMemberRank === 0) {
+            motivateText.innerText = "Check in to see where you rank on the leaderboard!";
+        } else if (currentMemberRank <= 10) {
+            motivateText.innerText = `🔥 Amazing! You are ranked #${currentMemberRank} in the Top 10! Keep defending your spot.`;
+        } else {
+            const diff = currentMemberRank - 10;
+            motivateText.innerText = `You're just ${diff} more check-ins away from reaching the Top 10!`;
+        }
     }
     
     // Filter and display Ranks >= 4
     const listRankings = leaderboard.filter(u => u.rank >= 4);
-    if (listRankings.length === 0) {
-        // Render some mock user ranks if list empty to match mockup visuals
-        const mockRows = [
-            { rank: 4, first_name: 'Kim', last_name: 'Park', points: 31, profile_photo: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=200&auto=format&fit=crop' },
-            { rank: 5, first_name: 'Chris', last_name: 'Wu', points: 28, profile_photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop' },
-            { rank: 6, first_name: 'Taylor', last_name: 'Reed', points: 25, profile_photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop' },
-            { rank: 6, first_name: 'You', last_name: '', points: 25, profile_photo: activeMemberData.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop', id: activeMemberData.member_id }
-        ];
-        
-        mockRows.forEach(user => {
-            const isSelf = user.id === activeMemberData.member_id || user.first_name === 'You';
-            const row = document.createElement('div');
-            row.style.display = 'flex';
-            row.style.justifyContent = 'space-between';
-            row.style.alignItems = 'center';
-            row.style.background = '#1c1c1e';
-            row.style.borderRadius = '12px';
-            row.style.padding = '12px 14px';
-            row.style.border = '1px solid rgba(255,255,255,0.03)';
-            if (isSelf) {
-                row.style.border = '1.5px solid var(--accent)';
-            }
-            
-            const nameLabel = isSelf ? 'You' : `${user.first_name} ${user.last_name}`;
-            
-            row.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 13.5px; font-weight: 700; color: rgba(255,255,255,0.3); width: 14px; text-align: center;">${user.rank}</span>
-                    <img src="${user.profile_photo}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
-                    <span style="font-size: 13.5px; font-weight: 700; color: #fff;">${nameLabel}</span>
-                </div>
-                <span style="font-size: 13.5px; font-weight: 800; color: var(--accent);">${user.points} PTS</span>
-            `;
-            container.appendChild(row);
-        });
-        return;
-    }
-    
     listRankings.forEach(user => {
         const avatarUrl = user.profile_photo || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop';
         const isSelf = user.id === activeMemberData.member_id || (user.first_name === activityDataGlobal.first_name && user.last_name === activityDataGlobal.last_name);
@@ -2209,24 +2355,20 @@ function renderLeaderboardSubScreen() {
         row.style.display = 'flex';
         row.style.justifyContent = 'space-between';
         row.style.alignItems = 'center';
-        row.style.background = '#1c1c1e';
-        row.style.borderRadius = '12px';
-        row.style.padding = '12px 14px';
-        row.style.border = '1px solid rgba(255,255,255,0.03)';
-        if (isSelf) {
-            row.style.border = '1.5px solid var(--accent)';
-        }
+        row.style.background = 'transparent';
+        row.style.padding = '12px 0';
+        row.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
 
         const nameLabel = isSelf ? 'You' : `${user.first_name} ${user.last_name}`;
-        const pts = user.points || (user.checkin_count * 1) || 25;
+        const pts = user.points || (user.checkin_count * 100) || 0;
 
         row.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span style="font-size: 13.5px; font-weight: 700; color: rgba(255,255,255,0.3); width: 14px; text-align: center;">${user.rank}</span>
-                <img src="${avatarUrl}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
-                <span style="font-size: 13.5px; font-weight: 700; color: #fff;">${nameLabel}</span>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <span style="font-size: 14.5px; font-weight: 700; color: rgba(255,255,255,0.4); width: 20px; text-align: center;">${user.rank}</span>
+                <img src="${avatarUrl}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover;">
+                <span style="font-size: 14.5px; font-weight: 700; color: #fff;">${nameLabel}</span>
             </div>
-            <span style="font-size: 13.5px; font-weight: 800; color: var(--accent);">${pts} PTS</span>
+            <span style="font-size: 14.5px; font-weight: 800; color: #dfff00;">${pts} PTS</span>
         `;
         container.appendChild(row);
     });
@@ -2242,7 +2384,7 @@ function setLeaderboardPeriod(period) {
     [btnWeekly, btnMonthly, btnAll].forEach(btn => {
         if (btn) {
             btn.style.background = 'transparent';
-            btn.style.color = 'rgba(255,255,255,0.4)';
+            btn.style.color = 'rgba(255,255,255,0.5)';
         }
     });
     
@@ -2250,7 +2392,7 @@ function setLeaderboardPeriod(period) {
         period === 'weekly' ? 'btnLeadWeekly' : (period === 'monthly' ? 'btnLeadMonthly' : 'btnLeadAll')
     );
     if (activeBtn) {
-        activeBtn.style.background = 'var(--accent)';
+        activeBtn.style.background = '#dfff00';
         activeBtn.style.color = '#000';
     }
     
