@@ -2181,6 +2181,16 @@ def member_activity_data():
     finally:
         conn.close()
 
+@app.route("/api/member/qr-token", methods=["GET"])
+@login_required("member")
+def member_get_qr_token():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM settings WHERE key = 'qr_token'")
+    row = cursor.fetchone()
+    conn.close()
+    return jsonify({"qr_token": row["value"] if row else None})
+
 @app.route("/api/member/check-in", methods=["POST"])
 @app.route("/api/member/attendance/scan", methods=["POST"])
 @login_required("member")
