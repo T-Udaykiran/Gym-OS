@@ -645,7 +645,7 @@ async function fetchMembers() {
                             <button class="dots-dropdown-item" style="color: var(--success-dark);" onclick="adminManualCheckIn(${m.id})">Manual Check-In</button>
                             <button class="dots-dropdown-item" style="color: var(--accent-dark);" onclick="adminManualCheckOut(${m.id})">Manual Check-Out</button>
                             <button class="dots-dropdown-item" style="color: var(--warning-dark);" onclick="toggleSuspendMember(${m.id}, '${m.status}')">
-                                ${m.status === 'suspended' ? 'Activate Member' : 'Suspend Member'}
+                                ${m.status === 'pending' ? 'Approve Member' : (m.status === 'suspended' ? 'Activate Member' : 'Suspend Member')}
                             </button>
                             <button class="dots-dropdown-item" style="color: var(--danger-dark);" onclick="deleteMember(${m.id})">Delete Member</button>
                         </div>
@@ -1275,8 +1275,9 @@ async function logoutOwner() {
 
 // Inline toggle suspend
 async function toggleSuspendMember(id, currentStatus) {
-    const target = currentStatus === 'suspended' ? 'active' : 'suspended';
-    if (!confirm(`Are you sure you want to set member status to ${target.toUpperCase()}?`)) return;
+    const target = (currentStatus === 'suspended' || currentStatus === 'pending') ? 'active' : 'suspended';
+    const actionLabel = currentStatus === 'pending' ? 'approve' : (currentStatus === 'suspended' ? 'activate' : 'suspend');
+    if (!confirm(`Are you sure you want to ${actionLabel} this member?`)) return;
 
     try {
         const detailRes = await fetch(`/api/admin/members/${id}`);

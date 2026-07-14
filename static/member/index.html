@@ -26,23 +26,6 @@
 
         <!-- Phone Screen -->
         <div class="phone-screen">
-            <!-- Status bar -->
-            <div class="phone-status-bar">
-                <div id="simTime">12:00</div>
-                <div class="status-right">
-                    <!-- Wifi -->
-                    <svg class="wifi-icon" viewBox="0 0 24 24">
-                        <path
-                            d="M12 21a2 2 0 1 1-2-2 2 2 0 0 1 2 2zm0-5a5 5 0 0 0-3.54 1.46l1.42 1.42a3 3 0 0 1 4.24 0l1.42-1.42A5 5 0 0 0 12 16zm0-5a10 10 0 0 0-7.07 2.93l1.42 1.42a8 8 0 0 1 11.3 0l1.42-1.42A10 10 0 0 0 12 11zm0-5a15 15 0 0 0-10.6 4.4l1.42 1.42a13 13 0 0 1 18.38 0l1.42-1.42A15 15 0 0 0 12 6z" />
-                    </svg>
-                    <!-- Battery -->
-                    <svg class="battery-icon" viewBox="0 0 24 24">
-                        <path
-                            d="M17 5H3a2 2 0 0 0-2 2h22a2 2 0 0 0-2-2zm0 14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14zM21 9h2v6h-2V9z" />
-                    </svg>
-                </div>
-            </div>
-
             <!-- ================= MEMBER SYSTEM: SIGN IN/REGISTRATION ================= -->
             <div id="memberAuthWrapper" style="display: none; width: 100%; height: 100%; position: relative; flex-direction: column; overflow: hidden; background: #000;">
 
@@ -96,33 +79,30 @@
                     <div id="authRegisterError" class="auth-error-banner" style="display: none;"></div>
 
                     <form id="authRegisterForm" onsubmit="event.preventDefault();" style="display: flex; flex-direction: column; gap: 12px;">
-                        <div class="input-block">
-                            <label class="input-lbl">Full Name</label>
-                            <input type="text" id="regFullNameInput" class="custom-input" placeholder="Enter Your Full Name" required>
+                        <div class="input-block" style="display: flex; flex-direction: column;">
+                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Full Name</label>
+                            <input type="text" id="regFullNameInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
                         </div>
-                        <div class="input-block">
-                            <label class="input-lbl">Email Address</label>
-                            <input type="email" id="regEmailInput" class="custom-input" placeholder="Enter Your Email ID" required>
+                        <div class="input-block" style="display: flex; flex-direction: column;">
+                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Email Address</label>
+                            <input type="email" id="regEmailInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
                         </div>
-                        <div class="input-block">
-                            <label class="input-lbl">Phone Number</label>
-                            <input type="text" id="regPhoneInput" class="custom-input" placeholder="Enter Your Full Name" required>
+                        <div class="input-block" style="display: flex; flex-direction: column;">
+                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Phone Number</label>
+                            <input type="text" id="regPhoneInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
                         </div>
-                        <div class="input-block">
-                            <label class="input-lbl">Emergency Contact</label>
-                            <input type="text" id="regEmergencyInput" class="custom-input" placeholder="Enter Your Full Name" required>
+                        <div class="input-block" style="display: flex; flex-direction: column;">
+                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Emergency Contact</label>
+                            <input type="text" id="regEmergencyInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
                         </div>
-                        <div class="input-block" style="position: relative;">
-                            <label class="input-lbl">Create Password</label>
-                            <input type="password" id="regPasswordInput" class="custom-input" placeholder="Enter Your Full Name" required style="padding-right: 48px;">
-                            <span class="password-toggle-eye" onclick="togglePasswordInput('regPasswordInput')">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.4)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                            </span>
+                        <div class="input-block" style="display: flex; flex-direction: column;">
+                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Create Password</label>
+                            <input type="password" id="regPasswordInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
                         </div>
-                        <button type="submit" class="auth-capsule-btn primary-btn" style="margin-top: 10px;">Join</button>
+                        <button type="submit" style="border-radius: 24px; height: 48px; background: #1c1c1e; border: 1.5px solid rgba(255,255,255,0.15); color: #fff; font-size: 14.5px; font-weight: 800; cursor: pointer; margin-top: 12px; width: 100%; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Join</button>
                     </form>
 
-                    <button class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showLoginView()">Have an account? Sign In</button>
+                    <div style="text-align: center; margin-top: 24px; font-size: 13.5px; color: rgba(255,255,255,0.6); cursor: pointer;" onclick="showLoginView()">Have an account? <strong style="color: #fff; font-weight: 700;">Sign In</strong></div>
                 </div>
 
                 <!-- 4. VERIFY CODE SCREEN -->
@@ -154,8 +134,8 @@
                     </div>
                 </div>
 
-                <!-- 5. VERIFICATION PENDING SCREEN -->
-                <div id="authPendingView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: #000; padding: 20px 20px 40px; justify-content: space-between; z-index: 5;">
+                <!-- 5. VERIFICATION PENDING SCREEN (OTP TRANSITION) -->
+                <div id="authPendingOTPView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: #000; padding: 20px 20px 40px; justify-content: space-between; z-index: 5;">
                     <div>
                         <!-- Header with back arrow -->
                         <div style="display: flex; align-items: center; margin-bottom: 24px; position: relative;">
@@ -181,6 +161,32 @@
                     </div>
 
                     <button class="auth-capsule-btn secondary-btn" style="border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff;" onclick="simulateOwnerVerificationGlow()">Contact Owner</button>
+                </div>
+
+                <!-- 5b. REGISTRATION PENDING APPROVAL SCREEN (STAY HERE UNTIL APPROVED) -->
+                <div id="authPendingView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: #000; padding: 20px 20px 40px; justify-content: space-between; z-index: 5;">
+                    <div>
+                        <!-- Header -->
+                        <div style="display: flex; align-items: center; margin-bottom: 24px; position: relative; height: 32px;">
+                            <span style="font-size: 15px; font-weight: 800; color: #fff; position: absolute; left: 50%; transform: translateX(-50%);">Approval Pending</span>
+                        </div>
+
+                        <!-- Lock circular icon -->
+                        <div style="display: flex; justify-content: center; margin: 48px 0 28px;">
+                            <div style="width: 90px; height: 90px; border-radius: 50%; border: 3.5px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; position: relative; background: rgba(255,255,255,0.02);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                                <div style="position: absolute; inset: -3.5px; border-radius: 50%; border: 3.5px solid var(--accent); border-top-color: transparent; border-right-color: transparent; border-bottom-color: transparent;"></div>
+                            </div>
+                        </div>
+
+                        <h2 style="font-size: 22px; font-weight: 800; color: #fff; text-align: center; margin: 0;">Awaiting Approval</h2>
+                        <p style="font-size: 13.5px; color: rgba(255,255,255,0.5); text-align: center; margin-top: 10px; line-height: 1.5; padding: 0 10px;">Your registration was successful! Your account is currently pending approval by the gym owner. Please contact the owner or check back later.</p>
+                    </div>
+
+                    <button class="auth-capsule-btn primary-btn" onclick="showLoginView()">Back to Login</button>
                 </div>
 
                 <!-- 6. PERSONALIZE FITNESS AND HEALTH SCREEN -->
@@ -220,58 +226,40 @@
                 <div id="modalDobPicker" class="personal-modal-overlay" style="display: none;">
                     <div class="personal-modal-card">
                         <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin: 0 0 14px 0; text-align: left;">Select a Date of Birth</h4>
-                        
+
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <span style="font-size: 13px; font-weight: 700; color: #fff;">September 2023</span>
-                            <div style="display: flex; gap: 8px;">
+                            <div style="display: flex; gap: 6px;">
+                                <button type="button" class="dob-header-btn" id="dobMonthBtn" onclick="toggleDobMonthView()">September</button>
+                                <button type="button" class="dob-header-btn" id="dobYearBtn" onclick="toggleDobYearView()">2023</button>
+                            </div>
+                            <div style="display: flex; gap: 8px;" id="dobNavArrows">
                                 <button type="button" class="picker-nav-arrow-btn" onclick="changeDobMonth(-1)">&lt;</button>
                                 <button type="button" class="picker-nav-arrow-btn" onclick="changeDobMonth(1)">&gt;</button>
                             </div>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 11.5px; margin-bottom: 20px;">
-                            <span class="cal-dow-label">Sun</span>
-                            <span class="cal-dow-label">Mon</span>
-                            <span class="cal-dow-label">Tue</span>
-                            <span class="cal-dow-label">Wed</span>
-                            <span class="cal-dow-label">Thu</span>
-                            <span class="cal-dow-label">Fri</span>
-                            <span class="cal-dow-label">Sat</span>
-                            
-                            <span class="cal-cell empty">27</span>
-                            <span class="cal-cell empty">28</span>
-                            <span class="cal-cell">1</span>
-                            <span class="cal-cell">2</span>
-                            <span class="cal-cell">3</span>
-                            <span class="cal-cell">4</span>
-                            <span class="cal-cell">5</span>
-                            <span class="cal-cell">6</span>
-                            <span class="cal-cell">7</span>
-                            <span class="cal-cell">8</span>
-                            <span class="cal-cell">9</span>
-                            <span class="cal-cell">10</span>
-                            <span class="cal-cell">11</span>
-                            <span class="cal-cell">12</span>
-                            <span class="cal-cell">13</span>
-                            <span class="cal-cell">14</span>
-                            <span class="cal-cell active">15</span>
-                            <span class="cal-cell">16</span>
-                            <span class="cal-cell">17</span>
-                            <span class="cal-cell">18</span>
-                            <span class="cal-cell">19</span>
-                            <span class="cal-cell">20</span>
-                            <span class="cal-cell">21</span>
-                            <span class="cal-cell">22</span>
-                            <span class="cal-cell">23</span>
-                            <span class="cal-cell">24</span>
-                            <span class="cal-cell">25</span>
-                            <span class="cal-cell">26</span>
-                            <span class="cal-cell">27</span>
-                            <span class="cal-cell">28</span>
-                            <span class="cal-cell">29</span>
-                            <span class="cal-cell">30</span>
-                            <span class="cal-cell empty">1</span>
-                            <span class="cal-cell empty">2</span>
+                        <!-- Day grid view -->
+                        <div id="dobDayView">
+                            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 11.5px; margin-bottom: 4px;">
+                                <span class="cal-dow-label">Sun</span>
+                                <span class="cal-dow-label">Mon</span>
+                                <span class="cal-dow-label">Tue</span>
+                                <span class="cal-dow-label">Wed</span>
+                                <span class="cal-dow-label">Thu</span>
+                                <span class="cal-dow-label">Fri</span>
+                                <span class="cal-dow-label">Sat</span>
+                            </div>
+                            <div id="dobDaysGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 13px; margin-bottom: 20px;"></div>
+                        </div>
+
+                        <!-- Month grid view -->
+                        <div id="dobMonthView" style="display: none;">
+                            <div id="dobMonthsGrid" class="dob-picker-grid-3col" style="margin-bottom: 20px;"></div>
+                        </div>
+
+                        <!-- Year list view -->
+                        <div id="dobYearView" style="display: none;">
+                            <div id="dobYearsGrid" class="dob-picker-grid-3col" style="max-height: 220px; overflow-y: auto; margin-bottom: 20px;"></div>
                         </div>
 
                         <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
@@ -378,6 +366,23 @@
                         <div style="margin-top: 4px;">
                             <p style="font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.6); margin: 0;">Hi, <span id="homeMemberFirstName">User</span>!</p>
                             <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin: 4px 0 0 0; letter-spacing: -0.02em;">Ready for your fitness routine today?</h2>
+                        </div>
+
+                        <!-- PWA INSTALL BANNER -->
+                        <div id="pwaInstallBanner" style="display: none; background: #1c1c1e; border: 1.5px solid var(--accent); border-radius: 16px; padding: 14px 16px; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 38px; height: 38px; border-radius: 8px; background: rgba(199, 255, 36, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                </div>
+                                <div style="text-align: left;">
+                                    <h4 style="font-size: 13.5px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Add GymOS to Home Screen</h4>
+                                    <p style="font-size: 11px; color: rgba(255,255,255,0.4); margin: 0;">Access GymOS as a native app instantly.</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <button type="button" class="btn btn-primary" style="padding: 6px 14px; font-size: 11.5px; font-weight: 700; border-radius: 20px; min-height: 28px;" onclick="triggerAppInstall()">Install</button>
+                                <button type="button" style="background: transparent; border: none; outline: none; font-size: 18px; color: rgba(255,255,255,0.4); cursor: pointer; padding: 4px;" onclick="dismissInstallBanner()">&times;</button>
+                            </div>
                         </div>
 
                         <!-- Section: Attendance Streak -->
@@ -659,17 +664,17 @@
                             <div style="margin-top: 10px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                                     <span style="font-size: 16px; font-weight: 800; color: #fff;">Recent Activity</span>
-                                    <span style="font-size: 13px; font-weight: 700; color: var(--accent); cursor: pointer;" onclick="showActivitySubScreen('subScreenHistory')">View All</span>
+                                    <span style="font-size: 13px; font-weight: 700; color: var(--accent); cursor: pointer;" onclick="switchMobileNav('attendanceHistory')">View All</span>
                                 </div>
 
                                 <div id="recentActivityListContainer" style="display: flex; flex-direction: column; gap: 12px;">
                                     <!-- Up to 3 recent logs rows -->
                                 </div>
                             </div>
-                        </div>iv>
+                        </div>
 
                         <!-- EMPTY STATE CONTAINER (HIDDEN BY DEFAULT) -->
-                        <div id="activityEmptyState" class="empty-state-container" style="display: none; height: 100%; justify-content: center;">
+                        <div id="activityEmptyState" class="empty-state-container" style="display: none;">
                             <div class="empty-state-illustration">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" fill="none">
                                     <circle cx="60" cy="60" r="50" fill="rgba(199, 255, 36, 0.03)" stroke="var(--border-color)" stroke-width="2"/>
@@ -683,25 +688,25 @@
 
                         <!-- ---------------- SUB-SCREENS (SLIDEOUT OVERLAYS) ---------------- -->
 
-                        <!-- SCREEN 2: ATTENDANCE HISTORY -->
-                        <div id="subScreenHistory" class="activity-screen-sub">
-                            <div class="activity-sub-header">
-                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                        <!-- SCREEN 2: ATTENDANCE HISTORY (PUSH SCREEN PAGE) -->
+                        <div id="attendanceHistoryScreen" class="mobile-screen" style="flex-direction: column; background: #000; box-sizing: border-box; height: 100%; width: 100%;">
+                            <div class="activity-sub-header" style="padding: 16px 16px 4px; display: flex; align-items: center; gap: 12px; background: #000; z-index: 10;">
+                                <button class="round-back-btn" type="button" onclick="switchMobileNav('activity')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
                                 </button>
-                                <span class="activity-sub-title">Attendance History</span>
+                                <span style="font-size: 16px; font-weight: 800; color: #fff;">Attendance History</span>
                             </div>
-                            <div class="activity-sub-content">
-                                <div class="search-filter-row">
-                                    <div class="search-control-wrapper">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                        <input type="text" id="historySearchField" class="search-input-field" placeholder="Search date or branch..." oninput="filterHistoryList()">
+                            <div class="activity-sub-content" style="flex: 1; overflow-y: auto; padding: 12px 16px 98px; box-sizing: border-box;">
+                                <div class="search-filter-row" style="margin-bottom: 12px;">
+                                    <div class="search-control-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" style="position: absolute; left: 14px; width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                        <input type="text" id="historySearchField" class="custom-input" placeholder="Search date or branch..." oninput="filterHistoryList()" style="padding-left: 40px; margin-bottom: 0; width: 100%; border-radius: 20px;">
                                     </div>
                                 </div>
-                                <div class="filter-tabs-wrapper">
-                                    <button id="tabFilterAll" class="filter-tab-btn active" onclick="setHistoryFilter('all')">All</button>
-                                    <button id="tabFilterWeekly" class="filter-tab-btn" onclick="setHistoryFilter('weekly')">Weekly</button>
-                                    <button id="tabFilterMonthly" class="filter-tab-btn" onclick="setHistoryFilter('monthly')">Monthly</button>
+                                <div class="filter-tabs-wrapper" style="display: flex; background: #1c1c1e; border-radius: 20px; padding: 3px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 16px;">
+                                    <button id="tabFilterAll" class="filter-tab-btn active" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s;" onclick="setHistoryFilter('all')">All</button>
+                                    <button id="tabFilterWeekly" class="filter-tab-btn" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setHistoryFilter('weekly')">Weekly</button>
+                                    <button id="tabFilterMonthly" class="filter-tab-btn" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setHistoryFilter('monthly')">Monthly</button>
                                 </div>
                                 <div id="subHistoryListContainer" style="display: flex; flex-direction: column; gap: 10px;">
                                     <!-- Dynamic list of visits -->
@@ -904,138 +909,6 @@
                             </div>
                         </div>
 
-                        <!-- SCREEN 7: LEADERBOARD -->
-                        <div id="subScreenLeaderboard" class="activity-screen-sub" style="display: flex; flex-direction: column; background: #000; height: 100%; overflow-y: auto;">
-                            <!-- Header -->
-                            <div style="padding: 20px 16px 0; display: flex; justify-content: space-between; align-items: flex-start; background: #000; z-index: 10;">
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()" style="margin: 0; padding: 4px; border: none; background: transparent; cursor: pointer; color: #fff;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                                    </button>
-                                    <div>
-                                        <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">LeaderBoard</h3>
-                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); margin: 0;">Stay active. Earn points.</p>
-                                    </div>
-                                </div>
-                                <button class="auth-capsule-btn secondary-btn" style="min-height: 30px; font-size: 11px; padding: 0 12px; border-radius: 20px; border-color: rgba(255,255,255,0.15); width: auto;" onclick="showLeaderboardGuide()">How it Works?</button>
-                            </div>
-
-                            <!-- Tabs toggle period selector -->
-                            <div style="padding: 0 16px; margin-top: 16px;">
-                                <div style="display: flex; background: #1c1c1e; border-radius: 20px; padding: 3px; border: 1px solid rgba(255,255,255,0.05);">
-                                    <button id="btnLeadWeekly" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: var(--accent); color: #000;" onclick="setLeaderboardPeriod('weekly')">Weekly</button>
-                                    <button id="btnLeadMonthly" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setLeaderboardPeriod('monthly')">Monthly</button>
-                                    <button id="btnLeadAll" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setLeaderboardPeriod('all')">All Time</button>
-                                </div>
-                            </div>
-
-                            <!-- PODIUM CONTAINER -->
-                            <div id="leaderboardPodiumBox" style="display: flex; justify-content: center; align-items: flex-end; gap: 14px; margin: 28px 0 16px; padding: 0 16px; height: 160px; position: relative; flex-shrink: 0;">
-                                <!-- Rank 2 (Left) -->
-                                <div id="podiumRank2" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
-                                    <div style="position: relative; margin-bottom: 8px;">
-                                        <img id="podiumRank2Img" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #8e8e93; object-fit: cover;">
-                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #8e8e93; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">2</div>
-                                    </div>
-                                    <span id="podiumRank2Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Sam Smith</span>
-                                    <span id="podiumRank2Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;">38 CHECK-INS</span>
-                                </div>
-
-                                <!-- Rank 1 (Center - Raised) -->
-                                <div id="podiumRank1" style="display: flex; flex-direction: column; align-items: center; width: 95px; transform: translateY(-12px);">
-                                    <div style="position: relative; margin-bottom: 8px;">
-                                        <img id="podiumRank1Img" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop" style="width: 66px; height: 66px; border-radius: 50%; border: 4px solid var(--accent); object-fit: cover;">
-                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; background: var(--accent); border-radius: 50%; color: #000; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
-                                    </div>
-                                    <span id="podiumRank1Name" style="font-size: 12.5px; font-weight: 800; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Alex Chen</span>
-                                    <span id="podiumRank1Count" style="font-size: 9.5px; color: var(--accent); text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px;">42 CHECK-INS</span>
-                                </div>
-
-                                <!-- Rank 3 (Right) -->
-                                <div id="podiumRank3" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
-                                    <div style="position: relative; margin-bottom: 8px;">
-                                        <img id="podiumRank3Img" src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #cd7f32; object-fit: cover;">
-                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #cd7f32; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">3</div>
-                                    </div>
-                                    <span id="podiumRank3Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Jo Rodriguez</span>
-                                    <span id="podiumRank3Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;">35 CHECK-INS</span>
-                                </div>
-                            </div>
-
-                            <!-- Keep it up card -->
-                            <div style="padding: 0 16px; margin-bottom: 18px; flex-shrink: 0;">
-                                <div style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px 16px; text-align: left;">
-                                    <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 6px 0; letter-spacing: 0.03em;">KEEP IT UP!</h4>
-                                    <p id="leaderboardMotivateText" style="font-size: 12px; color: rgba(255,255,255,0.4); margin: 0; line-height: 1.45;">You're just 5 more check-ins away from reaching rank #11</p>
-                                </div>
-                            </div>
-
-                            <!-- Dynamic List Rows rank 4+ -->
-                            <div style="padding: 0 16px 32px 16px; display: flex; flex-direction: column; gap: 10px;" id="leaderboardListContainer">
-                                <!-- Dynamic rows -->
-                            </div>
-                        </div>
-
-                        <!-- SCREEN 7B: HOW IT WORKS GUIDE -->
-                        <div id="subScreenLeaderboardGuide" class="activity-screen-sub" style="display: none; padding: 20px 16px 40px; background: #000; height: 100%; overflow-y: auto;">
-                            <!-- Header -->
-                            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 28px;">
-                                <button class="activity-sub-back-btn" onclick="hideLeaderboardGuide()" style="margin: 0; padding: 4px; border: none; background: transparent; cursor: pointer; color: #fff;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                                </button>
-                                <span style="font-size: 18px; font-weight: 800; color: #fff;">How it Works?</span>
-                            </div>
-
-                            <!-- Guide Items List -->
-                            <div style="display: flex; flex-direction: column; gap: 24px; margin-bottom: 36px;">
-                                <!-- Item 1 -->
-                                <div style="display: flex; gap: 16px; align-items: flex-start;">
-                                    <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                                    </div>
-                                    <div>
-                                        <h4 style="font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Point System</h4>
-                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.45; margin: 0;">Every unique check-in earns you 1 point. Consecutive days boost your score.</p>
-                                    </div>
-                                </div>
-
-                                <!-- Item 2 -->
-                                <div style="display: flex; gap: 16px; align-items: flex-start;">
-                                    <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                                    </div>
-                                    <div>
-                                        <h4 style="font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Streak Bonuses</h4>
-                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.45; margin: 0;">Maintain a 7-day streak for a +10 point multiplier.</p>
-                                    </div>
-                                </div>
-
-                                <!-- Item 3 -->
-                                <div style="display: flex; gap: 16px; align-items: flex-start;">
-                                    <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                                    </div>
-                                    <div>
-                                        <h4 style="font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Rank Reset</h4>
-                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.45; margin: 0;">Weekly leaderboards reset every Sunday at midnight IST.</p>
-                                    </div>
-                                </div>
-
-                                <!-- Item 4 -->
-                                <div style="display: flex; gap: 16px; align-items: flex-start;">
-                                    <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
-                                    </div>
-                                    <div>
-                                        <h4 style="font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Elite Badges</h4>
-                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.45; margin: 0;">Top 3 positions earn permanent badges on their profiles.</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button class="auth-capsule-btn primary-btn" style="width: 100%;" onclick="hideLeaderboardGuide()">GOT IT, LET'S GO</button>
-                        </div>
-
                         <!-- SCREEN 8: ACTIVITY CALENDAR -->
                         <div id="subScreenCalendar" class="activity-screen-sub">
                             <div class="activity-sub-header">
@@ -1105,6 +978,135 @@
                         </div>
                     </div>
 
+                    <!-- SCREEN: LEADERBOARD -->
+                    <div id="leadersScreen" class="mobile-screen" style="flex-direction: column; background: #000;">
+                        <!-- Header -->
+                        <div style="padding: 4px 4px 0; display: flex; justify-content: space-between; align-items: flex-start; background: #000; z-index: 10;">
+                            <div>
+                                <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Leaderboard</h3>
+                                <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); margin: 0;">Stay active. Earn points.</p>
+                            </div>
+                            <button class="auth-capsule-btn secondary-btn" style="min-height: 30px; font-size: 11px; padding: 0 12px; border-radius: 20px; border-color: rgba(255,255,255,0.15); width: auto;" onclick="showLeaderboardGuide()">How it Works?</button>
+                        </div>
+
+                        <!-- Tabs toggle period selector -->
+                        <div style="margin-top: 16px; margin-bottom: 16px;">
+                            <div style="display: flex; background: #1c1c1e; border-radius: 20px; padding: 3px; border: 1px solid rgba(255,255,255,0.05);">
+                                <button id="btnLeadWeekly" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: var(--accent); color: #000;" onclick="setLeaderboardPeriod('weekly')">Weekly</button>
+                                <button id="btnLeadMonthly" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setLeaderboardPeriod('monthly')">Monthly</button>
+                                <button id="btnLeadAll" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setLeaderboardPeriod('all')">All Time</button>
+                            </div>
+                        </div>
+
+                        <!-- PODIUM CONTAINER -->
+                        <div id="leaderboardPodiumBox" style="display: flex; justify-content: center; align-items: flex-end; gap: 14px; margin: 12px 0 16px; height: auto; min-height: 220px; padding-bottom: 8px; position: relative; flex-shrink: 0;">
+                            <!-- Rank 2 (Left) -->
+                            <div id="podiumRank2" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
+                                <div style="position: relative; margin-bottom: 8px;">
+                                    <img id="podiumRank2Img" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #8e8e93; object-fit: cover;">
+                                    <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #8e8e93; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">2</div>
+                                </div>
+                                <span id="podiumRank2Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Sam Smith</span>
+                                <span id="podiumRank2Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;">38 CHECK-INS</span>
+                                <div style="width: 58px; height: 48px; background: #1c1c1e; border: 1.5px solid #8e8e93; border-radius: 8px; margin-top: 8px;"></div>
+                            </div>
+
+                            <!-- Rank 1 (Center - Raised) -->
+                            <div id="podiumRank1" style="display: flex; flex-direction: column; align-items: center; width: 95px; transform: translateY(-12px);">
+                                <div style="position: relative; margin-bottom: 8px;">
+                                    <img id="podiumRank1Img" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop" style="width: 66px; height: 66px; border-radius: 50%; border: 4px solid var(--accent); object-fit: cover;">
+                                    <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; background: var(--accent); border-radius: 50%; color: #000; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
+                                </div>
+                                <span id="podiumRank1Name" style="font-size: 12.5px; font-weight: 800; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Alex Chen</span>
+                                <span id="podiumRank1Count" style="font-size: 9.5px; color: var(--accent); text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px;">42 CHECK-INS</span>
+                                <div style="width: 66px; height: 72px; background: #1c1c1e; border: 1.5px solid var(--accent); border-radius: 8px; margin-top: 8px;"></div>
+                            </div>
+
+                            <!-- Rank 3 (Right) -->
+                            <div id="podiumRank3" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
+                                <div style="position: relative; margin-bottom: 8px;">
+                                    <img id="podiumRank3Img" src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #cd7f32; object-fit: cover;">
+                                    <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #cd7f32; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">3</div>
+                                </div>
+                                <span id="podiumRank3Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Jo Rodriguez</span>
+                                <span id="podiumRank3Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;">35 CHECK-INS</span>
+                                <div style="width: 58px; height: 48px; background: #1c1c1e; border: 1.5px solid #cd7f32; border-radius: 8px; margin-top: 8px;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Keep it up card -->
+                        <div style="margin-bottom: 18px; flex-shrink: 0;">
+                            <div style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px 16px; text-align: left;">
+                                <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 6px 0; letter-spacing: 0.03em;">KEEP IT UP!</h4>
+                                <p id="leaderboardMotivateText" style="font-size: 12px; color: rgba(255,255,255,0.4); margin: 0; line-height: 1.45;">You're just 5 more check-ins away from reaching rank #11</p>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic List Rows rank 4+ -->
+                        <div style="display: flex; flex-direction: column; gap: 10px; padding-bottom: 32px;" id="leaderboardListContainer">
+                            <!-- Dynamic rows -->
+                        </div>
+                    </div>
+
+                    <!-- SCREEN: HOW IT WORKS GUIDE MODAL -->
+                    <div id="subScreenLeaderboardGuide" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
+                        <div class="member-modal-card" style="text-align: left; max-width: 340px; background: #1c1c1e;">
+                            <!-- Header -->
+                            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 20px;">
+                                <span style="font-size: 18px; font-weight: 800; color: #fff;">How it Works?</span>
+                            </div>
+
+                            <!-- Guide Items List -->
+                            <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
+                                <!-- Item 1 -->
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Point System</h4>
+                                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.4; margin: 0;">Every unique check-in earns you 1 point. Consecutive days boost your score.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Item 2 -->
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Streak Bonuses</h4>
+                                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.4; margin: 0;">Maintain a 7-day streak for a +10 point multiplier.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Item 3 -->
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Rank Reset</h4>
+                                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.4; margin: 0;">Weekly leaderboards reset every Sunday at midnight IST.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Item 4 -->
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Elite Badges</h4>
+                                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.4; margin: 0;">Top 3 positions earn permanent badges on their profiles.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="btn btn-primary" style="width: 100%; font-weight: 600;" onclick="hideLeaderboardGuide()">Got it</button>
+                        </div>
+                    </div>
+
                     <!-- SCREEN 5: PROFILE -->
                     <div id="profileScreen" class="mobile-screen">
                         <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Profile Settings</h3>
@@ -1119,6 +1121,9 @@
                                     alt="Avatar">
                                 <input type="hidden" id="profileAvatarBase64">
                                 <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" hidden>
+                                <div id="profilePhotoLoading" class="photo-loading-spinner">
+                                    <div class="spinner-ring"></div>
+                                </div>
                                 <div class="profile-photo-upload-overlay">Upload photo</div>
                             </label>
                             <p class="profile-photo-help">JPG, PNG or WebP · up to 2 MB</p>

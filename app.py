@@ -74,9 +74,9 @@ def auth_register():
         )
         user_id = cursor.lastrowid
         
-        # Create Member (status default is 'active', but without plans assigned yet)
+        # Create Member (status default is 'pending' and requires owner approval)
         cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status) VALUES (?, ?, ?, ?, ?, 'active')",
+            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status) VALUES (?, ?, ?, ?, ?, 'pending')",
             (user_id, first_name, last_name, phone, emergency)
         )
         member_id = cursor.lastrowid
@@ -84,22 +84,16 @@ def auth_register():
         # Create a welcome notification
         cursor.execute(
             "INSERT INTO notifications (user_id, type, message) VALUES (?, 'welcome', ?)",
-            (user_id, f"Welcome to GymOS, {first_name}! Access granted. Please see the owner to purchase a membership plan.")
+            (user_id, f"Welcome to GymOS, {first_name}! Access granted once approved. Please see the owner to purchase a membership plan.")
         )
         
         # Write action to activity log
         cursor.execute(
             "INSERT INTO settings (key, value) SELECT ?, ? WHERE NOT EXISTS(SELECT 1 FROM settings WHERE key=?)",
-            (f"activity:{user_id}", f"Registered new member: {first_name} {last_name}", f"activity:{user_id}")
+            (f"activity:{user_id}", f"Registered new member (Pending Approval): {first_name} {last_name}", f"activity:{user_id}")
         )
         
         conn.commit()
-        
-        # Auto-login after registration
-        session["user_id"] = user_id
-        session["role"] = "member"
-        session["email"] = email
-        session["member_id"] = member_id
         
         broadcast_event("MEMBER_REGISTERED", {
             "id": member_id,
@@ -110,6 +104,7 @@ def auth_register():
         
         return jsonify({
             "success": True,
+            "pending": True,
             "user": {"id": user_id, "email": email, "role": "member", "member_id": member_id}
         })
     except sqlite3.IntegrityError:
@@ -148,6 +143,9 @@ def auth_login():
             if m["status"] == "suspended":
                 conn.close()
                 return jsonify({"error": "Your GymOS account is currently suspended. Please contact the gym owner."}), 403
+            if m["status"] == "pending":
+                conn.close()
+                return jsonify({"error": "Your GymOS registration is pending owner approval. Please wait."}), 403
             member_id = m["id"]
             
     session["user_id"] = user_id
@@ -1535,6 +1533,11 @@ def member_dashboard():
         conn.close()
         session.clear()
         return jsonify({"error": "Account suspended. Session closed."}), 403
+        
+    if mb["status"] == "pending":
+        conn.close()
+        session.clear()
+        return jsonify({"error": "Account pending approval. Session closed."}), 403
         
     # Get active/latest membership details
     cursor.execute("""

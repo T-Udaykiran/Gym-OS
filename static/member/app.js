@@ -68,7 +68,9 @@ function updateSimulatorClock() {
     const suffix = hr >= 12 ? "PM" : "AM";
     hr = hr % 12;
     hr = hr ? hr : 12;
-    simTime.innerText = `${hr}:${min} ${suffix}`;
+    if (simTime) {
+        simTime.innerText = `${hr}:${min} ${suffix}`;
+    }
 }
 
 // Screen navigation
@@ -79,15 +81,18 @@ function switchMobileNav(tabName) {
 
     const btnIdx = { home: 0, activity: 1, scan: 2, leaders: 3, profile: 4 };
     let targetTab = tabName;
-    if (tabName === 'leaders') {
-        targetTab = 'activity';
+    
+    // Highlight the activity tab if we are on the attendance history page
+    let activeBtnTab = tabName;
+    if (tabName === 'attendanceHistory') {
+        activeBtnTab = 'activity';
     }
     
     currentMobileTab = targetTab;
 
     const btns = document.querySelectorAll('.tab-btn');
-    if (btns[btnIdx[tabName]]) {
-        btns[btnIdx[tabName]].classList.add('active');
+    if (btns[btnIdx[activeBtnTab]]) {
+        btns[btnIdx[activeBtnTab]].classList.add('active');
     }
 
     document.querySelectorAll('.mobile-screen').forEach(screen => screen.classList.remove('active'));
@@ -99,13 +104,19 @@ function switchMobileNav(tabName) {
     if (targetTab === 'scan') resetScannerView();
     if (targetTab === 'activity') {
         fetchActivityData();
-        if (tabName === 'leaders') {
-            setTimeout(() => {
-                showActivitySubScreen('subScreenLeaderboard');
-            }, 100);
-        } else {
-            hideActivitySubScreen();
-        }
+        hideActivitySubScreen();
+    }
+    if (targetTab === 'attendanceHistory') {
+        fetchActivityData();
+        setTimeout(() => {
+            renderHistorySubScreen();
+        }, 100);
+    }
+    if (targetTab === 'leaders') {
+        fetchActivityData();
+        setTimeout(() => {
+            renderLeaderboardSubScreen();
+        }, 100);
     }
     if (targetTab === 'payments') { renderBillingBills(); fetchAndRenderPlans(); }
     if (targetTab === 'profile') populateProfileFields();
@@ -510,6 +521,7 @@ async function markMemberNotificationsRead() {
     try {
         await fetch('/api/member/notifications/read', { method: 'POST' });
         document.getElementById('notifBadgeCount').style.display = 'none';
+        fetchDashboardData();
     } catch (err) {
         console.error(err);
     }
@@ -760,7 +772,7 @@ function submitManualEntranceCode() {
 }
 
 function showLeaderboardGuide() {
-    document.getElementById('subScreenLeaderboardGuide').style.display = 'block';
+    document.getElementById('subScreenLeaderboardGuide').style.display = 'flex';
 }
 
 function hideLeaderboardGuide() {
@@ -775,11 +787,48 @@ function handleProfilePhotoUpload(event) {
         event.target.value = '';
         return;
     }
+    
+    // Show spinner
+    const spinner = document.getElementById('profilePhotoLoading');
+    if (spinner) spinner.style.display = 'flex';
+    
     const reader = new FileReader();
-    reader.onload = () => {
-        document.getElementById('profileAvatarImg').src = reader.result;
-        document.getElementById('profileAvatarBase64').value = reader.result;
-        showMobileToast('Photo ready. Save profile to upload it.', 'success');
+    reader.onload = async () => {
+        const base64 = reader.result;
+        const phone = document.getElementById('profPhone').value || activeMemberData.phone || '';
+        const emergency = document.getElementById('profEmergency').value || activeMemberData.emergency_contact || '';
+        
+        try {
+            const res = await fetch('/api/member/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone: phone,
+                    emergency_contact: emergency,
+                    profile_photo: base64
+                })
+            });
+            const resData = await res.json();
+            if (resData.success) {
+                document.getElementById('profileAvatarImg').src = base64;
+                document.getElementById('profileAvatarBase64').value = base64;
+                activeMemberData.profile_photo = base64;
+                showMobileToast('Profile photo updated successfully', 'success');
+            } else {
+                showMobileToast(resData.error || 'Failed to save profile photo.', 'error');
+            }
+        } catch (err) {
+            console.error(err);
+            showMobileToast('Network error uploading profile photo.', 'error');
+        } finally {
+            if (spinner) spinner.style.display = 'none';
+            event.target.value = ''; // Reset file input
+        }
+    };
+    reader.onerror = () => {
+        showMobileToast('Error reading file.', 'error');
+        if (spinner) spinner.style.display = 'none';
+        event.target.value = '';
     };
     reader.readAsDataURL(file);
 }
@@ -816,12 +865,19 @@ function showVerifyView() {
     setupOtpSlotsAutoAdvance();
 }
 
-function showPendingView() {
+function showPendingOTPView() {
     hideAllAuthViews();
-    document.getElementById('authPendingView').style.display = 'flex';
+    const el = document.getElementById('authPendingOTPView');
+    if (el) el.style.display = 'flex';
     setTimeout(() => {
         showPersonalizeView();
     }, 2000);
+}
+
+function showPendingView() {
+    hideAllAuthViews();
+    const el = document.getElementById('authPendingView');
+    if (el) el.style.display = 'flex';
 }
 
 function showPersonalizeView() {
@@ -830,7 +886,7 @@ function showPersonalizeView() {
 }
 
 function hideAllAuthViews() {
-    const views = ['authSplashScreen', 'authLoginView', 'authRegisterView', 'authVerifyView', 'authPendingView', 'authPersonalizeView'];
+    const views = ['authSplashScreen', 'authLoginView', 'authRegisterView', 'authVerifyView', 'authPendingOTPView', 'authPendingView', 'authPersonalizeView'];
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -854,7 +910,7 @@ function setupOtpSlotsAutoAdvance() {
                 if (index < inputs.length - 1) {
                     inputs[index + 1].focus();
                 } else {
-                    showPendingView();
+                    showPendingOTPView();
                 }
             }
         });
@@ -889,8 +945,11 @@ function simulateOwnerVerificationGlow() {
 }
 
 // Modal Date Pickers
+const DOB_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 function openDobDatePicker() {
     document.getElementById('modalDobPicker').style.display = 'flex';
+    showDobDayView();
     renderDobCalendar();
 }
 
@@ -898,26 +957,136 @@ function closeDobDatePicker() {
     document.getElementById('modalDobPicker').style.display = 'none';
 }
 
+function renderDobHeader() {
+    document.getElementById('dobMonthBtn').innerText = DOB_MONTH_NAMES[selectedDobDate.getMonth()];
+    document.getElementById('dobYearBtn').innerText = selectedDobDate.getFullYear();
+}
+
+function showDobDayView() {
+    document.getElementById('dobDayView').style.display = 'block';
+    document.getElementById('dobMonthView').style.display = 'none';
+    document.getElementById('dobYearView').style.display = 'none';
+    document.getElementById('dobNavArrows').style.display = 'flex';
+    renderDobHeader();
+}
+
+function toggleDobMonthView() {
+    document.getElementById('dobDayView').style.display = 'none';
+    document.getElementById('dobYearView').style.display = 'none';
+    document.getElementById('dobMonthView').style.display = 'block';
+    document.getElementById('dobNavArrows').style.display = 'none';
+    renderDobHeader();
+    renderDobMonthGrid();
+}
+
+function toggleDobYearView() {
+    document.getElementById('dobDayView').style.display = 'none';
+    document.getElementById('dobMonthView').style.display = 'none';
+    document.getElementById('dobYearView').style.display = 'block';
+    document.getElementById('dobNavArrows').style.display = 'none';
+    renderDobHeader();
+    renderDobYearGrid();
+}
+
 function changeDobMonth(delta) {
     selectedDobDate.setMonth(selectedDobDate.getMonth() + delta);
-    showMobileToast('Month adjusted', 'info');
+    renderDobCalendar();
 }
 
 function renderDobCalendar() {
-    const cells = document.querySelectorAll('#modalDobPicker .cal-cell:not(.empty)');
-    cells.forEach(cell => {
+    renderDobHeader();
+
+    const grid = document.getElementById('dobDaysGrid');
+    grid.innerHTML = '';
+
+    const year = selectedDobDate.getFullYear();
+    const month = selectedDobDate.getMonth();
+    const selectedDay = selectedDobDate.getDate();
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const prevLastDay = new Date(year, month, 0).getDate();
+
+    for (let i = firstDayIndex; i > 0; i--) {
+        const cell = document.createElement('span');
+        cell.className = 'cal-cell empty';
+        cell.innerText = prevLastDay - i + 1;
+        grid.appendChild(cell);
+    }
+
+    for (let i = 1; i <= lastDay; i++) {
+        const cell = document.createElement('span');
+        cell.className = 'cal-cell' + (i === selectedDay ? ' active' : '');
+        cell.innerText = i;
         cell.onclick = () => {
-            cells.forEach(c => c.classList.remove('active'));
-            cell.classList.add('active');
-            const day = parseInt(cell.innerText);
-            selectedDobDate.setDate(day);
+            selectedDobDate.setDate(i);
+            renderDobCalendar();
         };
+        grid.appendChild(cell);
+    }
+
+    const totalCells = firstDayIndex + lastDay;
+    const nextMonthPadding = (Math.ceil(totalCells / 7) * 7) - totalCells;
+    for (let i = 1; i <= nextMonthPadding; i++) {
+        const cell = document.createElement('span');
+        cell.className = 'cal-cell empty';
+        cell.innerText = i;
+        grid.appendChild(cell);
+    }
+}
+
+function renderDobMonthGrid() {
+    const grid = document.getElementById('dobMonthsGrid');
+    grid.innerHTML = '';
+    DOB_MONTH_NAMES.forEach((name, idx) => {
+        const cell = document.createElement('div');
+        cell.className = 'dob-picker-cell' + (idx === selectedDobDate.getMonth() ? ' active' : '');
+        cell.innerText = name.slice(0, 3);
+        cell.onclick = () => {
+            const day = selectedDobDate.getDate();
+            const daysInNewMonth = new Date(selectedDobDate.getFullYear(), idx + 1, 0).getDate();
+            selectedDobDate.setMonth(idx);
+            if (day > daysInNewMonth) selectedDobDate.setDate(daysInNewMonth);
+            showDobDayView();
+            renderDobCalendar();
+        };
+        grid.appendChild(cell);
     });
 }
 
+function renderDobYearGrid() {
+    const grid = document.getElementById('dobYearsGrid');
+    grid.innerHTML = '';
+
+    const currentYear = new Date().getFullYear();
+    const startYear = currentYear - 100;
+    const selectedYear = selectedDobDate.getFullYear();
+    let activeCell = null;
+
+    for (let y = currentYear; y >= startYear; y--) {
+        const cell = document.createElement('div');
+        cell.className = 'dob-picker-cell' + (y === selectedYear ? ' active' : '');
+        cell.innerText = y;
+        if (y === selectedYear) activeCell = cell;
+        cell.onclick = () => {
+            const day = selectedDobDate.getDate();
+            const month = selectedDobDate.getMonth();
+            const daysInMonth = new Date(y, month + 1, 0).getDate();
+            selectedDobDate.setFullYear(y);
+            if (day > daysInMonth) selectedDobDate.setDate(daysInMonth);
+            showDobDayView();
+            renderDobCalendar();
+        };
+        grid.appendChild(cell);
+    }
+
+    if (activeCell) {
+        activeCell.scrollIntoView({ block: 'center' });
+    }
+}
+
 function confirmDobPicker() {
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const formatted = `${selectedDobDate.getDate()} ${monthNames[selectedDobDate.getMonth()]} ${selectedDobDate.getFullYear()}`;
+    const formatted = `${selectedDobDate.getDate()} ${DOB_MONTH_NAMES[selectedDobDate.getMonth()]} ${selectedDobDate.getFullYear()}`;
     document.getElementById('personalDobVal').innerText = formatted;
     closeDobDatePicker();
 }
@@ -1005,10 +1174,8 @@ async function submitPersonalizedDataAndComplete() {
         });
         const resData = await res.json();
         if (resData.success) {
-            memberAuthWrapper.style.display = 'none';
-            memberAppWrapper.style.display = 'flex';
-            showMobileToast('Fitness personalized and profile created!', 'success');
-            fetchDashboardData();
+            showPendingView();
+            showMobileToast('Registration successful! Awaiting owner approval.', 'success');
             tempRegisterData = null;
             document.getElementById('authRegisterForm').reset();
         } else {
@@ -1138,11 +1305,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     // Stash the event so it can be triggered later.
     deferredPrompt = e;
-    // Show the install banner in the member dashboard
-    const installBanner = document.getElementById('pwaInstallBanner');
-    if (installBanner) {
-        installBanner.style.display = 'flex';
+    // Show the install banner in the member dashboard if not already installed
+    if (!window.matchMedia('(display-mode: standalone)').matches) {
+        const installBanner = document.getElementById('pwaInstallBanner');
+        if (installBanner) {
+            installBanner.style.display = 'flex';
+        }
     }
+});
+
+window.addEventListener('appinstalled', (evt) => {
+    console.log('GymOS was installed');
+    const installBanner = document.getElementById('pwaInstallBanner');
+    if (installBanner) installBanner.style.display = 'none';
+    deferredPrompt = null;
 });
 
 function triggerAppInstall() {
@@ -1512,13 +1688,7 @@ function populateActivityDashboard(data) {
                 card.style.borderRadius = '14px';
                 card.style.padding = '14px 16px';
                 card.style.textAlign = 'left';
-                card.style.cursor = 'pointer';
-                
-                card.onclick = () => {
-                    selectedTimelineLog = log;
-                    showActivitySubScreen('subScreenTimeline');
-                    renderTimelineSubScreen();
-                };
+                card.style.marginBottom = '12px';
 
                 card.innerHTML = `
                     <h4 style="font-size: 13.5px; font-weight: 800; color: #fff; margin: 0 0 12px 0;">${dateLabel}</h4>
@@ -1533,7 +1703,7 @@ function populateActivityDashboard(data) {
                         </div>
                         <div style="flex: 1; text-align: right;">
                             <span style="font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 600;">Duration</span>
-                            <p style="font-size: 14.5px; font-weight: 800; color: var(--accent); margin: 4px 0 0 0;">${duration}</p>
+                            <p style="font-size: 14.5px; font-weight: 800; color: #fff; margin: 4px 0 0 0;">${duration}</p>
                         </div>
                     </div>
                 `;
@@ -1596,7 +1766,7 @@ function renderHistorySubScreen() {
     container.innerHTML = '';
     
     const searchVal = document.getElementById('historySearchField').value.toLowerCase().trim();
-    let logs = activityDataGlobal.logs || [];
+    let logs = (activityDataGlobal && activityDataGlobal.logs) ? activityDataGlobal.logs : [];
     
     if (searchVal) {
         logs = logs.filter(log => {
@@ -1647,14 +1817,7 @@ function renderHistorySubScreen() {
         card.style.borderRadius = '14px';
         card.style.padding = '14px 16px';
         card.style.textAlign = 'left';
-        card.style.cursor = 'pointer';
         card.style.marginBottom = '12px';
-
-        card.onclick = () => {
-            selectedTimelineLog = log;
-            showActivitySubScreen('subScreenTimeline');
-            renderTimelineSubScreen();
-        };
 
         card.innerHTML = `
             <h4 style="font-size: 13.5px; font-weight: 800; color: #fff; margin: 0 0 12px 0;">${dateLabel}</h4>
@@ -1669,7 +1832,7 @@ function renderHistorySubScreen() {
                 </div>
                 <div style="flex: 1; text-align: right;">
                     <span style="font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 600;">Duration</span>
-                    <p style="font-size: 14.5px; font-weight: 800; color: var(--accent); margin: 4px 0 0 0;">${durationStr}</p>
+                    <p style="font-size: 14.5px; font-weight: 800; color: #fff; margin: 4px 0 0 0;">${durationStr}</p>
                 </div>
             </div>
         `;
@@ -1950,15 +2113,17 @@ function renderLeaderboardSubScreen() {
     let leaderboard = [];
     let currentMemberRank = 0;
     
-    if (currentLeaderboardPeriod === 'weekly') {
-        leaderboard = activityDataGlobal.leaderboard_weekly || [];
-        currentMemberRank = activityDataGlobal.weekly_rank || 0;
-    } else if (currentLeaderboardPeriod === 'monthly') {
-        leaderboard = activityDataGlobal.leaderboard_monthly || [];
-        currentMemberRank = activityDataGlobal.monthly_rank || 0;
-    } else {
-        leaderboard = activityDataGlobal.leaderboard_all || [];
-        currentMemberRank = activityDataGlobal.all_time_rank || 0;
+    if (activityDataGlobal) {
+        if (currentLeaderboardPeriod === 'weekly') {
+            leaderboard = activityDataGlobal.leaderboard_weekly || [];
+            currentMemberRank = activityDataGlobal.weekly_rank || 0;
+        } else if (currentLeaderboardPeriod === 'monthly') {
+            leaderboard = activityDataGlobal.leaderboard_monthly || [];
+            currentMemberRank = activityDataGlobal.monthly_rank || 0;
+        } else {
+            leaderboard = activityDataGlobal.leaderboard_all || [];
+            currentMemberRank = activityDataGlobal.all_time_rank || 0;
+        }
     }
     
     const defaultPodium = [
