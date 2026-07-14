@@ -107,9 +107,13 @@ def auth_register():
             "pending": True,
             "user": {"id": user_id, "email": email, "role": "member", "member_id": member_id}
         })
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "Email address already registered"}), 400
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        if "email" in str(e).lower():
+            return jsonify({"error": "Email address already registered"}), 400
+        return jsonify({"error": f"Registration failed: {e}"}), 400
     except Exception as e:
+        conn.rollback()
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
