@@ -13,9 +13,6 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="stylesheet" href="/shared/styles.css">
     <link rel="stylesheet" href="/member/style.css">
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics-compat.js"></script>
-    <script src="/shared/firebase-init.js"></script>
 </head>
 
 <body>
@@ -1102,10 +1099,18 @@
 
                     <!-- SCREEN 4: PAYMENTS -->
                     <div id="paymentsScreen" class="mobile-screen">
-                        <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">Billings & Payments</h3>
-                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">Review invoice
-                            receipts and dues.</p>
+                        <div class="profile-back-header">
+                            <button class="profile-back-btn" onclick="switchMobileNav('profile')">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            </button>
+                            <h3>Payments</h3>
+                            <button class="emergency-action-btn" onclick="openUploadPaymentModal()" style="margin-left: auto; color: var(--text-primary);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15v3.8a2 2 0 0 1-2 2H4.8a2 2 0 0 1-2-2V15"></path><polyline points="7.6 8 12 3.6 16.4 8"></polyline><line x1="12" y1="3.6" x2="12" y2="15"></line></svg>
+                            </button>
+                        </div>
+                        <p class="payments-subtitle" style="margin-top: -16px; margin-bottom: 24px;">Track your membership payments</p>
 
+                        <div class="payments-section-lbl">History</div>
                         <div id="memberPaymentsList" style="display: flex; flex-direction: column;">
                             <!-- Invoices -->
                         </div>
@@ -1274,34 +1279,346 @@
                                     style="background-color: var(--bg-raised); color: var(--text-secondary);" readonly>
                             </div>
 
-                            <div class="input-group">
-                                <label>Last Name</label>
-                                <input type="text" id="profLast" class="input-control"
-                                    style="background-color: var(--bg-raised); color: var(--text-secondary);" readonly>
+                            <!-- Avatar -->
+                            <div class="profile-avatar-container">
+                                <div class="profile-avatar-ring">
+                                    <img id="profileHomeAvatar" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop" alt="Profile">
+                                </div>
+                                <div class="profile-active-dot"></div>
                             </div>
 
-                            <div class="input-group">
-                                <label for="profPhone">Phone Number</label>
-                                <input type="text" id="profPhone" class="input-control"
-                                    placeholder="Update physical phone" required>
+                            <!-- User Details -->
+                            <div style="text-align: center; margin-bottom: 20px;">
+                                <h4 id="profileHomeName" style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 4px 0;">David Doni</h4>
                             </div>
 
-                            <div class="input-group">
-                                <label for="profEmergency">Emergency Contact Info</label>
-                                <input type="text" id="profEmergency" class="input-control"
-                                    placeholder="Jane Doe / +155500000" required>
+                            <!-- Streak Row -->
+                            <div class="profile-stats-row">
+                                <div class="profile-stat-col">
+                                    <div class="profile-stat-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7ff24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
+                                    </div>
+                                    <div id="profileHomeStreak" class="profile-stat-val">12d</div>
+                                    <div class="profile-stat-lbl">Streak</div>
+                                </div>
+                                <div class="profile-stat-col">
+                                    <div class="profile-stat-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7ff24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    </div>
+                                    <div id="profileHomeTimeSpent" class="profile-stat-val">47hrs</div>
+                                    <div class="profile-stat-lbl">Time Spent</div>
+                                </div>
+                                <div class="profile-stat-col">
+                                    <div class="profile-stat-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7ff24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"></path><path d="M12 2a6 6 0 0 1 6 6v3.5a6 6 0 0 1-6 6 6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z"></path></svg>
+                                    </div>
+                                    <div id="profileHomeRank" class="profile-stat-val">#3</div>
+                                    <div class="profile-stat-lbl">Rank</div>
+                                </div>
                             </div>
 
-                            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 16px;">Save
-                                Profiles Changes</button>
-                        </form>
+                            <!-- Menu List -->
+                            <div class="profile-menu-list">
+                                <div class="profile-menu-item" onclick="showProfileSubScreen('profileEditSubScreen')">
+                                    <div class="profile-menu-item-left">
+                                        <svg class="profile-menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                        <span class="profile-menu-item-label">Personal Info</span>
+                                    </div>
+                                    <div class="profile-menu-item-arrow">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                </div>
+                                <div class="profile-menu-item" onclick="showProfileSubScreen('profileEmergencySubScreen')">
+                                    <div class="profile-menu-item-left">
+                                        <svg class="profile-menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                                        <span class="profile-menu-item-label">Emergency Contact</span>
+                                    </div>
+                                    <div class="profile-menu-item-arrow">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                </div>
+                                <div class="profile-menu-item" onclick="showProfileSubScreen('profileStatsSubScreen')">
+                                    <div class="profile-menu-item-left">
+                                        <svg class="profile-menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                                        <span class="profile-menu-item-label">Body Stats</span>
+                                    </div>
+                                    <div class="profile-menu-item-arrow">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                </div>
+                                <div class="profile-menu-item" onclick="switchMobileNav('payments')">
+                                    <div class="profile-menu-item-left">
+                                        <svg class="profile-menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+                                        <span class="profile-menu-item-label">Payments</span>
+                                    </div>
+                                    <div class="profile-menu-item-arrow">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                </div>
+                                <div class="profile-menu-item" onclick="showProfileSubScreen('profilePasswordSubScreen')">
+                                    <div class="profile-menu-item-left">
+                                        <svg class="profile-menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                                        <span class="profile-menu-item-label">Change Password</span>
+                                    </div>
+                                    <div class="profile-menu-item-arrow">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                </div>
+                                <div class="profile-menu-item" onclick="logoutMemberApp()" style="color: var(--danger);">
+                                    <div class="profile-menu-item-left">
+                                        <svg class="profile-menu-item-icon" style="color: var(--danger);" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                                        <span class="profile-menu-item-label">Log Out</span>
+                                    </div>
+                                    <div class="profile-menu-item-arrow" style="color: var(--danger);">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                        <!-- Log out Member Portal -->
-                        <button class="btn btn-secondary"
-                            style="width: 100%; border-color: rgba(239, 68, 68, 0.2); color: var(--danger-dark); margin-top: 16px;"
-                            onclick="logoutMemberApp()">
-                            Sign Out Account
-                        </button>
+                        <!-- SUB-SCREEN: EDIT PROFILE -->
+                        <div id="profileEditSubScreen" class="profile-subscreen">
+                            <div class="profile-back-header">
+                                <button class="profile-back-btn" onclick="hideProfileSubScreen('profileEditSubScreen')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                </button>
+                                <h3>Edit Profile</h3>
+                            </div>
+
+                            <form id="memberProfileForm" onsubmit="saveProfileChangesRedesigned(event)">
+                                <label class="profile-avatar-edit" for="profilePhotoInput">
+                                    <img id="profileAvatarImg" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop" alt="Avatar">
+                                    <input type="hidden" id="profileAvatarBase64">
+                                    <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" hidden>
+                                    <div class="profile-avatar-edit-overlay">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                    </div>
+                                </label>
+
+                                <div class="profile-input-group">
+                                    <label>Input Title</label>
+                                    <input type="text" id="profFirst" class="profile-input-control" placeholder="Full Name" required>
+                                </div>
+                                <div class="profile-input-group">
+                                    <label>Input Title</label>
+                                    <input type="text" id="profPhone" class="profile-input-control" placeholder="Phone Number" required>
+                                </div>
+                                <div class="profile-input-group">
+                                    <label>Input Title</label>
+                                    <input type="email" id="profEmail" class="profile-input-control" placeholder="Email" readonly style="background: rgba(255,255,255,0.01); color: var(--text-secondary);">
+                                </div>
+                                <div class="profile-input-group">
+                                    <label>Input Title</label>
+                                    <input type="text" id="profDob" class="profile-input-control" placeholder="Date of Birth (e.g. 12 May, 1994)">
+                                </div>
+
+                                <button type="submit" class="profile-btn-primary">Save Changes</button>
+                            </form>
+                        </div>
+
+                        <!-- SUB-SCREEN: EMERGENCY CONTACT -->
+                        <div id="profileEmergencySubScreen" class="profile-subscreen">
+                            <div class="profile-back-header">
+                                <button class="profile-back-btn" onclick="hideProfileSubScreen('profileEmergencySubScreen')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                </button>
+                                <h3>Emergency Contact</h3>
+                            </div>
+
+                            <div id="emergencyContactsList" class="emergency-contacts-list">
+                                <!-- Contact cards dynamically rendered -->
+                            </div>
+
+                            <button class="floating-add-btn" onclick="openAddEmergencyContactModal()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            </button>
+                        </div>
+
+                        <!-- SUB-SCREEN: BODY STATS -->
+                        <div id="profileStatsSubScreen" class="profile-subscreen">
+                            <div class="profile-back-header">
+                                <button class="profile-back-btn" onclick="hideProfileSubScreen('profileStatsSubScreen')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                </button>
+                                <h3>Body Stats</h3>
+                            </div>
+
+                            <div class="body-stats-grid">
+                                <div class="body-stat-card">
+                                    <div class="body-stat-card-title">Weight</div>
+                                    <div class="body-stat-card-value"><span id="statWeightVal">192</span><span>lb</span></div>
+                                </div>
+                                <div class="body-stat-card">
+                                    <div class="body-stat-card-title">Height</div>
+                                    <div class="body-stat-card-value"><span id="statHeightVal">190</span><span>cm</span></div>
+                                </div>
+                                <div class="body-stat-card">
+                                    <div class="body-stat-card-title">BMI</div>
+                                    <div class="body-stat-card-value" id="statBmiVal">24.3</div>
+                                </div>
+                            </div>
+
+                            <!-- Weight Trend Card -->
+                            <div class="weight-trend-card">
+                                <div class="weight-trend-header">
+                                    <span class="weight-trend-title">Weight Trend</span>
+                                    <span class="weight-trend-diff">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+                                        <span>2.4 lb</span>
+                                    </span>
+                                </div>
+                                <div id="weightTrendChartContainer" style="width: 100%; height: 160px; margin-top: 10px;">
+                                    <!-- Rendered SVG weight trend chart -->
+                                </div>
+                            </div>
+
+                            <button class="profile-btn-primary" onclick="openUpdateStatsModal()">Update Stats</button>
+                        </div>
+
+                        <!-- SUB-SCREEN: CHANGE PASSWORD -->
+                        <div id="profilePasswordSubScreen" class="profile-subscreen">
+                            <div class="profile-back-header">
+                                <button class="profile-back-btn" onclick="hideProfileSubScreen('profilePasswordSubScreen')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                </button>
+                                <h3>Change Password</h3>
+                            </div>
+
+                            <form id="profileChangePasswordForm" onsubmit="submitChangePasswordRedesigned(event)">
+                                <div class="profile-input-group">
+                                    <label>Current Password</label>
+                                    <input type="password" id="oldPasswordInput" class="profile-input-control" placeholder="Enter current password" required>
+                                </div>
+                                <div class="profile-input-group">
+                                    <label>New Password</label>
+                                    <input type="password" id="newPasswordInput" class="profile-input-control" placeholder="Enter new password" required>
+                                </div>
+                                <div class="profile-input-group">
+                                    <label>Confirm Password</label>
+                                    <input type="password" id="confirmNewPasswordInput" class="profile-input-control" placeholder="Confirm new password" required>
+                                </div>
+
+                                <button type="submit" class="profile-btn-primary">Save Changes</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Redesigned Emergency Contact Dialog -->
+                    <div id="emergencyContactModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
+                        <div class="member-modal-card" style="text-align: left; max-width: 340px;">
+                            <h3 id="emergencyModalTitle" style="font-size: 17px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary);">Add Emergency Contact</h3>
+                            <form id="emergencyContactForm" onsubmit="saveEmergencyContactSubmit(event)">
+                                <input type="hidden" id="emergencyContactId">
+                                <div class="input-group" style="margin-bottom: 12px;">
+                                    <label for="emergencyName">Full Name</label>
+                                    <input type="text" id="emergencyName" class="input-control" placeholder="John Doni" required>
+                                </div>
+                                <div class="input-group" style="margin-bottom: 12px;">
+                                    <label for="emergencyRelation">Relation</label>
+                                    <input type="text" id="emergencyRelation" class="input-control" placeholder="Brother" required>
+                                </div>
+                                <div class="input-group" style="margin-bottom: 20px;">
+                                    <label for="emergencyPhone">Phone Number</label>
+                                    <input type="text" id="emergencyPhone" class="input-control" placeholder="+1 (555) 987-6543" required>
+                                </div>
+                                <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%;">
+                                    <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closeEmergencyContactModal()">Cancel</button>
+                                    <button type="submit" class="btn btn-primary" style="flex: 1; font-weight: 600;">Save</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Redesigned Update Stats Dialog -->
+                    <div id="updateStatsModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
+                        <div class="member-modal-card" style="text-align: left; max-width: 340px;">
+                            <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary);">Update Body Stats</h3>
+                            <form id="updateStatsForm" onsubmit="saveStatsSubmit(event)">
+                                <div class="input-group" style="margin-bottom: 12px;">
+                                    <label for="statsWeightInput">Weight (lb)</label>
+                                    <input type="number" id="statsWeightInput" class="input-control" placeholder="192" required>
+                                </div>
+                                <div class="input-group" style="margin-bottom: 12px;">
+                                    <label for="statsHeightInput">Height (cm)</label>
+                                    <input type="number" id="statsHeightInput" class="input-control" placeholder="190" required>
+                                </div>
+                                <div class="input-group" style="margin-bottom: 20px;">
+                                    <label for="statsBmiInput">BMI</label>
+                                    <input type="number" step="0.1" id="statsBmiInput" class="input-control" placeholder="24.3" required>
+                                </div>
+                                <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%;">
+                                    <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closeUpdateStatsModal()">Cancel</button>
+                                    <button type="submit" class="btn btn-primary" style="flex: 1; font-weight: 600;">Update</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Upload Your Payment Modal -->
+                    <div id="uploadPaymentModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
+                        <div class="member-modal-card" style="text-align: left; max-width: 360px;">
+                            <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 4px; color: var(--text-primary);">Upload Your Payment</h3>
+                            <p style="font-size: 11px; color: var(--text-tertiary); margin-bottom: 16px;">Method Of Payment</p>
+                            
+                            <div class="input-group" style="margin-bottom: 16px;">
+                                <select id="paymentMethodSelect" class="input-control" style="background-color: rgba(255,255,255,0.02); color: var(--text-primary); border-color: var(--border-color);">
+                                    <option value="online">Online</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="card">Card</option>
+                                </select>
+                            </div>
+
+                            <div class="input-group" style="margin-bottom: 16px;">
+                                <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 8px;">Date</label>
+                                <input type="text" id="paymentSenderName" class="input-control" placeholder="Enter Your Full Name" required>
+                            </div>
+
+                            <div id="fileUploadDottedZone" class="file-upload-dotted-zone" onclick="triggerFileInput()">
+                                <div class="file-upload-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                </div>
+                                <div class="file-upload-title">Upload Your Payment Screenshot</div>
+                                <div class="file-upload-subtitle">JPEG, PNG, PDF, and MP4 formats, up to 1 MB.</div>
+                                <button type="button" class="file-upload-browse-btn">Browse File</button>
+                                <input type="file" id="paymentScreenshotInput" accept="image/*,application/pdf,video/mp4" style="display:none;" onchange="handleFileSelection(event)">
+                            </div>
+
+                            <!-- Progress file card -->
+                            <div id="fileUploadProgressCard" class="uploaded-file-card" style="display:none;">
+                                <div class="uploaded-file-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                </div>
+                                <div class="uploaded-file-info">
+                                    <div id="progressFileName" class="uploaded-file-name">my-Invoice.pdf</div>
+                                    <div id="progressFileMeta" class="uploaded-file-meta">0 KB of 120 KB · Uploading...</div>
+                                    <div style="width: 100%; height: 4px; background-color: var(--border-color); border-radius: 2px; margin-top: 6px; overflow: hidden;">
+                                        <div id="progressFillBar" style="width: 0%; height: 100%; background-color: var(--accent); transition: width 0.2s;"></div>
+                                    </div>
+                                </div>
+                                <button type="button" class="uploaded-file-close" onclick="cancelUploadSimulator()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
+                            </div>
+
+                            <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%; margin-top: 24px;">
+                                <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closeUploadPaymentModal()">Cancel</button>
+                                <button type="button" id="uploadPaymentSubmitBtn" class="btn btn-primary" style="flex: 1; font-weight: 600;" disabled onclick="startSimulatedUpload()">Upload</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Uploaded Successfully Success Dialog -->
+                    <div id="paymentSuccessModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
+                        <div class="member-modal-card" style="text-align: center; max-width: 320px; padding: 24px;">
+                            <div class="success-modal-check">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            </div>
+                            <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 8px; color: var(--text-primary);">Payment Uploaded Successfully</h3>
+                            <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 24px;">
+                                Your payment receipt has been uploaded and is awaiting verification.
+                            </p>
+                            <button class="profile-btn-primary" style="margin: 0; width: 100%;" onclick="closeSuccessPaymentModal()">Okay</button>
+                        </div>
                     </div>
                 </div>
 

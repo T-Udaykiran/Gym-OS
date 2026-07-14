@@ -1639,6 +1639,641 @@ body { background: #080808; padding: 0; }
     background-color: var(--accent) !important;
 }
 
+/* Redesigned Profile Sub-screen System */
+.profile-subscreen {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background-color: var(--bg-app);
+    z-index: 100;
+    flex-direction: column;
+    padding: 24px 20px 100px;
+    overflow-y: auto;
+}
+
+.profile-subscreen.active {
+    display: flex;
+}
+
+/* Profile Avatar Green Ring Badge */
+.profile-avatar-container {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    margin: 16px auto 12px;
+}
+
+.profile-avatar-ring {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.profile-avatar-ring img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.profile-active-dot {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    background-color: var(--accent);
+    border: 3px solid var(--bg-app);
+    border-radius: 50%;
+}
+
+.profile-avatar-edit {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    margin: 0 auto 24px;
+    border-radius: 50%;
+    background-color: #242424;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.profile-avatar-edit img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-avatar-edit-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile-avatar-edit-overlay svg {
+    color: white;
+    width: 24px;
+    height: 24px;
+}
+
+/* Streak Stats Row */
+.profile-stats-row {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 16px 8px;
+    margin-bottom: 24px;
+}
+
+.profile-stat-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    flex: 1;
+}
+
+.profile-stat-col:not(:last-child) {
+    border-right: 1px solid var(--border-color);
+}
+
+.profile-stat-icon {
+    margin-bottom: 8px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile-stat-val {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.profile-stat-lbl {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+}
+
+/* Redesigned Menu list */
+.profile-menu-list {
+    display: flex;
+    flex-direction: column;
+    background-color: rgba(255, 255, 255, 0.01);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+
+.profile-menu-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.profile-menu-item:not(:last-child) {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.profile-menu-item:active {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.profile-menu-item-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.profile-menu-item-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--text-secondary);
+}
+
+.profile-menu-item-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.profile-menu-item-arrow {
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+}
+
+/* Sub-screen header */
+.profile-back-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding: 4px 0;
+}
+
+.profile-back-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    font-size: 20px;
+}
+
+.profile-back-header h3 {
+    font-size: 18px;
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+/* Redesigned Form Fields */
+.profile-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+
+.profile-input-group label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    letter-spacing: 0.05em;
+}
+
+.profile-input-control {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 14px;
+    color: var(--text-primary);
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.profile-input-control:focus {
+    border-color: var(--accent);
+}
+
+.profile-btn-primary {
+    background-color: var(--text-primary);
+    color: var(--bg-app);
+    border: none;
+    border-radius: 24px;
+    padding: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    width: 100%;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    margin-top: 16px;
+    text-align: center;
+}
+
+.profile-btn-primary:active {
+    opacity: 0.85;
+}
+
+/* Emergency Contacts List */
+.emergency-contacts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.emergency-contact-card {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 18px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.emergency-contact-details h4 {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.emergency-contact-relation {
+    font-size: 11px;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.emergency-contact-details p {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.emergency-contact-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.emergency-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.emergency-action-btn.delete {
+    color: var(--danger-dark);
+}
+
+/* Floating Add Button */
+.floating-add-btn {
+    position: absolute;
+    bottom: 120px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    color: var(--bg-app);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(199, 255, 36, 0.2);
+    transition: transform 0.2s;
+    z-index: 10;
+}
+
+.floating-add-btn:active {
+    transform: scale(0.95);
+}
+
+/* Body Stats Screen */
+.body-stats-grid {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.body-stat-card {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 16px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.body-stat-card-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+
+.body-stat-card-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.body-stat-card-value span {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-left: 2px;
+    font-weight: 500;
+}
+
+.weight-trend-card {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.weight-trend-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.weight-trend-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.weight-trend-diff {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Payments list custom style */
+.payments-header {
+    margin-bottom: 20px;
+}
+
+.payments-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.payments-subtitle {
+    font-size: 12px;
+    color: var(--text-tertiary);
+}
+
+.payments-section-lbl {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+    letter-spacing: 0.05em;
+}
+
+.payment-history-item {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.payment-history-left {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.payment-history-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.payment-history-date {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.payment-status-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+.payment-status-badge.approved {
+    background-color: rgba(199, 255, 36, 0.1);
+    color: var(--accent);
+}
+
+.payment-status-badge.pending {
+    background-color: rgba(255, 204, 77, 0.1);
+    color: var(--warning-dark);
+}
+
+.payment-status-badge.rejected {
+    background-color: rgba(255, 104, 104, 0.1);
+    color: var(--danger-dark);
+}
+
+.payment-history-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.payment-history-amount {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.payment-download-link {
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+}
+
+/* File Upload UI */
+.file-upload-dotted-zone {
+    border: 2px dashed var(--border-color);
+    border-radius: 12px;
+    padding: 24px 16px;
+    text-align: center;
+    cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.01);
+    margin-top: 16px;
+}
+
+.file-upload-dotted-zone:hover {
+    border-color: var(--accent);
+}
+
+.file-upload-icon {
+    width: 32px;
+    height: 32px;
+    color: var(--text-tertiary);
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-upload-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.file-upload-subtitle {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+}
+
+.file-upload-browse-btn {
+    background-color: #242424;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 6px 16px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* Progress card styles */
+.uploaded-file-card {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+}
+
+.uploaded-file-icon {
+    background-color: rgba(255, 104, 104, 0.1);
+    color: #ff6868;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.uploaded-file-info {
+    flex: 1;
+}
+
+.uploaded-file-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.uploaded-file-meta {
+    font-size: 10px;
+    color: var(--text-tertiary);
+}
+
+.uploaded-file-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+}
+
+/* Premium success modal */
+.success-modal-check {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+}
+
+.success-modal-check svg {
+    width: 24px;
+    height: 24px;
+}
+
 /* Empty State Container */
 .empty-state-container {
     display: flex;

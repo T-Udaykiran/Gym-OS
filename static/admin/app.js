@@ -41,6 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     setupFormHandlers();
     setHeaderDates();
+    if (typeof initializeOwnerNotifications === 'function') initializeOwnerNotifications();
+    if (typeof setupDashboardFilterListeners === 'function') setupDashboardFilterListeners();
 
     window.addEventListener('online', () => {
         showToast('Internet restored. Sync active.', 'success');
@@ -276,6 +278,10 @@ function showTab(tabName) {
     // Auto-close mobile sidebar drawer
     toggleMobileSidebar(false);
     
+    // Close floating popovers
+    if (typeof closeDashboardFilterPanel === 'function') closeDashboardFilterPanel();
+    if (typeof closeNotificationPopover === 'function') closeNotificationPopover();
+    
     currentTab = tabName;
     clearAllSelections();
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
@@ -297,6 +303,7 @@ function showTab(tabName) {
     if (tabName === 'reports') populateReportsTab();
     if (tabName === 'reminders') populateRemindersTab();
     if (tabName === 'pending-approvals') fetchPendingApprovals();
+    if (tabName === 'notifications' && typeof filterNotificationHistory === 'function') filterNotificationHistory();
 }
 
 function triggerGlobalSearch(query) {
@@ -308,22 +315,23 @@ function triggerGlobalSearch(query) {
     }
 }
 
+let rawDashboardStats = null;
+let dashboardFilters = {
+    status: [],
+    payment: [],
+    attendance: [],
+    plan: [],
+    sortBy: 'newest'
+};
+
 // Fetch stats and render dashboard elements
 async function fetchDashboardStats() {
     try {
         const res = await fetch('/api/admin/stats');
         const data = await res.json();
+        rawDashboardStats = data;
 
-        // Cards data
-        document.getElementById('statActiveMembers').innerText = data.stats.active_members;
-        document.getElementById('statNewMembersWeek').innerText = data.stats.new_members_week;
-        document.getElementById('statTodayCheckins').innerText = data.stats.today_checkins;
-        document.getElementById('statMonthlyRevenue').innerText = formatINRCurrency(data.stats.monthly_revenue);
-        document.getElementById('statPendingPayments').innerText = data.stats.pending_payments;
-        document.getElementById('statPendingAmountVal').innerText = `${formatINRCurrency(data.stats.pending_amount)} total`;
-        document.getElementById('statExpiredCount').innerText = data.stats.expiring_members;
-
-        // Update Pending Approvals KPI Card
+        // Update Pending Approvals KPI Card (Never affected by dashboard filter)
         const pendingCount = data.stats.pending_registrations_count || 0;
         document.getElementById('statPendingApprovalsCount').innerText = pendingCount;
         document.getElementById('statPendingApprovalsSub').innerText = `${pendingCount} Member${pendingCount === 1 ? '' : 's'} Waiting`;
@@ -353,142 +361,430 @@ async function fetchDashboardStats() {
         // Fetch Leaderboard
         fetchAdminLeaderboard();
 
-        // Line Chart
-        renderRevenueChart(data.charts.revenue);
-
-        // Donut Chart & ratios
-        renderAttendanceDonut(data.stats.today_checkins, data.stats.active_members);
-
-        // Table List: Pending Payments
-        const pTable = document.getElementById('dashboardPendingPaymentsBody');
-        pTable.innerHTML = '';
-        if (data.pending_payments_list.length === 0) {
-            pTable.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-tertiary); padding: 16px 0;">No pending payments!</td></tr>';
-        } else {
-            data.pending_payments_list.forEach(p => {
-                const tr = document.createElement('tr');
-                const badge = p.status === 'overdue' ? 'badge-suspended' : 'badge-expired';
-
-                const initials = (p.first_name[0] + p.last_name[0]).toUpperCase();
-                const dDate = new Date(p.due_date);
-                const diffTime = dDate - new Date();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                let dueStr = p.due_date;
-                if (diffDays === 0) dueStr = '<span style="color:var(--danger); font-weight:600;">Today</span>';
-                else if (diffDays < 0) dueStr = `<span style="color:var(--danger); font-weight:600;">${Math.abs(diffDays)}d Overdue</span>`;
-
-                tr.innerHTML = `
-                    <td>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <div class="member-avatar-mini">${initials}</div>
-                            <div>
-                                <div style="font-weight:600;">${p.first_name} ${p.last_name}</div>
-                                <div style="font-size:11px; color:var(--text-secondary);">${p.plan_name || 'Membership'}</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td>${dueStr}</td>
-                    <td style="font-weight:700;">${formatINRCurrency(p.amount)}</td>
-                    <td><span class="badge ${badge}">${p.status}</span></td>
-                    <td>
-                        <div class="communication-action-group">
-                            <button class="btn-comms-circle btn-comms-whatsapp" onclick="triggerWhatsAppModal(${p.id})">
-                                <svg fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.503-5.722-1.465L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.965C16.59 1.977 14.113.953 11.5.953c-5.44 0-9.866 4.372-9.87 9.802 0 1.814.49 3.518 1.42 5.061l-.995 3.633 3.738-.971z"/></svg>
-                            </button>
-                            <a href="tel:${p.phone}" class="btn-comms-circle btn-comms-phone">
-                                <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
-                            </a>
-                        </div>
-                    </td>
-                `;
-                pTable.appendChild(tr);
-            });
-        }
-
-        // List 1: New Members list (Bottom row left column)
-        const joinersList = document.getElementById('dashboardNewMembersList');
-        joinersList.innerHTML = '';
-        if (data.new_members_list.length === 0) {
-            joinersList.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px;">No registrations.</div>';
-        } else {
-            data.new_members_list.forEach(m => {
-                const initials = (m.first_name[0] + m.last_name[0]).toUpperCase();
-                const div = document.createElement('div');
-                div.className = 'recent-joiner-item';
-                div.innerHTML = `
-                    <div class="member-avatar-mini">${initials}</div>
-                    <div class="joiner-details">
-                        <span class="joiner-name">${m.first_name} ${m.last_name}</span>
-                        <span class="joiner-plan-date">${m.plan_name || 'No Plan'} &bull; ${new Date(m.joined_at).toLocaleDateString()}</span>
-                    </div>
-                `;
-                joinersList.appendChild(div);
-            });
-        }
-
-        // List 2: Membership Expiring list (Right column panel)
-        const expiringList = document.getElementById('dashboardExpiringList');
-        expiringList.innerHTML = '';
-        if (data.expiring_members_list.length === 0) {
-            expiringList.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px;">No memberships expiring.</div>';
-        } else {
-            data.expiring_members_list.forEach(m => {
-                const initials = (m.first_name[0] + m.last_name[0]).toUpperCase();
-
-                const eDate = new Date(m.end_date);
-                const diffTime = eDate - new Date();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                let countdownStr = `Expires: ${m.end_date}`;
-                if (diffDays === 0) countdownStr = 'Expires TODAY';
-                else if (diffDays === 1) countdownStr = 'Expires Tomorrow';
-                else if (diffDays > 0) countdownStr = `Expires in ${diffDays} days`;
-
-                const div = document.createElement('div');
-                div.className = 'expiring-list-member-item';
-                // Only show reminder button if there's a payment record to alert on
-                const actBtn = m.payment_id ? `<button class="btn-send-whatsapp-remind" onclick="triggerWhatsAppModal(${m.payment_id})">Alert</button>` : '';
-                div.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <div class="member-avatar-mini">${initials}</div>
-                        <div class="member-info-mini">
-                            <span class="member-name-mini">${m.first_name} ${m.last_name}</span>
-                            <span class="member-subtitle-mini">${countdownStr}</span>
-                        </div>
-                    </div>
-                    ${actBtn}
-                `;
-                expiringList.appendChild(div);
-            });
-        }
-
-        // Timeline feed checkin nodes
-        const stream = document.getElementById('sseCheckinStream');
-        stream.innerHTML = '';
-        if (data.recent_activity.length === 0) {
-            stream.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px 0;">Waiting for checks...</div>';
-        } else {
-            data.recent_activity.forEach(act => {
-                const div = document.createElement('div');
-                div.className = 'timeline-item-nodes';
-                const actColorClass = act.status === 'success' ? 'timeline-bg-success' : 'timeline-bg-warning';
-
-                const actTime = new Date(act.time);
-                const timeStr = actTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                div.innerHTML = `
-                    <div class="timeline-color-node ${actColorClass}"></div>
-                    <div class="timeline-block-body">
-                        <div class="timeline-text-content"><strong>${act.name}</strong> ${act.description}</div>
-                        <div class="timeline-stamp-time">${timeStr}</div>
-                    </div>
-                `;
-                stream.appendChild(div);
-            });
-        }
+        // Render dashboard data (applying filters if active)
+        await renderFilteredDashboardData();
 
     } catch (err) {
         console.error('Stats loading failed', err);
     }
+}
+
+async function renderFilteredDashboardData() {
+    if (!rawDashboardStats) return;
+
+    let stats = { ...rawDashboardStats.stats };
+    let chartRevenue = [ ...rawDashboardStats.charts.revenue ];
+    let todayCheckins = stats.today_checkins;
+    let activeMembers = stats.active_members;
+
+    // Check if any filter is active
+    const isFilterActive = dashboardFilters.status.length > 0 ||
+                          dashboardFilters.payment.length > 0 ||
+                          dashboardFilters.attendance.length > 0 ||
+                          dashboardFilters.plan.length > 0 ||
+                          dashboardFilters.sortBy !== 'newest';
+
+    // Update filter badge in UI
+    let activeCount = 0;
+    if (dashboardFilters.status.length > 0) activeCount += dashboardFilters.status.length;
+    if (dashboardFilters.payment.length > 0) activeCount += dashboardFilters.payment.length;
+    if (dashboardFilters.attendance.length > 0) activeCount += dashboardFilters.attendance.length;
+    if (dashboardFilters.plan.length > 0) activeCount += dashboardFilters.plan.length;
+    if (dashboardFilters.sortBy !== 'newest') activeCount += 1;
+
+    const filterBadge = document.getElementById('activeFilterBadge');
+    if (filterBadge) {
+        if (activeCount > 0) {
+            filterBadge.innerText = activeCount;
+            filterBadge.style.display = 'flex';
+        } else {
+            filterBadge.style.display = 'none';
+        }
+    }
+
+    if (isFilterActive) {
+        // Fetch all members, payments, and attendance to compute filtered stats
+        try {
+            const [membersRes, paymentsRes, attendanceRes] = await Promise.all([
+                fetch('/api/admin/members?limit=all'),
+                fetch('/api/admin/payments?limit=all'),
+                fetch('/api/admin/attendance?limit=1000')
+            ]);
+            
+            const membersData = await membersRes.json();
+            const paymentsData = await paymentsRes.json();
+            const attendanceData = await attendanceRes.json();
+
+            let members = membersData.data || [];
+            let payments = paymentsData.data || [];
+            let attendanceList = attendanceData.data || [];
+
+            // Filter members list
+            members = members.filter(m => {
+                // 1. Membership Status Filter
+                if (dashboardFilters.status.length > 0) {
+                    if (!dashboardFilters.status.includes(m.status)) return false;
+                }
+
+                // 2. Payment Status Filter
+                if (dashboardFilters.payment.length > 0) {
+                    const memberPayments = payments.filter(p => p.member_id === m.id);
+                    if (memberPayments.length === 0) return false;
+                    const latestPayment = memberPayments[0]; // ordered desc by date
+                    if (!dashboardFilters.payment.includes(latestPayment.status)) return false;
+                }
+
+                // 3. Attendance Filter
+                if (dashboardFilters.attendance.length > 0) {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const checkedInToday = attendanceList.some(a => a.member_id === m.id && a.check_in_time.startsWith(todayStr));
+                    
+                    const oneWeekAgo = new Date();
+                    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                    const activeThisWeek = attendanceList.some(a => a.member_id === m.id && new Date(a.check_in_time) >= oneWeekAgo);
+
+                    let matchesAttendance = false;
+                    if (dashboardFilters.attendance.includes('checked_in') && checkedInToday) matchesAttendance = true;
+                    if (dashboardFilters.attendance.includes('absent') && !checkedInToday) matchesAttendance = true;
+                    if (dashboardFilters.attendance.includes('active_week') && activeThisWeek) matchesAttendance = true;
+
+                    if (!matchesAttendance) return false;
+                }
+
+                // 4. Membership Plan Filter
+                if (dashboardFilters.plan.length > 0) {
+                    if (!m.plan_name) return false;
+                    const planLower = m.plan_name.toLowerCase();
+                    let planType = '';
+                    if (planLower.includes('monthly') || planLower.includes('1 month')) planType = 'monthly';
+                    else if (planLower.includes('quarterly') || planLower.includes('3 month')) planType = 'quarterly';
+                    else if (planLower.includes('half') || planLower.includes('6 month')) planType = 'half_yearly';
+                    else if (planLower.includes('annual') || planLower.includes('yearly') || planLower.includes('12 month')) planType = 'annual';
+
+                    if (!dashboardFilters.plan.includes(planType)) return false;
+                }
+
+                return true;
+            });
+
+            // Apply Sorting to members
+            if (dashboardFilters.sortBy === 'newest') {
+                members.sort((a, b) => new Date(b.joined_at) - new Date(a.joined_at));
+            } else if (dashboardFilters.sortBy === 'oldest') {
+                members.sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
+            } else if (dashboardFilters.sortBy === 'name_asc') {
+                members.sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`));
+            } else if (dashboardFilters.sortBy === 'name_desc') {
+                members.sort((a, b) => `${b.first_name} ${b.last_name}`.localeCompare(`${a.first_name} ${a.last_name}`));
+            } else if (dashboardFilters.sortBy === 'revenue') {
+                members.sort((a, b) => {
+                    const revA = payments.filter(p => p.member_id === a.id && p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
+                    const revB = payments.filter(p => p.member_id === b.id && p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
+                    return revB - revA;
+                });
+            } else if (dashboardFilters.sortBy === 'active_days') {
+                members.sort((a, b) => {
+                    const countA = attendanceList.filter(att => att.member_id === a.id && att.status === 'success').length;
+                    const countB = attendanceList.filter(att => att.member_id === b.id && att.status === 'success').length;
+                    return countB - countA;
+                });
+            }
+
+            const filteredMemberIds = new Set(members.map(m => m.id));
+
+            // Recompute stats metrics
+            const todayStr = new Date().toISOString().split('T')[0];
+            const activeFiltered = members.filter(m => m.status === 'active');
+            
+            stats.active_members = activeFiltered.length;
+            stats.new_members_week = members.filter(m => {
+                const oneWeekAgo = new Date();
+                oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+                return new Date(m.joined_at) >= oneWeekAgo;
+            }).length;
+            
+            stats.today_checkins = attendanceList.filter(a => filteredMemberIds.has(a.member_id) && a.check_in_time.startsWith(todayStr) && a.status === 'success').length;
+            
+            const currentMonthStart = new Date();
+            currentMonthStart.setDate(1);
+            currentMonthStart.setHours(0,0,0,0);
+            
+            const paidMonthPayments = payments.filter(p => filteredMemberIds.has(p.member_id) && p.status === 'paid' && new Date(p.payment_date) >= currentMonthStart);
+            stats.monthly_revenue = paidMonthPayments.reduce((sum, p) => sum + p.amount, 0);
+
+            const pendingPaymentsList = payments.filter(p => filteredMemberIds.has(p.member_id) && ['pending', 'overdue'].includes(p.status));
+            stats.pending_payments = pendingPaymentsList.length;
+            stats.pending_amount = pendingPaymentsList.reduce((sum, p) => sum + p.amount, 0);
+
+            const today = new Date();
+            const nextWeek = new Date();
+            nextWeek.setDate(today.getDate() + 7);
+            
+            stats.expiring_members = members.filter(m => m.end_date && new Date(m.end_date) >= today && new Date(m.end_date) <= nextWeek).length;
+
+            // Recompute revenue chart
+            chartRevenue = [];
+            for (let i = 5; i >= 0; i--) {
+                const targetMonth = new Date();
+                targetMonth.setDate(1);
+                targetMonth.setMonth(targetMonth.getMonth() - i);
+                const mStart = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1);
+                const mEnd = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 1);
+                const mLabel = targetMonth.toLocaleString('default', { month: 'short' });
+
+                const monthlyPaid = payments.filter(p => filteredMemberIds.has(p.member_id) && p.status === 'paid' && new Date(p.payment_date) >= mStart && new Date(p.payment_date) < mEnd);
+                const revSum = monthlyPaid.reduce((sum, p) => sum + p.amount, 0);
+                chartRevenue.push({ month: mLabel, revenue: revSum });
+            }
+
+            // Recompute attendance chart data
+            const attendanceChart = [];
+            for (let i = 6; i >= 0; i--) {
+                const targetDay = new Date();
+                targetDay.setDate(targetDay.getDate() - i);
+                const dStart = targetDay.toISOString().split('T')[0];
+                const dLabel = targetDay.toLocaleString('default', { weekday: 'short' });
+
+                const checkinCount = attendanceList.filter(a => filteredMemberIds.has(a.member_id) && a.check_in_time.startsWith(dStart) && a.status === 'success').length;
+                attendanceChart.push({ day: dLabel, count: checkinCount });
+            }
+            
+            todayCheckins = stats.today_checkins;
+            activeMembers = stats.active_members;
+
+            // Render recomputed attendance chart
+            renderAttendanceChart(attendanceChart);
+
+        } catch (e) {
+            console.error('Error calculating filtered dashboard stats:', e);
+        }
+    } else {
+        // Render raw default charts
+        renderRevenueChart(rawDashboardStats.charts.revenue);
+        renderAttendanceChart(rawDashboardStats.charts.attendance);
+    }
+
+    // Render KPI Cards
+    document.getElementById('statActiveMembers').innerText = stats.active_members;
+    document.getElementById('statNewMembersWeek').innerText = stats.new_members_week;
+    document.getElementById('statTodayCheckins').innerText = stats.today_checkins;
+    document.getElementById('statMonthlyRevenue').innerText = formatINRCurrency(stats.monthly_revenue);
+    document.getElementById('statPendingPayments').innerText = stats.pending_payments;
+    document.getElementById('statPendingAmountVal').innerText = `${formatINRCurrency(stats.pending_amount)} total`;
+    document.getElementById('statExpiredCount').innerText = stats.expiring_members;
+
+    // Render Revenue Chart
+    renderRevenueChart(chartRevenue);
+
+    // Donut Chart & ratios
+    renderAttendanceDonut(todayCheckins, activeMembers);
+
+    // Table List: Pending Payments
+    const pTable = document.getElementById('dashboardPendingPaymentsBody');
+    pTable.innerHTML = '';
+    const rawPendingList = rawDashboardStats.pending_payments_list || [];
+    let filteredPendingList = rawPendingList;
+    
+    if (isFilterActive) {
+        // Filter pending payments list
+        const filteredMemberIds = new Set(members.map(m => m.id));
+        filteredPendingList = rawPendingList.filter(p => filteredMemberIds.has(p.member_id));
+    }
+
+    if (filteredPendingList.length === 0) {
+        pTable.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-tertiary); padding: 16px 0;">No pending payments!</td></tr>';
+    } else {
+        filteredPendingList.forEach(p => {
+            const tr = document.createElement('tr');
+            const badge = p.status === 'overdue' ? 'badge-suspended' : 'badge-expired';
+            const initials = (p.first_name[0] + p.last_name[0]).toUpperCase();
+            const dDate = new Date(p.due_date);
+            const diffTime = dDate - new Date();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            let dueStr = p.due_date;
+            if (diffDays === 0) dueStr = '<span style="color:var(--danger); font-weight:600;">Today</span>';
+            else if (diffDays < 0) dueStr = `<span style="color:var(--danger); font-weight:600;">${Math.abs(diffDays)}d Overdue</span>`;
+
+            tr.innerHTML = `
+                <td>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div class="member-avatar-mini">${initials}</div>
+                        <div>
+                            <div style="font-weight:600;">${p.first_name} ${p.last_name}</div>
+                            <div style="font-size:11px; color:var(--text-secondary);">${p.plan_name || 'Membership'}</div>
+                        </div>
+                    </div>
+                </td>
+                <td>${dueStr}</td>
+                <td style="font-weight:700;">${formatINRCurrency(p.amount)}</td>
+                <td><span class="badge ${badge}">${p.status}</span></td>
+                <td>
+                    <div class="communication-action-group">
+                        <button class="btn-comms-circle btn-comms-whatsapp" onclick="triggerWhatsAppModal(${p.id})">
+                            <svg fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.503-5.722-1.465L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.965C16.59 1.977 14.113.953 11.5.953c-5.44 0-9.866 4.372-9.87 9.802 0 1.814.49 3.518 1.42 5.061l-.995 3.633 3.738-.971z"/></svg>
+                        </button>
+                        <a href="tel:${p.phone}" class="btn-comms-circle btn-comms-phone">
+                            <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                        </a>
+                    </div>
+                </td>
+            `;
+            pTable.appendChild(tr);
+        });
+    }
+
+    // List 1: New Members list (Bottom row left column)
+    const joinersList = document.getElementById('dashboardNewMembersList');
+    joinersList.innerHTML = '';
+    const rawNewList = rawDashboardStats.new_members_list || [];
+    let filteredNewList = rawNewList;
+    
+    if (isFilterActive) {
+        const filteredMemberIds = new Set(members.map(m => m.id));
+        filteredNewList = rawNewList.filter(p => filteredMemberIds.has(p.id));
+    }
+
+    if (filteredNewList.length === 0) {
+        joinersList.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px;">No registrations.</div>';
+    } else {
+        filteredNewList.forEach(m => {
+            const initials = (m.first_name[0] + m.last_name[0]).toUpperCase();
+            const div = document.createElement('div');
+            div.className = 'recent-joiner-item';
+            div.innerHTML = `
+                <div class="member-avatar-mini">${initials}</div>
+                <div class="joiner-details">
+                    <span class="joiner-name">${m.first_name} ${m.last_name}</span>
+                    <span class="joiner-plan-date">${m.plan_name || 'No Plan'} &bull; ${new Date(m.joined_at).toLocaleDateString()}</span>
+                </div>
+            `;
+            joinersList.appendChild(div);
+        });
+    }
+
+    // List 2: Membership Expiring list (Right column panel)
+    const expiringList = document.getElementById('dashboardExpiringList');
+    expiringList.innerHTML = '';
+    const rawExpiringList = rawDashboardStats.expiring_members_list || [];
+    let filteredExpiringList = rawExpiringList;
+    
+    if (isFilterActive) {
+        const filteredMemberIds = new Set(members.map(m => m.id));
+        filteredExpiringList = rawExpiringList.filter(p => filteredMemberIds.has(p.id));
+    }
+
+    if (filteredExpiringList.length === 0) {
+        expiringList.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px;">No memberships expiring.</div>';
+    } else {
+        filteredExpiringList.forEach(m => {
+            const initials = (m.first_name[0] + m.last_name[0]).toUpperCase();
+            const eDate = new Date(m.end_date);
+            const diffTime = eDate - new Date();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            let countdownStr = `Expires: ${m.end_date}`;
+            if (diffDays === 0) countdownStr = 'Expires TODAY';
+            else if (diffDays === 1) countdownStr = 'Expires Tomorrow';
+            else if (diffDays > 0) countdownStr = `Expires in ${diffDays} days`;
+
+            const div = document.createElement('div');
+            div.className = 'expiring-list-member-item';
+            const actBtn = m.payment_id ? `<button class="btn-send-whatsapp-remind" onclick="triggerWhatsAppModal(${m.payment_id})">Alert</button>` : '';
+            div.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="member-avatar-mini">${initials}</div>
+                    <div class="member-info-mini">
+                        <span class="member-name-mini">${m.first_name} ${m.last_name}</span>
+                        <span class="member-subtitle-mini">${countdownStr}</span>
+                    </div>
+                </div>
+                ${actBtn}
+            `;
+            expiringList.appendChild(div);
+        });
+    }
+
+    // Timeline feed checkin nodes
+    const stream = document.getElementById('sseCheckinStream');
+    stream.innerHTML = '';
+    const rawActivity = rawDashboardStats.recent_activity || [];
+    let filteredActivity = rawActivity;
+    
+    if (isFilterActive) {
+        const filteredMemberIds = new Set(members.map(m => m.id));
+        // Find member ID by searching recent activity names or match mapping
+        filteredActivity = rawActivity.filter(act => {
+            // Match name prefix or search mapping
+            const matchedM = members.find(m => `${m.first_name} ${m.last_name}` === act.name);
+            return !matchedM || filteredMemberIds.has(matchedM.id);
+        });
+    }
+
+    if (filteredActivity.length === 0) {
+        stream.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px 0;">Waiting for checks...</div>';
+    } else {
+        filteredActivity.forEach(act => {
+            const div = document.createElement('div');
+            div.className = 'timeline-item-nodes';
+            const actColorClass = act.status === 'success' ? 'timeline-bg-success' : 'timeline-bg-warning';
+            const actTime = new Date(act.time);
+            const timeStr = actTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            div.innerHTML = `
+                <div class="timeline-color-node ${actColorClass}"></div>
+                <div class="timeline-block-body">
+                    <div class="timeline-text-content"><strong>${act.name}</strong> ${act.description}</div>
+                    <div class="timeline-stamp-time">${timeStr}</div>
+                </div>
+            `;
+            stream.appendChild(div);
+        });
+    }
+}
+
+// Global variable for Attendance Chart instance to re-draw correctly
+let dashboardAttendanceChartInstance = null;
+
+function renderAttendanceChart(chartData) {
+    const canvas = document.getElementById('attendanceBarChart');
+    if (!canvas) return;
+
+    if (dashboardAttendanceChartInstance) dashboardAttendanceChartInstance.destroy();
+
+    const labels = chartData.map(item => item.day);
+    const counts = chartData.map(item => item.count);
+
+    dashboardAttendanceChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Check-ins',
+                data: counts,
+                backgroundColor: 'rgba(234, 179, 8, 0.7)',
+                borderColor: '#eab308',
+                borderWidth: 1.5,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#94a3b8', stepSize: 1 }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8' }
+                }
+            }
+        }
+    });
 }
 
 // Chart renders
@@ -2227,3 +2523,405 @@ async function rejectPendingMember(id) {
         showToast('Network error, please try again.', 'error');
     }
 }
+
+/* ================= OWNER FILTER & NOTIFICATION MODULE ================= */
+
+// DASHBOARD FILTERS FUNCTIONALITY
+function toggleDashboardFilterPanel(event) {
+    if (event) event.stopPropagation();
+    const panel = document.getElementById('dashboardFilterPanel');
+    if (!panel) return;
+    
+    // Close notifications popover if open
+    closeNotificationPopover();
+
+    const isActive = panel.classList.contains('active');
+    if (isActive) {
+        closeDashboardFilterPanel();
+    } else {
+        panel.style.display = 'flex';
+        // Force reflow for animation
+        panel.offsetHeight;
+        panel.classList.add('active');
+    }
+}
+
+function closeDashboardFilterPanel() {
+    const panel = document.getElementById('dashboardFilterPanel');
+    if (!panel) return;
+    panel.classList.remove('active');
+    setTimeout(() => {
+        if (!panel.classList.contains('active')) {
+            panel.style.display = 'none';
+        }
+    }, 250);
+}
+
+function setupDashboardFilterListeners() {
+    // Close on click outside
+    document.addEventListener('click', (event) => {
+        const panel = document.getElementById('dashboardFilterPanel');
+        const btn = document.getElementById('dashboardFilterBtn');
+        if (panel && panel.classList.contains('active')) {
+            if (!panel.contains(event.target) && !btn.contains(event.target)) {
+                closeDashboardFilterPanel();
+            }
+        }
+        
+        const notifPanel = document.getElementById('notificationBellPopover');
+        const notifBtn = document.getElementById('ownerBellBtn');
+        if (notifPanel && notifPanel.classList.contains('active')) {
+            if (!notifPanel.contains(event.target) && !notifBtn.contains(event.target)) {
+                closeNotificationPopover();
+            }
+        }
+    });
+
+    // Preset filter input checkbox values based on dashboardFilters object
+    const inputsStatus = document.querySelectorAll('input[name="filterMemberStatus"]');
+    const inputsPayment = document.querySelectorAll('input[name="filterPaymentStatus"]');
+    const inputsAttendance = document.querySelectorAll('input[name="filterAttendance"]');
+    const inputsPlan = document.querySelectorAll('input[name="filterPlan"]');
+    const selectSort = document.getElementById('filterSortBy');
+
+    // Restore selections
+    inputsStatus.forEach(i => i.checked = dashboardFilters.status.includes(i.value));
+    inputsPayment.forEach(i => i.checked = dashboardFilters.payment.includes(i.value));
+    inputsAttendance.forEach(i => i.checked = dashboardFilters.attendance.includes(i.value));
+    inputsPlan.forEach(i => i.checked = dashboardFilters.plan.includes(i.value));
+    if (selectSort) selectSort.value = dashboardFilters.sortBy;
+}
+
+function applyDashboardFilters() {
+    const status = [];
+    document.querySelectorAll('input[name="filterMemberStatus"]:checked').forEach(i => status.push(i.value));
+    
+    const payment = [];
+    document.querySelectorAll('input[name="filterPaymentStatus"]:checked').forEach(i => payment.push(i.value));
+    
+    const attendance = [];
+    document.querySelectorAll('input[name="filterAttendance"]:checked').forEach(i => attendance.push(i.value));
+    
+    const plan = [];
+    document.querySelectorAll('input[name="filterPlan"]:checked').forEach(i => plan.push(i.value));
+    
+    const sortBy = document.getElementById('filterSortBy').value;
+
+    dashboardFilters = { status, payment, attendance, plan, sortBy };
+    
+    renderFilteredDashboardData();
+    closeDashboardFilterPanel();
+    showToast('Filters applied successfully', 'success');
+}
+
+function resetDashboardFilters() {
+    document.querySelectorAll('input[name="filterMemberStatus"]').forEach(i => i.checked = false);
+    document.querySelectorAll('input[name="filterPaymentStatus"]').forEach(i => i.checked = false);
+    document.querySelectorAll('input[name="filterAttendance"]').forEach(i => i.checked = false);
+    document.querySelectorAll('input[name="filterPlan"]').forEach(i => i.checked = false);
+    
+    const selectSort = document.getElementById('filterSortBy');
+    if (selectSort) selectSort.value = 'newest';
+
+    dashboardFilters = {
+        status: [],
+        payment: [],
+        attendance: [],
+        plan: [],
+        sortBy: 'newest'
+    };
+
+    renderFilteredDashboardData();
+    closeDashboardFilterPanel();
+    showToast('Filters reset', 'info');
+}
+
+
+// OWNER NOTIFICATIONS FUNCTIONALITY
+let ownerNotificationsList = [];
+let notifHistoryFilterType = 'all'; // all, unread, read
+
+function toggleNotificationPopover(event) {
+    if (event) event.stopPropagation();
+    const panel = document.getElementById('notificationBellPopover');
+    if (!panel) return;
+    
+    // Close dashboard filter panel if open
+    closeDashboardFilterPanel();
+
+    const isActive = panel.classList.contains('active');
+    if (isActive) {
+        closeNotificationPopover();
+    } else {
+        // Re-render latest notifications
+        renderOwnerNotificationsPopover();
+        
+        panel.style.display = 'flex';
+        panel.offsetHeight;
+        panel.classList.add('active');
+    }
+}
+
+function closeNotificationPopover() {
+    const panel = document.getElementById('notificationBellPopover');
+    if (!panel) return;
+    panel.classList.remove('active');
+    setTimeout(() => {
+        if (!panel.classList.contains('active')) {
+            panel.style.display = 'none';
+        }
+    }, 250);
+}
+
+function initializeOwnerNotifications() {
+    const local = localStorage.getItem('gymos_owner_notifications');
+    if (local) {
+        ownerNotificationsList = JSON.parse(local);
+    } else {
+        // Mock default data from request prompt
+        ownerNotificationsList = [
+            {
+                id: 1,
+                type: 'welcome',
+                title: 'New Member Registered',
+                message: 'Rahul Kumar submitted a registration request.',
+                time: '2 mins ago',
+                read: false,
+                timestamp: new Date(Date.now() - 2 * 60000).toISOString()
+            },
+            {
+                id: 2,
+                type: 'payment',
+                title: 'Payment Received',
+                message: 'Kiran Patel paid ₹2,000.',
+                time: '15 mins ago',
+                read: false,
+                timestamp: new Date(Date.now() - 15 * 60000).toISOString()
+            },
+            {
+                id: 3,
+                type: 'expiry',
+                title: 'Membership Expiring',
+                message: "Anjali Mehta's membership expires tomorrow.",
+                time: '1 hour ago',
+                read: false,
+                timestamp: new Date(Date.now() - 60 * 60000).toISOString()
+            },
+            {
+                id: 4,
+                type: 'checkin',
+                title: 'Member Checked In',
+                message: 'Rahul Verma checked in.',
+                time: '2 hours ago',
+                read: false,
+                timestamp: new Date(Date.now() - 120 * 60000).toISOString()
+            },
+            {
+                id: 5,
+                type: 'pending',
+                title: 'Pending Approval',
+                message: '1 member is waiting for approval.',
+                time: '3 hours ago',
+                read: false,
+                timestamp: new Date(Date.now() - 180 * 60000).toISOString()
+            }
+        ];
+        saveNotificationsToLocalStorage();
+    }
+    updateNotificationBadge();
+}
+
+function saveNotificationsToLocalStorage() {
+    localStorage.setItem('gymos_owner_notifications', JSON.stringify(ownerNotificationsList));
+}
+
+function updateNotificationBadge() {
+    const unreadCount = ownerNotificationsList.filter(n => !n.read).length;
+    const badge = document.getElementById('ownerBellBadge');
+    if (badge) {
+        if (unreadCount > 0) {
+            badge.innerText = unreadCount;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+function renderOwnerNotificationsPopover() {
+    const container = document.getElementById('notifPopoverList');
+    if (!container) return;
+
+    container.innerHTML = '';
+    
+    // Sort descending by timestamp
+    const sorted = [...ownerNotificationsList].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const latest5 = sorted.slice(0, 5);
+
+    if (latest5.length === 0) {
+        container.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-tertiary); font-size: 13px;">No notifications.</div>';
+        return;
+    }
+
+    latest5.forEach(n => {
+        const item = document.createElement('div');
+        item.className = `notif-popover-item ${n.read ? '' : 'unread'}`;
+        item.onclick = () => {
+            markNotificationRead(n.id);
+            renderOwnerNotificationsPopover();
+        };
+
+        let icon = '🔔';
+        let bg = 'rgba(234, 179, 8, 0.1)';
+        if (n.type === 'welcome') { icon = '🟢'; bg = 'rgba(34, 197, 94, 0.1)'; }
+        else if (n.type === 'payment') { icon = '💰'; bg = 'rgba(59, 130, 246, 0.1)'; }
+        else if (n.type === 'expiry') { icon = '⚠️'; bg = 'rgba(239, 68, 68, 0.1)'; }
+        else if (n.type === 'checkin') { icon = '🏃'; bg = 'rgba(168, 85, 247, 0.1)'; }
+        else if (n.type === 'pending') { icon = '📩'; bg = 'rgba(14, 165, 233, 0.1)'; }
+
+        item.innerHTML = `
+            <div class="notif-item-icon-wrapper" style="background-color: ${bg};">${icon}</div>
+            <div class="notif-item-info">
+                <div class="notif-item-title-row">
+                    <span class="notif-item-title">${n.title}</span>
+                    <span class="notif-item-time">${n.time}</span>
+                </div>
+                <div class="notif-item-desc">${n.message}</div>
+            </div>
+            ${n.read ? '' : '<div class="notif-unread-dot"></div>'}
+        `;
+        container.appendChild(item);
+    });
+}
+
+function viewAllNotifications(event) {
+    if (event) event.preventDefault();
+    closeNotificationPopover();
+    showTab('notifications');
+}
+
+// Notification History Page filter selection
+function setNotifHistoryFilter(type) {
+    notifHistoryFilterType = type;
+    
+    // Toggle active state
+    document.getElementById('notifFilterAll').style.backgroundColor = type === 'all' ? 'var(--accent)' : 'transparent';
+    document.getElementById('notifFilterAll').style.borderColor = type === 'all' ? 'var(--accent)' : 'var(--border-color)';
+    document.getElementById('notifFilterAll').style.color = type === 'all' ? 'white' : 'var(--text-primary)';
+    
+    document.getElementById('notifFilterUnread').style.backgroundColor = type === 'unread' ? 'var(--accent)' : 'transparent';
+    document.getElementById('notifFilterUnread').style.borderColor = type === 'unread' ? 'var(--accent)' : 'var(--border-color)';
+    document.getElementById('notifFilterUnread').style.color = type === 'unread' ? 'white' : 'var(--text-primary)';
+    
+    document.getElementById('notifFilterRead').style.backgroundColor = type === 'read' ? 'var(--accent)' : 'transparent';
+    document.getElementById('notifFilterRead').style.borderColor = type === 'read' ? 'var(--accent)' : 'var(--border-color)';
+    document.getElementById('notifFilterRead').style.color = type === 'read' ? 'white' : 'var(--text-primary)';
+
+    filterNotificationHistory();
+}
+
+function filterNotificationHistory() {
+    const listContainer = document.getElementById('notificationHistoryList');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '';
+    const searchQuery = document.getElementById('notifSearchInput').value.toLowerCase().trim();
+
+    let filtered = [...ownerNotificationsList].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Filter by search query
+    if (searchQuery) {
+        filtered = filtered.filter(n => 
+            n.title.toLowerCase().includes(searchQuery) || 
+            n.message.toLowerCase().includes(searchQuery)
+        );
+    }
+
+    // Filter by tab type selection
+    if (notifHistoryFilterType === 'unread') {
+        filtered = filtered.filter(n => !n.read);
+    } else if (notifHistoryFilterType === 'read') {
+        filtered = filtered.filter(n => n.read);
+    }
+
+    if (filtered.length === 0) {
+        listContainer.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-tertiary); font-size: 14px;">No notifications found matching criteria.</div>';
+        return;
+    }
+
+    filtered.forEach(n => {
+        const card = document.createElement('div');
+        card.className = `notif-history-card ${n.read ? '' : 'unread'}`;
+
+        let icon = '🔔';
+        let bg = 'rgba(234, 179, 8, 0.1)';
+        if (n.type === 'welcome') { icon = '🟢'; bg = 'rgba(34, 197, 94, 0.1)'; }
+        else if (n.type === 'payment') { icon = '💰'; bg = 'rgba(59, 130, 246, 0.1)'; }
+        else if (n.type === 'expiry') { icon = '⚠️'; bg = 'rgba(239, 68, 68, 0.1)'; }
+        else if (n.type === 'checkin') { icon = '🏃'; bg = 'rgba(168, 85, 247, 0.1)'; }
+        else if (n.type === 'pending') { icon = '📩'; bg = 'rgba(14, 165, 233, 0.1)'; }
+
+        card.innerHTML = `
+            <div class="notif-history-left">
+                <div class="notif-item-icon-wrapper" style="background-color: ${bg}; width: 40px; height: 40px; font-size: 18px;">${icon}</div>
+                <div class="notif-history-details">
+                    <div class="notif-history-title-row">
+                        <span class="notif-history-title">${n.title}</span>
+                        ${n.read ? '' : '<span class="notif-history-badge-unread">Unread</span>'}
+                        <span class="notif-history-time">&bull; ${n.time}</span>
+                    </div>
+                    <div class="notif-history-desc">${n.message}</div>
+                </div>
+            </div>
+            <div class="notif-history-actions">
+                ${n.read ? '' : `
+                    <button class="notif-action-icon-btn" onclick="markNotificationRead(${n.id})" title="Mark as Read">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </button>
+                `}
+                <button class="notif-action-icon-btn delete" onclick="deleteNotification(${n.id})" title="Delete Notification">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                </button>
+            </div>
+        `;
+        listContainer.appendChild(card);
+    });
+}
+
+function markNotificationRead(id) {
+    const notif = ownerNotificationsList.find(n => n.id === id);
+    if (notif) {
+        notif.read = true;
+        saveNotificationsToLocalStorage();
+        updateNotificationBadge();
+        filterNotificationHistory();
+    }
+}
+
+function markAllNotificationsAsRead() {
+    ownerNotificationsList.forEach(n => n.read = true);
+    saveNotificationsToLocalStorage();
+    updateNotificationBadge();
+    filterNotificationHistory();
+    showToast('All notifications marked as read', 'info');
+}
+
+function deleteNotification(id) {
+    ownerNotificationsList = ownerNotificationsList.filter(n => n.id !== id);
+    saveNotificationsToLocalStorage();
+    updateNotificationBadge();
+    filterNotificationHistory();
+    showToast('Notification deleted', 'info');
+}
+
+function clearAllNotifications() {
+    const confirmed = confirm('Delete All?\n\nAre you sure you want to clear your entire notification history?');
+    if (!confirmed) return;
+    
+    ownerNotificationsList = [];
+    saveNotificationsToLocalStorage();
+    updateNotificationBadge();
+    filterNotificationHistory();
+    showToast('All notifications cleared', 'info');
+}
+

@@ -14,9 +14,6 @@
     <link rel="stylesheet" href="/shared/styles.css">
     <link rel="stylesheet" href="/admin/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics-compat.js"></script>
-    <script src="/shared/firebase-init.js"></script>
 </head>
 
 <body>
@@ -205,21 +202,28 @@
                     <h1 class="gym-title-headline" id="headerGymName">FitZone Gym</h1>
                     <span class="current-date-info" id="realTimeHeaderDate">Friday, 10 July 2026</span>
                 </div>
-                <div class="header-controls">
-                    <div class="search-input-header">
-                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                        <input type="text" placeholder="Search members..." oninput="triggerGlobalSearch(this.value)">
+                <div class="header-controls" style="position: relative;">
+                    <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
+                        <div class="search-input-header" style="flex: 1; max-width: none;">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input type="text" placeholder="Search members..." oninput="triggerGlobalSearch(this.value)">
+                        </div>
+                        <button class="btn-round-control" id="dashboardFilterBtn" onclick="toggleDashboardFilterPanel(event)" style="flex-shrink: 0; background-color: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 8px;">
+                            <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                            </svg>
+                            <span id="activeFilterBadge" class="badge-count-red" style="display:none; position: absolute; top: -4px; right: -4px;">0</span>
+                        </button>
                     </div>
-                    <button class="btn-round-control"
-                        onclick="alert('Notification Center: 5 outstanding items require attention.')">
+                    <button class="btn-round-control" id="ownerBellBtn" onclick="toggleNotificationPopover(event)" style="position: relative;">
                         <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                         </svg>
-                        <span class="badge-count-red">5</span>
+                        <span id="ownerBellBadge" class="badge-count-red" style="display:none;">5</span>
                     </button>
                     <button class="date-selector-trigger" onclick="alert('Simulated calendar schedule display.')"
                         id="currentCalendarDisplayTrigger">
@@ -984,6 +988,31 @@
                         </div>
                         <button type="submit" class="btn btn-primary">Save Changes</button>
                     </form>
+            </section>
+
+            <!-- ================= 9. TAB: NOTIFICATIONS ================= -->
+            <section id="notificationsTab" class="tab-content">
+                <div class="premium-table-header" style="border: 1px solid var(--border-color); border-bottom: none; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 20px 24px;">
+                    <div class="premium-table-header-left" style="gap: 16px;">
+                        <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: var(--text-primary);">Notification History</h3>
+                        <div class="search-input-header" style="max-width: 300px; flex: 1;">
+                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                            <input type="text" id="notifSearchInput" placeholder="Search notifications..." oninput="filterNotificationHistory()">
+                        </div>
+                    </div>
+                    <div class="premium-table-header-right" style="gap: 12px;">
+                        <button class="pagination-btn" id="notifFilterAll" onclick="setNotifHistoryFilter('all')" style="border-color: var(--accent); background-color: var(--accent); color: white;">All</button>
+                        <button class="pagination-btn" id="notifFilterUnread" onclick="setNotifHistoryFilter('unread')">Unread</button>
+                        <button class="pagination-btn" id="notifFilterRead" onclick="setNotifHistoryFilter('read')">Read</button>
+                        
+                        <button class="btn btn-secondary" onclick="markAllNotificationsAsRead()" style="padding: 8px 16px; min-height: auto; height: 38px; font-size: 13px; font-weight: 700;">Mark All Read</button>
+                        <button class="btn btn-secondary" onclick="clearAllNotifications()" style="padding: 8px 16px; min-height: auto; height: 38px; font-size: 13px; font-weight: 700; color: var(--danger-dark); border-color: rgba(239,68,68,0.2);">Clear All</button>
+                    </div>
+                </div>
+                <div id="notificationHistoryList" class="notif-history-container" style="background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 0 0 var(--radius-lg) var(--radius-lg); padding: 24px; min-height: 200px;">
+                    <!-- Notification history items dynamically rendered -->
                 </div>
             </section>
         </main>
@@ -1208,11 +1237,7 @@
                     check in instantly.</p>
                 <div style="background-color: var(--bg-raised); border-radius: var(--radius-sm); padding: 6px 12px; font-size: 13px; font-weight: 500; font-family: monospace;"
                     id="qrTokenDisplayTxt">Token: -</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ================= BULK ACTIONS FLOATING OVERLAY ================= -->
+      <!-- ================= BULK ACTIONS FLOATING OVERLAY ================= -->
     <div id="bulkActionsBar" class="bulk-actions-overlay">
         <div class="bulk-selected-count"><span id="bulkSelectedVal">0</span> selected</div>
         <div class="bulk-actions-buttons">
@@ -1220,6 +1245,145 @@
             <button class="btn-bulk-action" onclick="triggerBulkSuspend()">Suspend/Activate</button>
             <button class="btn-bulk-action btn-bulk-danger" onclick="triggerBulkDelete()">Delete</button>
             <button class="btn-bulk-action" onclick="clearAllSelections()" style="background:none;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- ================= DASHBOARD FILTER PANEL ================= -->
+    <div id="dashboardFilterPanel" class="dashboard-filter-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+            <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text-primary);">Filter Dashboard</h4>
+            <button class="modal-close" onclick="closeDashboardFilterPanel()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; display: flex; align-items: center;">
+                <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 14px; overflow-y: auto; max-height: 400px; padding-right: 4px;">
+            <!-- Membership Status -->
+            <div>
+                <div class="filter-section-title">Membership Status</div>
+                <div class="filter-options-group">
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterMemberStatus" value="active">
+                        <span>Active</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterMemberStatus" value="pending">
+                        <span>Pending Approval</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterMemberStatus" value="expired">
+                        <span>Expired</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterMemberStatus" value="suspended">
+                        <span>Suspended</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Payment Status -->
+            <div>
+                <div class="filter-section-title">Payment Status</div>
+                <div class="filter-options-group">
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterPaymentStatus" value="paid">
+                        <span>Paid</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterPaymentStatus" value="pending">
+                        <span>Pending</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterPaymentStatus" value="overdue">
+                        <span>Overdue</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Attendance -->
+            <div>
+                <div class="filter-section-title">Attendance</div>
+                <div class="filter-options-group">
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterAttendance" value="checked_in">
+                        <span>Checked In Today</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterAttendance" value="absent">
+                        <span>Absent Today</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterAttendance" value="active_week">
+                        <span>Active This Week</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Membership Plan -->
+            <div>
+                <div class="filter-section-title">Membership Plan</div>
+                <div class="filter-options-group">
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterPlan" value="monthly">
+                        <span>Monthly</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterPlan" value="quarterly">
+                        <span>Quarterly</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterPlan" value="half_yearly">
+                        <span>Half Yearly</span>
+                    </label>
+                    <label class="filter-option-item">
+                        <input type="checkbox" name="filterPlan" value="annual">
+                        <span>Annual</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Sort By -->
+            <div>
+                <div class="filter-section-title">Sort By</div>
+                <div class="filter-options-group">
+                    <select id="filterSortBy" style="width:100%; border:1px solid var(--border-color); background-color:var(--bg-raised); color:var(--text-primary); padding:8px; border-radius:8px;">
+                        <option value="newest">Newest</option>
+                        <option value="oldest">Oldest</option>
+                        <option value="name_asc">Name A-Z</option>
+                        <option value="name_desc">Name Z-A</option>
+                        <option value="revenue">Highest Revenue</option>
+                        <option value="active_days">Most Active</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-actions-row">
+            <button class="btn btn-secondary" onclick="resetDashboardFilters()" style="flex: 1; min-height: auto; height: 38px; font-size: 13px; font-weight: 700; padding: 0;">Reset</button>
+            <button class="btn btn-primary" onclick="applyDashboardFilters()" style="flex: 1; min-height: auto; height: 38px; font-size: 13px; font-weight: 700; padding: 0; background-color: var(--accent); color: var(--sidebar-dark);">Apply Filter</button>
+        </div>
+    </div>
+
+    <!-- ================= NOTIFICATION BELL POPOVER ================= -->
+    <div id="notificationBellPopover" class="notification-bell-popover">
+        <div class="notif-popover-header">
+            <h4>Notifications</h4>
+            <button class="modal-close" onclick="closeNotificationPopover()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; display: flex; align-items: center;">
+                <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div id="notifPopoverList" class="notif-popover-list">
+            <!-- Latest 5 notifications dynamically rendered -->
+        </div>
+        <div class="notif-popover-footer">
+            <a href="#" class="notif-view-all-link" onclick="viewAllNotifications(event)">
+                <span>View All</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </a>
         </div>
     </div>
 
