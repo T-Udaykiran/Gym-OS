@@ -110,8 +110,14 @@ document.addEventListener('DOMContentLoaded', () => {
 // Toast notification helper for Mobile app view
 function showMobileToast(message, type = 'success') {
     const container = document.getElementById('toastContainer');
+
+    const duplicate = Array.from(container.children).find(t => t.dataset.msg === message && t.dataset.type === type);
+    if (duplicate) return;
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
+    toast.dataset.msg = message;
+    toast.dataset.type = type;
     toast.style.width = '300px';
     toast.style.minWidth = '280px';
 
@@ -1106,17 +1112,23 @@ function togglePasswordInput(inputId) {
     }
 }
 
+let otpSubmitInFlight = false;
+
 function setupOtpSlotsAutoAdvance() {
+    otpSubmitInFlight = false;
     const inputs = document.querySelectorAll('.code-slot-input');
     inputs.forEach((input, index) => {
         input.value = '';
+        if (input.dataset.listenerAttached) return;
+        input.dataset.listenerAttached = 'true';
         input.addEventListener('input', (e) => {
             const val = e.target.value;
             if (val.length === 1) {
                 if (index < inputs.length - 1) {
                     inputs[index + 1].focus();
-                } else {
-                    showPendingOTPView();
+                } else if (!otpSubmitInFlight) {
+                    otpSubmitInFlight = true;
+                    submitRegistrationAndShowPending();
                 }
             }
         });
@@ -1371,11 +1383,12 @@ function submitPersonalizedDataAndComplete() {
 
 async function submitRegistrationAndShowPending() {
     if (!tempRegisterData) {
+        otpSubmitInFlight = false;
         showMobileToast('Registration data not found.', 'error');
         showRegisterView();
         return;
     }
-    
+
     try {
         const res = await fetch('/api/auth/register', {
             method: 'POST',
@@ -1389,10 +1402,12 @@ async function submitRegistrationAndShowPending() {
             tempRegisterData = null;
             document.getElementById('authRegisterForm').reset();
         } else {
+            otpSubmitInFlight = false;
             showMobileToast(resData.error || 'Registration failed', 'error');
             showRegisterView();
         }
     } catch (err) {
+        otpSubmitInFlight = false;
         console.error('Registration submit error:', err);
         showMobileToast('Error: ' + err.message, 'error');
         showRegisterView();

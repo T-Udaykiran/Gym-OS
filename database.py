@@ -176,6 +176,41 @@ def init_db():
     );
     """)
 
+    # Migration: Update members status CHECK constraint to support 'pending' and 'rejected'
+    # (older databases only allowed active/suspended/expired, which made every new
+    # registration raise a CHECK-constraint IntegrityError since new members are
+    # inserted with status='pending').
+    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='members'")
+    sql_row = cursor.fetchone()
+    if sql_row:
+        sql = sql_row[0]
+        if "'pending'" not in sql:
+            conn.commit()  # foreign_keys pragma is a no-op inside an open transaction
+            cursor.execute("PRAGMA foreign_keys=OFF;")
+            cursor.execute("ALTER TABLE members RENAME TO members_old;")
+            cursor.execute("""
+            CREATE TABLE members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE NOT NULL,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                emergency_contact TEXT,
+                status TEXT CHECK(status IN ('active', 'suspended', 'expired', 'pending', 'rejected')) DEFAULT 'pending',
+                profile_photo TEXT,
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            );
+            """)
+            cursor.execute("""
+            INSERT INTO members (id, user_id, first_name, last_name, phone, emergency_contact, status, profile_photo, joined_at)
+            SELECT id, user_id, first_name, last_name, phone, emergency_contact, status, profile_photo, joined_at
+            FROM members_old;
+            """)
+            cursor.execute("DROP TABLE members_old;")
+            conn.commit()
+            cursor.execute("PRAGMA foreign_keys=ON;")
+
     # Migration: Update payments status CHECK constraint to support 'pending_approval'
     cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='payments'")
     sql_row = cursor.fetchone()
