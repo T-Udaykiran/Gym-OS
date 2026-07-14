@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GymOS Member App</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GymOS Member">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="/shared/styles.css">
+    <link rel="stylesheet" href="/member/style.css">
+</head>
+
+<body>
+
+    <!-- ================= MOBILE APP SIMULATOR CONTAINER ================= -->
+    <div class="mobile-simulator">
+        <!-- Speaker & Camera Notch -->
+        <div class="phone-notch">
+            <div class="speaker-line"></div>
+        </div>
+
+        <!-- Phone Screen -->
+        <div class="phone-screen">
+            <!-- Status bar -->
+            <div class="phone-status-bar">
+                <div id="simTime">12:00</div>
+                <div class="status-right">
+                    <!-- Wifi -->
+                    <svg class="wifi-icon" viewBox="0 0 24 24">
+                        <path
+                            d="M12 21a2 2 0 1 1-2-2 2 2 0 0 1 2 2zm0-5a5 5 0 0 0-3.54 1.46l1.42 1.42a3 3 0 0 1 4.24 0l1.42-1.42A5 5 0 0 0 12 16zm0-5a10 10 0 0 0-7.07 2.93l1.42 1.42a8 8 0 0 1 11.3 0l1.42-1.42A10 10 0 0 0 12 11zm0-5a15 15 0 0 0-10.6 4.4l1.42 1.42a13 13 0 0 1 18.38 0l1.42-1.42A15 15 0 0 0 12 6z" />
+                    </svg>
+                    <!-- Battery -->
+                    <svg class="battery-icon" viewBox="0 0 24 24">
+                        <path
+                            d="M17 5H3a2 2 0 0 0-2 2h22a2 2 0 0 0-2-2zm0 14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14zM21 9h2v6h-2V9z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- ================= MEMBER SYSTEM: SIGN IN/REGISTRATION ================= -->
+            <div id="memberAuthWrapper" style="display: none; width: 100%; height: 100%; position: relative; flex-direction: column; overflow: hidden; background: #000;">
+
+                <!-- 1. SPLASH SCREEN -->
+                <div id="authSplashScreen" class="auth-subview" style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: absolute; inset: 0; background: #000; z-index: 10;">
+                    <div style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <!-- Stylized circular logo -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M8 12h8"></path>
+                            <path d="M12 8v8"></path>
+                        </svg>
+                    </div>
+                    <h1 style="font-size: 26px; font-weight: 800; letter-spacing: 0.1em; color: #fff; margin-top: 20px;">N GYM</h1>
+                </div>
+
+                <!-- 2. LOGIN SCREEN -->
+                <div id="authLoginView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 100%), url('https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop'); background-size: cover; background-position: center; justify-content: flex-end; padding: 24px 20px 40px; z-index: 5;">
+                    <div style="margin-bottom: 24px;">
+                        <h1 style="font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -0.03em; margin: 0;">NGYM</h1>
+                        <p style="font-size: 13.5px; color: rgba(255,255,255,0.7); margin-top: 4px; margin-bottom: 0;">Sign in to your member mobile portal</p>
+                    </div>
+
+                    <div id="authLoginError" class="auth-error-banner" style="display: none;"></div>
+
+                    <form id="authLoginForm" onsubmit="event.preventDefault();" style="display: flex; flex-direction: column; gap: 14px;">
+                        <div class="input-block">
+                            <label class="input-lbl">Email ID</label>
+                            <input type="email" id="authEmailInput" class="custom-input" placeholder="Enter your Email ID" required>
+                        </div>
+                        <div class="input-block" style="position: relative;">
+                            <label class="input-lbl">Password</label>
+                            <input type="password" id="authPasswordInput" class="custom-input" placeholder="Enter your Password" required style="padding-right: 48px;">
+                            <span class="password-toggle-eye" onclick="togglePasswordInput('authPasswordInput')">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.4)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </span>
+                        </div>
+                        <button type="submit" class="auth-capsule-btn primary-btn" style="margin-top: 10px;">Login</button>
+                    </form>
+
+                    <button class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showRegisterView()">New to NGYM? Sign In</button>
+                </div>
+
+                <!-- 3. REGISTER SCREEN -->
+                <div id="authRegisterView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 100%), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=600&auto=format&fit=crop'); background-size: cover; background-position: center; justify-content: flex-end; padding: 24px 20px 40px; z-index: 5;">
+                    <div style="margin-bottom: 20px;">
+                        <h1 style="font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin: 0;">Join NGYM</h1>
+                        <p style="font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px; margin-bottom: 0;">Create your fitness profile today</p>
+                    </div>
+
+                    <div id="authRegisterError" class="auth-error-banner" style="display: none;"></div>
+
+                    <form id="authRegisterForm" onsubmit="event.preventDefault();" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="input-block">
+                            <label class="input-lbl">Full Name</label>
+                            <input type="text" id="regFullNameInput" class="custom-input" placeholder="Enter Your Full Name" required>
+                        </div>
+                        <div class="input-block">
+                            <label class="input-lbl">Email Address</label>
+                            <input type="email" id="regEmailInput" class="custom-input" placeholder="Enter Your Email ID" required>
+                        </div>
+                        <div class="input-block">
+                            <label class="input-lbl">Phone Number</label>
+                            <input type="text" id="regPhoneInput" class="custom-input" placeholder="Enter Your Full Name" required>
+                        </div>
+                        <div class="input-block">
+                            <label class="input-lbl">Emergency Contact</label>
+                            <input type="text" id="regEmergencyInput" class="custom-input" placeholder="Enter Your Full Name" required>
+                        </div>
+                        <div class="input-block" style="position: relative;">
+                            <label class="input-lbl">Create Password</label>
+                            <input type="password" id="regPasswordInput" class="custom-input" placeholder="Enter Your Full Name" required style="padding-right: 48px;">
+                            <span class="password-toggle-eye" onclick="togglePasswordInput('regPasswordInput')">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.4)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </span>
+                        </div>
+                        <button type="submit" class="auth-capsule-btn primary-btn" style="margin-top: 10px;">Join</button>
+                    </form>
+
+                    <button class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showLoginView()">Have an account? Sign In</button>
+                </div>
+
+                <!-- 4. VERIFY CODE SCREEN -->
+                <div id="authVerifyView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: #000; padding: 20px 20px 40px; justify-content: space-between; z-index: 5;">
+                    <div>
+                        <!-- Header with back arrow -->
+                        <div style="display: flex; align-items: center; margin-bottom: 24px; position: relative;">
+                            <button class="round-back-btn" type="button" onclick="showRegisterView()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                            </button>
+                            <span style="font-size: 15px; font-weight: 800; color: #fff; position: absolute; left: 50%; transform: translateX(-50%);">Verification</span>
+                        </div>
+
+                        <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin: 0;">Verify Code</h2>
+                        <p style="font-size: 13.5px; color: rgba(255,255,255,0.5); margin-top: 6px; line-height: 1.4;">Please enter the code we just sent to email <strong id="verifyDestEmail">davisdoni@email.com</strong></p>
+
+                        <!-- Code slots (5 slots) -->
+                        <div style="display: flex; justify-content: center; gap: 12px; margin: 36px 0;">
+                            <input type="text" class="code-slot-input" maxlength="1" data-idx="0" pattern="[0-9]*" inputmode="numeric">
+                            <input type="text" class="code-slot-input" maxlength="1" data-idx="1" pattern="[0-9]*" inputmode="numeric">
+                            <input type="text" class="code-slot-input" maxlength="1" data-idx="2" pattern="[0-9]*" inputmode="numeric">
+                            <input type="text" class="code-slot-input" maxlength="1" data-idx="3" pattern="[0-9]*" inputmode="numeric">
+                            <input type="text" class="code-slot-input" maxlength="1" data-idx="4" pattern="[0-9]*" inputmode="numeric">
+                        </div>
+                    </div>
+
+                    <div style="text-align: center;">
+                        <span style="font-size: 13.5px; color: rgba(255,255,255,0.4);">Resend code in <strong style="color: var(--accent);" id="verifyTimer">00:48</strong></span>
+                    </div>
+                </div>
+
+                <!-- 5. VERIFICATION PENDING SCREEN -->
+                <div id="authPendingView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: #000; padding: 20px 20px 40px; justify-content: space-between; z-index: 5;">
+                    <div>
+                        <!-- Header with back arrow -->
+                        <div style="display: flex; align-items: center; margin-bottom: 24px; position: relative;">
+                            <button class="round-back-btn" type="button" onclick="showVerifyView()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                            </button>
+                            <span style="font-size: 15px; font-weight: 800; color: #fff; position: absolute; left: 50%; transform: translateX(-50%);">Verification</span>
+                        </div>
+
+                        <!-- Clock circular icon -->
+                        <div style="display: flex; justify-content: center; margin: 48px 0 28px;">
+                            <div style="width: 90px; height: 90px; border-radius: 50%; border: 3.5px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; position: relative; background: rgba(255,255,255,0.02);">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <div style="position: absolute; inset: -3.5px; border-radius: 50%; border: 3.5px solid var(--accent); border-top-color: transparent; border-right-color: transparent; border-bottom-color: transparent;"></div>
+                            </div>
+                        </div>
+
+                        <h2 style="font-size: 22px; font-weight: 800; color: #fff; text-align: center; margin: 0;">Verification Pending</h2>
+                        <p style="font-size: 13.5px; color: rgba(255,255,255,0.5); text-align: center; margin-top: 10px; line-height: 1.5; padding: 0 10px;">Your verification is being reviewed. Please contact the gym owner for approval or wait for confirmation.</p>
+                    </div>
+
+                    <button class="auth-capsule-btn secondary-btn" style="border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff;" onclick="simulateOwnerVerificationGlow()">Contact Owner</button>
+                </div>
+
+                <!-- 6. PERSONALIZE FITNESS AND HEALTH SCREEN -->
+                <div id="authPersonalizeView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: #000; padding: 28px 20px 40px; justify-content: space-between; z-index: 5;">
+                    <div>
+                        <h2 style="font-size: 26px; font-weight: 900; color: #fff; line-height: 1.25; margin: 0; letter-spacing: -0.02em;">Personalize Fitness<br>and Health</h2>
+                        <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 8px; line-height: 1.4;">This information ensures fitness and health data are as accurate as possible</p>
+
+                        <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 32px;">
+                            <!-- DOB field -->
+                            <div class="personal-field-row" onclick="openDobDatePicker()">
+                                <span class="personal-field-lbl">Date of Birth</span>
+                                <span class="personal-field-val" id="personalDobVal">Date of Birth</span>
+                            </div>
+                            <!-- Gender field -->
+                            <div class="personal-field-row" onclick="openGenderDropdown()">
+                                <span class="personal-field-lbl">Sex</span>
+                                <span class="personal-field-val" id="personalGenderVal">Male</span>
+                            </div>
+                            <!-- Height field -->
+                            <div class="personal-field-row" onclick="openHeightPickerDialog()">
+                                <span class="personal-field-lbl">Height</span>
+                                <span class="personal-field-val" id="personalHeightVal">190 cm</span>
+                            </div>
+                            <!-- Weight field -->
+                            <div class="personal-field-row" onclick="openWeightPickerDialog()">
+                                <span class="personal-field-lbl">Weight</span>
+                                <span class="personal-field-val" id="personalWeightVal">192 lb</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="auth-capsule-btn primary-btn" onclick="submitPersonalizedDataAndComplete()">Continue</button>
+                </div>
+
+                <!-- Custom MODAL: Date of Birth Picker -->
+                <div id="modalDobPicker" class="personal-modal-overlay" style="display: none;">
+                    <div class="personal-modal-card">
+                        <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin: 0 0 14px 0; text-align: left;">Select a Date of Birth</h4>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <span style="font-size: 13px; font-weight: 700; color: #fff;">September 2023</span>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" class="picker-nav-arrow-btn" onclick="changeDobMonth(-1)">&lt;</button>
+                                <button type="button" class="picker-nav-arrow-btn" onclick="changeDobMonth(1)">&gt;</button>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; font-size: 11.5px; margin-bottom: 20px;">
+                            <span class="cal-dow-label">Sun</span>
+                            <span class="cal-dow-label">Mon</span>
+                            <span class="cal-dow-label">Tue</span>
+                            <span class="cal-dow-label">Wed</span>
+                            <span class="cal-dow-label">Thu</span>
+                            <span class="cal-dow-label">Fri</span>
+                            <span class="cal-dow-label">Sat</span>
+                            
+                            <span class="cal-cell empty">27</span>
+                            <span class="cal-cell empty">28</span>
+                            <span class="cal-cell">1</span>
+                            <span class="cal-cell">2</span>
+                            <span class="cal-cell">3</span>
+                            <span class="cal-cell">4</span>
+                            <span class="cal-cell">5</span>
+                            <span class="cal-cell">6</span>
+                            <span class="cal-cell">7</span>
+                            <span class="cal-cell">8</span>
+                            <span class="cal-cell">9</span>
+                            <span class="cal-cell">10</span>
+                            <span class="cal-cell">11</span>
+                            <span class="cal-cell">12</span>
+                            <span class="cal-cell">13</span>
+                            <span class="cal-cell">14</span>
+                            <span class="cal-cell active">15</span>
+                            <span class="cal-cell">16</span>
+                            <span class="cal-cell">17</span>
+                            <span class="cal-cell">18</span>
+                            <span class="cal-cell">19</span>
+                            <span class="cal-cell">20</span>
+                            <span class="cal-cell">21</span>
+                            <span class="cal-cell">22</span>
+                            <span class="cal-cell">23</span>
+                            <span class="cal-cell">24</span>
+                            <span class="cal-cell">25</span>
+                            <span class="cal-cell">26</span>
+                            <span class="cal-cell">27</span>
+                            <span class="cal-cell">28</span>
+                            <span class="cal-cell">29</span>
+                            <span class="cal-cell">30</span>
+                            <span class="cal-cell empty">1</span>
+                            <span class="cal-cell empty">2</span>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                            <button type="button" class="auth-capsule-btn primary-btn" style="min-height: 38px; font-size: 13px;" onclick="confirmDobPicker()">Confirm</button>
+                            <button type="button" class="auth-capsule-btn secondary-btn" style="min-height: 38px; font-size: 13px; border-color: rgba(255,255,255,0.1); color: #fff;" onclick="closeDobPicker()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom MODAL: Gender Dropdown -->
+                <div id="modalGenderDropdown" class="personal-modal-overlay" style="display: none; align-items: flex-end;" onclick="closeGenderDropdown()">
+                    <div class="personal-bottom-sheet" onclick="event.stopPropagation();">
+                        <div style="width: 36px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin: 0 auto 16px;"></div>
+                        <button type="button" class="sheet-option-btn active" onclick="selectGenderVal('Male')">Male</button>
+                        <button type="button" class="sheet-option-btn" onclick="selectGenderVal('Female')">Female</button>
+                    </div>
+                </div>
+
+                <!-- Custom MODAL: Height Picker -->
+                <div id="modalHeightPicker" class="personal-modal-overlay" style="display: none;">
+                    <div class="personal-modal-card">
+                        <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin: 0 0 4px 0; text-align: center;">Height</h4>
+                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.5); text-align: center; margin-bottom: 20px;">Set a height based on your body</p>
+
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 24px; margin: 24px 0;">
+                            <button type="button" class="picker-adjust-btn" onclick="adjustHeightVal(-1)">-</button>
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <span style="font-size: 32px; font-weight: 900; color: #fff;" id="heightPickerVal">180</span>
+                                <span style="font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; margin-top: 2px;">CM</span>
+                            </div>
+                            <button type="button" class="picker-adjust-btn" onclick="adjustHeightVal(1)">+</button>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 12px;">
+                            <button type="button" class="auth-capsule-btn primary-btn" style="min-height: 38px; font-size: 13px;" onclick="confirmHeightPicker()">Confirm</button>
+                            <button type="button" class="auth-capsule-btn secondary-btn" style="min-height: 38px; font-size: 13px; border-color: rgba(255,255,255,0.1); color: #fff;" onclick="closeHeightPicker()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom MODAL: Weight Picker -->
+                <div id="modalWeightPicker" class="personal-modal-overlay" style="display: none;">
+                    <div class="personal-modal-card">
+                        <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin: 0 0 4px 0; text-align: center;">Weight</h4>
+                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.5); text-align: center; margin-bottom: 20px;">Set a weight based on your body</p>
+
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 24px; margin: 24px 0;">
+                            <button type="button" class="picker-adjust-btn" onclick="adjustWeightVal(-1)">-</button>
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <span style="font-size: 32px; font-weight: 900; color: #fff;" id="weightPickerVal">192</span>
+                                <span style="font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; margin-top: 2px;">LB</span>
+                            </div>
+                            <button type="button" class="picker-adjust-btn" onclick="adjustWeightVal(1)">+</button>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 12px;">
+                            <button type="button" class="auth-capsule-btn primary-btn" style="min-height: 38px; font-size: 13px;" onclick="confirmWeightPicker()">Confirm</button>
+                            <button type="button" class="auth-capsule-btn secondary-btn" style="min-height: 38px; font-size: 13px; border-color: rgba(255,255,255,0.1); color: #fff;" onclick="closeWeightPicker()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ================= PORTAL SHELL APP ================= -->
+            <div id="memberAppWrapper" style="display: none; flex-direction: column; height: 100%; overflow: hidden;">
+                <header class="app-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: #0b0b0b; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div class="app-identity" style="display: flex; align-items: center; gap: 8px;">
+                        <div class="app-logo" style="background: var(--accent); color: #111; font-weight: 900; font-size: 16px; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">G</div>
+                        <div class="app-name" style="font-size: 16px; font-weight: 800; letter-spacing: 0.05em; color: var(--text-primary);">GYMOS</div>
+                    </div>
+
+                    <div class="notif-bell" style="background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;" onclick="toggleNotificationsPanel()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24"
+                            stroke="var(--text-primary)" stroke-width="2.5">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
+                        <div id="notifBadgeCount" class="notif-badge-dot" style="background-color: #ef4444; width: 8px; height: 8px; border-radius: 50%; position: absolute; top: 0; right: 0; display: none;"></div>
+                    </div>
+                </header>
+
+                <!-- Notification Panel Overlay Inside Screen -->
+                <div id="notifOverlayPanel"
+                    style="display:none; position:absolute; top:74px; right:20px; left:20px; max-height:350px; background: rgba(17, 17, 17, 0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); z-index: 1900; overflow-y:auto; padding:16px;">
+                    <div
+                        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:8px;">
+                        <h4 style="font-size:14px; font-weight:800; color: var(--text-primary);">Notifications</h4>
+                        <button class="btn btn-ghost" style="padding:2px 8px; font-size:11px; color: var(--accent); min-height: unset; font-weight: 700;"
+                            onclick="markMemberNotificationsRead()">Mark Read</button>
+                    </div>
+                    <div id="notifPanelList" style="display:flex; flex-direction:column; gap:8px;">
+                        <!-- Dynamic notifications listings -->
+                    </div>
+                </div>
+
+                <!-- Simulated App Screen Views -->
+                <div class="screen-content" id="scrollContentArea">
+
+                    <!-- SCREEN 1: HOME/DASHBOARD -->
+                    <div id="homeScreen" class="mobile-screen active" style="gap: 20px;">
+                        
+                        <!-- Top Profile Greeting header -->
+                        <div style="margin-top: 4px;">
+                            <p style="font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.6); margin: 0;">Hi, <span id="homeMemberFirstName">User</span>!</p>
+                            <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin: 4px 0 0 0; letter-spacing: -0.02em;">Ready for your fitness routine today?</h2>
+                        </div>
+
+                        <!-- Section: Attendance Streak -->
+                        <div>
+                            <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0 0 12px 0;">Attendance Streak</h3>
+                            
+                            <!-- Streak Card -->
+                            <div style="background-color: #1c1c1e; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+                                <div>
+                                    <h4 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0;"><span id="homeStreakDaysText">0</span> Day</h4>
+                                    <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); margin: 4px 0 0 0;">Check-in consecutively to grow your streak!</p>
+                                </div>
+
+                                <!-- Week Checklist Row (M T W T F S S) -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; margin-top: 4px;">
+                                    <div class="streak-day-dot-container">
+                                        <span class="streak-day-lbl">M</span>
+                                        <div class="streak-day-circle" id="streakDayDot-1"></div>
+                                    </div>
+                                    <div class="streak-day-dot-container">
+                                        <span class="streak-day-lbl">T</span>
+                                        <div class="streak-day-circle" id="streakDayDot-2"></div>
+                                    </div>
+                                    <div class="streak-day-dot-container">
+                                        <span class="streak-day-lbl">W</span>
+                                        <div class="streak-day-circle" id="streakDayDot-3"></div>
+                                    </div>
+                                    <div class="streak-day-dot-container">
+                                        <span class="streak-day-lbl">T</span>
+                                        <div class="streak-day-circle" id="streakDayDot-4"></div>
+                                    </div>
+                                    <div class="streak-day-dot-container">
+                                        <span class="streak-day-lbl">F</span>
+                                        <div class="streak-day-circle" id="streakDayDot-5"></div>
+                                    </div>
+                                    <div class="streak-day-dot-container">
+                                        <span class="streak-day-lbl">S</span>
+                                        <div class="streak-day-circle" id="streakDayDot-6"></div>
+                                    </div>
+                                    <div class="streak-day-dot-container">
+                                        <span class="streak-day-lbl">S</span>
+                                        <div class="streak-day-circle" id="streakDayDot-7"></div>
+                                    </div>
+                                </div>
+
+                                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 4px 0;">
+
+                                <!-- Stats Row (3 columns) -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; text-align: left;">
+                                    <div style="flex: 1;">
+                                        <span style="font-size: 24px; font-weight: 800; color: #fff;" id="homeWeeklyVisitsCount">0</span>
+                                        <p style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4); margin: 4px 0 0 0;">Weekly Vists</p>
+                                    </div>
+                                    <div style="flex: 1; padding-left: 12px; border-left: 1px solid rgba(255,255,255,0.06);">
+                                        <span style="font-size: 24px; font-weight: 800; color: #fff;" id="homeMonthlyVisitsCount">0</span>
+                                        <p style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4); margin: 4px 0 0 0;">Monthly Vists</p>
+                                    </div>
+                                    <div style="flex: 1; padding-left: 12px; border-left: 1px solid rgba(255,255,255,0.06);">
+                                        <span style="font-size: 24px; font-weight: 800; color: #fff;" id="homeTimeSpentText">0hrs</span>
+                                        <p style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4); margin: 4px 0 0 0;">Time Spent</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section: Membership -->
+                        <div>
+                            <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0 0 12px 0;">Membership</h3>
+
+                            <!-- Membership Card -->
+                            <div style="background-color: #1c1c1e; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 20px;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div>
+                                        <span style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.05em;">Membership ID</span>
+                                        <h4 style="font-size: 22px; font-weight: 800; color: #fff; margin: 4px 0 0 0; letter-spacing: 0.02em;" id="homeMembershipId">--</h4>
+                                    </div>
+                                    <span style="font-size: 22px; font-weight: 800; color: #fff; letter-spacing: 0.03em;">NGYM</span>
+                                </div>
+
+                                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                                    <div>
+                                        <span style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.05em;">Expiry</span>
+                                        <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin: 4px 0 0 0;" id="homeExpiryDate">--</h4>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <span style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.05em;">Status</span>
+                                        <h4 style="font-size: 15px; font-weight: 800; color: var(--accent); margin: 4px 0 0 0;" id="homeStatusText">Active</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- SCREEN 2: SCAN QR -->
+                    <div id="scanScreen" class="mobile-screen" style="gap: 16px; background: #000;">
+                        <div>
+                            <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Entrance Scanner</h3>
+                            <p style="font-size: 13px; color: rgba(255,255,255,0.4); margin: 0;">Point your camera at the gym entrance QR code.</p>
+                        </div>
+
+                        <div class="scanner-chassis" style="display: flex; flex-direction: column; gap: 20px; align-items: center; justify-content: center; flex: 1; margin-top: 10px;">
+                            
+                            <!-- Viewfinder Frame -->
+                            <div class="scanner-viewfinder" id="scannerViewfinder" style="width: 180px; height: 180px; border-radius: 20px; overflow: hidden; position: relative;">
+                                <video id="scannerVideo" autoplay muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+                                <div class="scanner-laser"></div>
+                                <div class="scan-corner-top-l"></div>
+                                <div class="scan-corner-top-r"></div>
+                                <div class="scan-corner-btm-l"></div>
+                                <div class="scan-corner-btm-r"></div>
+                            </div>
+
+                            <div id="scannerInstructionsBlock" style="text-align: center; display: flex; flex-direction: column; gap: 14px;">
+                                <p style="font-size: 13px; color: rgba(255,255,255,0.5); margin: 0;" id="scannerStatusText">Point the camera at the gym QR code.</p>
+                                
+                                <!-- Manual Code Link/Input -->
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                                    <span style="font-size: 12.5px; color: rgba(255,255,255,0.3); cursor: pointer; text-decoration: underline;" onclick="toggleManualCodeField()">QR Scan Not Working? Enter code</span>
+                                    
+                                    <div id="manualCodeEntryField" style="display: none; align-items: center; gap: 8px; margin-top: 6px;">
+                                        <input type="text" id="manualEntranceCodeInput" class="custom-input" placeholder="45789" style="width: 120px; height: 38px; font-size: 14px; text-align: center;" pattern="[0-9]*" inputmode="numeric">
+                                        <button class="auth-capsule-btn primary-btn" style="width: 64px; min-height: 38px; font-size: 12.5px; border-radius: 10px;" onclick="submitManualEntranceCode()">Enter</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="scannerCameraState" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                                <div id="cameraInstructionsLink" style="display:none;">
+                                    <button class="auth-capsule-btn secondary-btn" style="min-height: 36px; font-size: 12.5px; padding: 0 16px;" onclick="document.getElementById('cameraInstructionsModal').style.display='flex'">View Settings Guide</button>
+                                </div>
+                                <div id="simulateScanBox" style="display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%;">
+                                    <span style="font-size: 11px; color: rgba(255,255,255,0.25);">Or, simulate check-in/out:</span>
+                                    <button class="auth-capsule-btn secondary-btn" style="min-height: 38px; font-size: 13px;" onclick="simulateQuickScan()">Simulate QR Code Scan</button>
+                                </div>
+                                <button id="startCameraButton" class="auth-capsule-btn primary-btn" type="button" onclick="startCameraScanner()" style="display:none;">Open Camera</button>
+                            </div>
+
+                            <!-- Success Animation viewport checkin -->
+                            <div id="scannerSuccessAnimationBox" class="success-checkin-wrapper" style="display: none; padding: 12px 0; width: 100%; text-align: center; flex-direction: column; align-items: center;">
+                                
+                                <!-- State 1: Check-in Success -->
+                                <div id="checkinSuccessState" style="display: none; width: 100%;">
+                                    <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                                        <div style="width: 72px; height: 72px; border-radius: 50%; border: 3px solid var(--accent); display: flex; align-items: center; justify-content: center; background: rgba(199, 255, 36, 0.05);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <h3 style="color: #fff; font-weight: 800; font-size: 22px; margin: 0 0 10px 0;">Check-In Sucessful</h3>
+                                    <p style="font-size: 13.5px; color: rgba(255,255,255,0.5); line-height: 1.5; margin: 0 0 24px 0;">Checked in at <strong style="color: #fff;" id="checkinTimeVal">7:15 PM</strong>, Have a great workout! Don't forget to check out before leaving.</p>
+                                    
+                                    <button class="auth-capsule-btn secondary-btn" style="width: 100%; border-color: rgba(255,255,255,0.15);" onclick="finishAttendanceFlow()">Check-Out Now</button>
+                                </div>
+
+                                <!-- State 2: Check-out Success (Attendance Logged) -->
+                                <div id="checkoutSuccessState" style="display: none; width: 100%;">
+                                    <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                                        <div style="width: 72px; height: 72px; border-radius: 50%; border: 3px solid var(--accent); display: flex; align-items: center; justify-content: center; background: rgba(199, 255, 36, 0.05);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <h3 style="color: #fff; font-weight: 800; font-size: 22px; margin: 0 0 10px 0;">Attendance Logged</h3>
+                                    <p style="font-size: 13.5px; color: rgba(255,255,255,0.5); line-height: 1.5; margin: 0 0 24px 0;">Great job! Your gym session has been logged successfully, See you Tomorrow</p>
+                                    
+                                    <!-- Stats Table Grid -->
+                                    <div style="display: flex; flex-direction: column; gap: 12px; background: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 12px; padding: 14px; text-align: left; margin-bottom: 24px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 600;">Check-in</span>
+                                            <span style="font-size: 13.5px; color: #fff; font-weight: 700;" id="successCheckinTime">11:46</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+                                            <span style="font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 600;">Check-out</span>
+                                            <span style="font-size: 13.5px; color: #fff; font-weight: 700;" id="successCheckoutTime">12:46</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+                                            <span style="font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 600;">Work Duration</span>
+                                            <span style="font-size: 13.5px; color: #fff; font-weight: 700;" id="checkoutDurationVal">55 Mins</span>
+                                        </div>
+                                    </div>
+
+                                    <button class="auth-capsule-btn primary-btn" style="width: 100%;" onclick="finishAttendanceFlow()">Continue</button>
+                                </div>
+
+                                <!-- State 3: Already Completed Warning (Also Attendance Logged format) -->
+                                <div id="completedWarningState" style="display: none; width: 100%;">
+                                    <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                                        <div style="width: 72px; height: 72px; border-radius: 50%; border: 3px solid var(--accent); display: flex; align-items: center; justify-content: center; background: rgba(199, 255, 36, 0.05);">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <h3 style="color: #fff; font-weight: 800; font-size: 22px; margin: 0 0 10px 0;">Attendance Logged</h3>
+                                    <p style="font-size: 13.5px; color: rgba(255,255,255,0.5); line-height: 1.5; margin: 0 0 24px 0;">You have already completed your workout for today. See you Tomorrow</p>
+                                    
+                                    <!-- Stats Table Grid -->
+                                    <div style="display: flex; flex-direction: column; gap: 12px; background: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 12px; padding: 14px; text-align: left; margin-bottom: 24px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 600;">Check-in</span>
+                                            <span style="font-size: 13.5px; color: #fff; font-weight: 700;" id="warningCheckinTime">11:46</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+                                            <span style="font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 600;">Check-out</span>
+                                            <span style="font-size: 13.5px; color: #fff; font-weight: 700;" id="warningCheckoutTime">12:46</span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+                                            <span style="font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 600;">Work Duration</span>
+                                            <span style="font-size: 13.5px; color: #fff; font-weight: 700;" id="warningDuration">55 Mins</span>
+                                        </div>
+                                    </div>
+
+                                    <button class="auth-capsule-btn primary-btn" style="width: 100%;" onclick="finishAttendanceFlow()">Continue</button>
+                                </div>
+                            </div>
+                    </div>
+                    </div>
+
+                    <!-- SCREEN 3: ATTENDANCE -->
+                    <!-- SCREEN 3: ACTIVITY MODULE (REPLACES OLD ATTENDANCE SCREEN) -->
+                    <div id="activityScreen" class="mobile-screen" style="overflow: hidden;">
+                        
+                        <!-- MAIN DASHBOARD CONTENT (CALENDAR & RECENT ACTIVITY) -->
+                        <div id="activityDashboardContent" style="display: flex; flex-direction: column; gap: 20px; height: 100%; overflow-y: auto; padding: 20px 16px 40px; box-sizing: border-box;">
+                            
+                            <!-- Header -->
+                            <div style="margin-top: 4px;">
+                                <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 16px 0;">Activity Calendar</h3>
+                            </div>
+
+                            <!-- Month Switcher Selector -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px; margin-bottom: 8px;">
+                                <button class="calendar-hdr-btn" onclick="changeActivityCalendarMonth(-1)" style="font-size: 18px; color: #fff; background: transparent; border: none; cursor: pointer; padding: 4px 10px;">‹</button>
+                                <span id="activityCalendarMonthYearTitle" style="font-size: 15px; font-weight: 800; color: #fff; letter-spacing: 0.02em;">July 2025</span>
+                                <button class="calendar-hdr-btn" onclick="changeActivityCalendarMonth(1)" style="font-size: 18px; color: #fff; background: transparent; border: none; cursor: pointer; padding: 4px 10px;">›</button>
+                            </div>
+
+                            <!-- Calendar Grid Widget -->
+                            <div style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 18px 16px;">
+                                <!-- DOW Header -->
+                                <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 12px; text-align: center;">
+                                    <div style="font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase;">Mon</div>
+                                    <div style="font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase;">Tue</div>
+                                    <div style="font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase;">Wed</div>
+                                    <div style="font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase;">Thu</div>
+                                    <div style="font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase;">Fri</div>
+                                    <div style="font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase;">Sat</div>
+                                    <div style="font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase;">Sun</div>
+                                </div>
+                                <!-- Days numbers grid -->
+                                <div id="activityCalendarDaysGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center;">
+                                    <!-- Dynamic days grid -->
+                                </div>
+                            </div>
+
+                            <!-- Metrics Row Summary Card -->
+                            <div style="display: flex; gap: 10px; width: 100%;">
+                                <!-- Active Days -->
+                                <div style="flex: 1; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; text-align: left;">
+                                    <h4 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 4px 0;" id="metricActiveDaysCount">0</h4>
+                                    <span style="font-size: 10.5px; color: rgba(255,255,255,0.4); font-weight: 600;">Active Days</span>
+                                </div>
+                                <!-- Rest Days -->
+                                <div style="flex: 1; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; text-align: left;">
+                                    <h4 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 4px 0;" id="metricRestDaysCount">0</h4>
+                                    <span style="font-size: 10.5px; color: rgba(255,255,255,0.4); font-weight: 600;">Rest Days</span>
+                                </div>
+                                <!-- Day Streak -->
+                                <div style="flex: 1; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; text-align: left;">
+                                    <h4 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 4px 0;" id="metricStreakCount">0</h4>
+                                    <span style="font-size: 10.5px; color: rgba(255,255,255,0.4); font-weight: 600;">Day Streak</span>
+                                </div>
+                            </div>
+
+                            <!-- Recent Activity Title/Row -->
+                            <div style="margin-top: 10px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <span style="font-size: 16px; font-weight: 800; color: #fff;">Recent Activity</span>
+                                    <span style="font-size: 13px; font-weight: 700; color: var(--accent); cursor: pointer;" onclick="showActivitySubScreen('subScreenHistory')">View All</span>
+                                </div>
+
+                                <div id="recentActivityListContainer" style="display: flex; flex-direction: column; gap: 12px;">
+                                    <!-- Up to 3 recent logs rows -->
+                                </div>
+                            </div>
+                        </div>iv>
+
+                        <!-- EMPTY STATE CONTAINER (HIDDEN BY DEFAULT) -->
+                        <div id="activityEmptyState" class="empty-state-container" style="display: none; height: 100%; justify-content: center;">
+                            <div class="empty-state-illustration">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" fill="none">
+                                    <circle cx="60" cy="60" r="50" fill="rgba(199, 255, 36, 0.03)" stroke="var(--border-color)" stroke-width="2"/>
+                                    <path d="M60 40v30m0 10h.01" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <h4 style="font-size: 18px; font-weight: 800; color: var(--text-primary);">No Activity Yet</h4>
+                            <p style="font-size: 13px; color: var(--text-secondary); margin: 8px 0 24px; max-width: 250px; line-height: 1.4;">Complete your first check-in to start tracking your fitness journey.</p>
+                            <button class="btn btn-primary" style="padding: 10px 24px; font-size: 13px; font-weight: 700;" onclick="switchMobileNav('scan')">Scan QR</button>
+                        </div>
+
+                        <!-- ---------------- SUB-SCREENS (SLIDEOUT OVERLAYS) ---------------- -->
+
+                        <!-- SCREEN 2: ATTENDANCE HISTORY -->
+                        <div id="subScreenHistory" class="activity-screen-sub">
+                            <div class="activity-sub-header">
+                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span class="activity-sub-title">Attendance History</span>
+                            </div>
+                            <div class="activity-sub-content">
+                                <div class="search-filter-row">
+                                    <div class="search-control-wrapper">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                        <input type="text" id="historySearchField" class="search-input-field" placeholder="Search date or branch..." oninput="filterHistoryList()">
+                                    </div>
+                                </div>
+                                <div class="filter-tabs-wrapper">
+                                    <button id="tabFilterAll" class="filter-tab-btn active" onclick="setHistoryFilter('all')">All</button>
+                                    <button id="tabFilterWeekly" class="filter-tab-btn" onclick="setHistoryFilter('weekly')">Weekly</button>
+                                    <button id="tabFilterMonthly" class="filter-tab-btn" onclick="setHistoryFilter('monthly')">Monthly</button>
+                                </div>
+                                <div id="subHistoryListContainer" style="display: flex; flex-direction: column; gap: 10px;">
+                                    <!-- Dynamic list of visits -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SCREEN 3: WORKOUT TIMELINE -->
+                        <div id="subScreenTimeline" class="activity-screen-sub">
+                            <div class="activity-sub-header">
+                                <button class="activity-sub-back-btn" onclick="showActivitySubScreen('subScreenHistory')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span class="activity-sub-title">Workout Timeline</span>
+                            </div>
+                            <div class="activity-sub-content">
+                                <div class="card" style="padding: 16px; margin-bottom: 20px;">
+                                    <h4 id="timelineDateVal" style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">-- --</h4>
+                                    <p id="timelineBranchVal" style="font-size: 12.5px; color: var(--text-secondary);">GymOS Branch</p>
+                                </div>
+                                <div class="details-timeline-wrapper">
+                                    <div class="details-timeline-item" id="timelineStep1">
+                                        <div class="details-timeline-dot"></div>
+                                        <div class="details-timeline-text-box">
+                                            <span class="details-timeline-lbl">Checked In at entrance</span>
+                                            <span class="details-timeline-time" id="timelineTime1">--:--</span>
+                                        </div>
+                                    </div>
+                                    <div class="details-timeline-item" id="timelineStep2">
+                                        <div class="details-timeline-dot"></div>
+                                        <div class="details-timeline-text-box">
+                                            <span class="details-timeline-lbl">Workout Started</span>
+                                            <span class="details-timeline-time" id="timelineTime2">--:--</span>
+                                        </div>
+                                    </div>
+                                    <div class="details-timeline-item" id="timelineStep3">
+                                        <div class="details-timeline-dot"></div>
+                                        <div class="details-timeline-text-box">
+                                            <span class="details-timeline-lbl">Workout Completed</span>
+                                            <span class="details-timeline-time" id="timelineTime3">--:--</span>
+                                        </div>
+                                    </div>
+                                    <div class="details-timeline-item" id="timelineStep4">
+                                        <div class="details-timeline-dot"></div>
+                                        <div class="details-timeline-text-box">
+                                            <span class="details-timeline-lbl">Checked Out</span>
+                                            <span class="details-timeline-time" id="timelineTime4">--:--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" style="width: 100%; margin-top: 32px;" onclick="viewCurrentWorkoutDetails()">View Details</button>
+                            </div>
+                        </div>
+
+                        <!-- SCREEN 4: WORKOUT DETAILS -->
+                        <div id="subScreenDetails" class="activity-screen-sub">
+                            <div class="activity-sub-header">
+                                <button class="activity-sub-back-btn" onclick="showActivitySubScreen('subScreenTimeline')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span class="activity-sub-title">Workout Details</span>
+                            </div>
+                            <div class="activity-sub-content">
+                                <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                                        <div>
+                                            <span style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase;">Workout Date</span>
+                                            <h4 id="detailDateText" style="font-size: 18px; font-weight: 700; color: var(--text-primary); margin-top: 2px;">-- --</h4>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <span style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase;">Duration</span>
+                                            <h4 id="detailDurationText" style="font-size: 18px; font-weight: 700; color: var(--accent); margin-top: 2px;">--</h4>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                                        <div>
+                                            <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;">Check-in Time</span>
+                                            <p id="detailCheckinVal" style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 2px;">--:--</p>
+                                        </div>
+                                        <div>
+                                            <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;">Check-out Time</span>
+                                            <p id="detailCheckoutVal" style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 2px;">--:--</p>
+                                        </div>
+                                        <div>
+                                            <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;">Calories (Est.)</span>
+                                            <p id="detailCaloriesVal" style="font-size: 14px; font-weight: 600; color: var(--accent); margin-top: 2px;">-- kcal</p>
+                                        </div>
+                                        <div>
+                                            <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;">Steps (Est.)</span>
+                                            <p id="detailStepsVal" style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-top: 2px;">-- steps</p>
+                                        </div>
+                                    </div>
+
+                                    <div style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                                        <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;">Gym Branch</span>
+                                        <p id="detailBranchVal" style="font-size: 13.5px; font-weight: 500; color: var(--text-primary); margin-top: 2px;">GymOS Branch</p>
+                                    </div>
+
+                                    <div>
+                                        <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;">Membership Plan</span>
+                                        <p id="detailPlanVal" style="font-size: 13.5px; font-weight: 500; color: var(--text-primary); margin-top: 2px;">Standard Plan</p>
+                                    </div>
+
+                                    <div style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                                        <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;">Workout Notes</span>
+                                        <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.4; margin-top: 4px; font-style: italic;">
+                                            💪 Standard high-intensity training session at GymOS. Consistency is the key to progress!
+                                        </p>
+                                    </div>
+                                </div>
+                                <button class="btn btn-secondary" style="width: 100%; margin-top: 24px;" onclick="showActivitySubScreen('subScreenHistory')">Back to History</button>
+                            </div>
+                        </div>
+
+                        <!-- SCREEN 5: STATISTICS -->
+                        <div id="subScreenStats" class="activity-screen-sub">
+                            <div class="activity-sub-header">
+                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span class="activity-sub-title">Statistics</span>
+                            </div>
+                            <div class="activity-sub-content">
+                                
+                                <!-- Weekly Visits (Bar Chart Container) -->
+                                <div class="chart-container-box">
+                                    <div class="chart-header">
+                                        <div>
+                                            <span class="chart-title">Weekly Attendance</span>
+                                            <div id="statWeeklyVisitsVal" class="chart-val-big">0</div>
+                                            <div class="chart-val-sub">Visits this calendar month</div>
+                                        </div>
+                                    </div>
+                                    <div id="activityBarChartContainer">
+                                        <!-- Dynamic SVG Bar Chart inserted here -->
+                                    </div>
+                                </div>
+
+                                <!-- Workout Hours (Line Chart Container) -->
+                                <div class="chart-container-box">
+                                    <div class="chart-header">
+                                        <div>
+                                            <span class="chart-title">Workout Hours</span>
+                                            <div id="statWorkoutHoursVal" class="chart-val-big">0 hrs</div>
+                                            <div class="chart-val-sub">Total training hours tracked</div>
+                                        </div>
+                                    </div>
+                                    <div id="activityLineChartContainer">
+                                        <!-- Dynamic SVG Line Chart inserted here -->
+                                    </div>
+                                </div>
+
+                                <!-- Average & Ring progress (Donut Chart Container) -->
+                                <div class="chart-container-box" style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+                                    <div style="flex: 1;">
+                                        <span class="chart-title">Avg Session</span>
+                                        <div id="statAvgDurationVal" class="chart-val-big">0 mins</div>
+                                        <div class="chart-val-sub" style="margin-top: 4px;">Longest workout: <strong id="statMaxDurationVal" style="color: var(--accent);">0 min</strong></div>
+                                    </div>
+                                    <div id="activityDonutContainer" style="display: flex; align-items: center; justify-content: center;">
+                                        <!-- Dynamic Progress Ring Donut here -->
+                                    </div>
+                                </div>
+
+                                <!-- Streaks & Goals Details -->
+                                <div class="card" style="padding: 16px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                        <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Current Streak</span>
+                                        <strong id="statCurrentStreakVal" style="font-size: 14px; color: var(--accent);">0 Days</strong>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                                        <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Best Streak</span>
+                                        <strong id="statBestStreakVal" style="font-size: 14px; color: var(--text-primary);">0 Days</strong>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                                        <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Yearly Progress</span>
+                                        <strong id="statYearlyVisitsVal" style="font-size: 14px; color: var(--text-primary);">0 / 120 visits</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SCREEN 6: ACHIEVEMENTS -->
+                        <div id="subScreenAchievements" class="activity-screen-sub">
+                            <div class="activity-sub-header">
+                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span class="activity-sub-title">Achievements</span>
+                            </div>
+                            <div class="activity-sub-content">
+                                <div style="text-align: center; margin-bottom: 16px;">
+                                    <span style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Unlocked Badges</span>
+                                    <div id="achievementProgressText" style="font-size: 20px; font-weight: 800; color: var(--accent); margin-top: 2px;">0 / 6 Unlocked</div>
+                                </div>
+                                <div id="achievementsGridContainer" class="achievements-grid">
+                                    <!-- Dynamic achievement badge elements -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SCREEN 7: LEADERBOARD -->
+                        <div id="subScreenLeaderboard" class="activity-screen-sub" style="display: flex; flex-direction: column; background: #000; height: 100%; overflow-y: auto;">
+                            <!-- Header -->
+                            <div style="padding: 20px 16px 0; display: flex; justify-content: space-between; align-items: flex-start; background: #000; z-index: 10;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()" style="margin: 0; padding: 4px; border: none; background: transparent; cursor: pointer; color: #fff;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                    </button>
+                                    <div>
+                                        <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">LeaderBoard</h3>
+                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); margin: 0;">Stay active. Earn points.</p>
+                                    </div>
+                                </div>
+                                <button class="auth-capsule-btn secondary-btn" style="min-height: 30px; font-size: 11px; padding: 0 12px; border-radius: 20px; border-color: rgba(255,255,255,0.15); width: auto;" onclick="showLeaderboardGuide()">How it Works?</button>
+                            </div>
+
+                            <!-- Tabs toggle period selector -->
+                            <div style="padding: 0 16px; margin-top: 16px;">
+                                <div style="display: flex; background: #1c1c1e; border-radius: 20px; padding: 3px; border: 1px solid rgba(255,255,255,0.05);">
+                                    <button id="btnLeadWeekly" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: var(--accent); color: #000;" onclick="setLeaderboardPeriod('weekly')">Weekly</button>
+                                    <button id="btnLeadMonthly" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setLeaderboardPeriod('monthly')">Monthly</button>
+                                    <button id="btnLeadAll" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setLeaderboardPeriod('all')">All Time</button>
+                                </div>
+                            </div>
+
+                            <!-- PODIUM CONTAINER -->
+                            <div id="leaderboardPodiumBox" style="display: flex; justify-content: center; align-items: flex-end; gap: 14px; margin: 28px 0 16px; padding: 0 16px; height: 160px; position: relative; flex-shrink: 0;">
+                                <!-- Rank 2 (Left) -->
+                                <div id="podiumRank2" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
+                                    <div style="position: relative; margin-bottom: 8px;">
+                                        <img id="podiumRank2Img" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #8e8e93; object-fit: cover;">
+                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #8e8e93; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">2</div>
+                                    </div>
+                                    <span id="podiumRank2Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Sam Smith</span>
+                                    <span id="podiumRank2Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;">38 CHECK-INS</span>
+                                </div>
+
+                                <!-- Rank 1 (Center - Raised) -->
+                                <div id="podiumRank1" style="display: flex; flex-direction: column; align-items: center; width: 95px; transform: translateY(-12px);">
+                                    <div style="position: relative; margin-bottom: 8px;">
+                                        <img id="podiumRank1Img" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop" style="width: 66px; height: 66px; border-radius: 50%; border: 4px solid var(--accent); object-fit: cover;">
+                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; background: var(--accent); border-radius: 50%; color: #000; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
+                                    </div>
+                                    <span id="podiumRank1Name" style="font-size: 12.5px; font-weight: 800; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Alex Chen</span>
+                                    <span id="podiumRank1Count" style="font-size: 9.5px; color: var(--accent); text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px;">42 CHECK-INS</span>
+                                </div>
+
+                                <!-- Rank 3 (Right) -->
+                                <div id="podiumRank3" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
+                                    <div style="position: relative; margin-bottom: 8px;">
+                                        <img id="podiumRank3Img" src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #cd7f32; object-fit: cover;">
+                                        <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #cd7f32; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">3</div>
+                                    </div>
+                                    <span id="podiumRank3Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Jo Rodriguez</span>
+                                    <span id="podiumRank3Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;">35 CHECK-INS</span>
+                                </div>
+                            </div>
+
+                            <!-- Keep it up card -->
+                            <div style="padding: 0 16px; margin-bottom: 18px; flex-shrink: 0;">
+                                <div style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px 16px; text-align: left;">
+                                    <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 6px 0; letter-spacing: 0.03em;">KEEP IT UP!</h4>
+                                    <p id="leaderboardMotivateText" style="font-size: 12px; color: rgba(255,255,255,0.4); margin: 0; line-height: 1.45;">You're just 5 more check-ins away from reaching rank #11</p>
+                                </div>
+                            </div>
+
+                            <!-- Dynamic List Rows rank 4+ -->
+                            <div style="padding: 0 16px 32px 16px; display: flex; flex-direction: column; gap: 10px;" id="leaderboardListContainer">
+                                <!-- Dynamic rows -->
+                            </div>
+                        </div>
+
+                        <!-- SCREEN 7B: HOW IT WORKS GUIDE -->
+                        <div id="subScreenLeaderboardGuide" class="activity-screen-sub" style="display: none; padding: 20px 16px 40px; background: #000; height: 100%; overflow-y: auto;">
+                            <!-- Header -->
+                            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 28px;">
+                                <button class="activity-sub-back-btn" onclick="hideLeaderboardGuide()" style="margin: 0; padding: 4px; border: none; background: transparent; cursor: pointer; color: #fff;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 20px; height: 20px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span style="font-size: 18px; font-weight: 800; color: #fff;">How it Works?</span>
+                            </div>
+
+                            <!-- Guide Items List -->
+                            <div style="display: flex; flex-direction: column; gap: 24px; margin-bottom: 36px;">
+                                <!-- Item 1 -->
+                                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                                    <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Point System</h4>
+                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.45; margin: 0;">Every unique check-in earns you 1 point. Consecutive days boost your score.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Item 2 -->
+                                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                                    <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Streak Bonuses</h4>
+                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.45; margin: 0;">Maintain a 7-day streak for a +10 point multiplier.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Item 3 -->
+                                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                                    <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Rank Reset</h4>
+                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.45; margin: 0;">Weekly leaderboards reset every Sunday at midnight IST.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Item 4 -->
+                                <div style="display: flex; gap: 16px; align-items: flex-start;">
+                                    <div style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                                    </div>
+                                    <div>
+                                        <h4 style="font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Elite Badges</h4>
+                                        <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); line-height: 1.45; margin: 0;">Top 3 positions earn permanent badges on their profiles.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button class="auth-capsule-btn primary-btn" style="width: 100%;" onclick="hideLeaderboardGuide()">GOT IT, LET'S GO</button>
+                        </div>
+
+                        <!-- SCREEN 8: ACTIVITY CALENDAR -->
+                        <div id="subScreenCalendar" class="activity-screen-sub">
+                            <div class="activity-sub-header">
+                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span class="activity-sub-title">Calendar</span>
+                            </div>
+                            <div class="activity-sub-content">
+                                <div class="calendar-widget-box">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                                        <button class="calendar-hdr-btn" onclick="changeCalendarMonth(-1)">‹</button>
+                                        <span id="calendarMonthYearTitle" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">July 2026</span>
+                                        <button class="calendar-hdr-btn" onclick="changeCalendarMonth(1)">›</button>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;">
+                                        <div class="calendar-day-header-lbl">Su</div>
+                                        <div class="calendar-day-header-lbl">Mo</div>
+                                        <div class="calendar-day-header-lbl">Tu</div>
+                                        <div class="calendar-day-header-lbl">We</div>
+                                        <div class="calendar-day-header-lbl">Th</div>
+                                        <div class="calendar-day-header-lbl">Fr</div>
+                                        <div class="calendar-day-header-lbl">Sa</div>
+                                    </div>
+                                    <div id="calendarDaysGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;">
+                                        <!-- Dynamic days grid -->
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 11.5px; color: var(--text-secondary); margin-top: 8px;">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent);"></div>
+                                    <span>Indicates days with gym visits</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SCREEN 9: INSIGHTS -->
+                        <div id="subScreenInsights" class="activity-screen-sub">
+                            <div class="activity-sub-header">
+                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span class="activity-sub-title">Personal Insights</span>
+                            </div>
+                            <div class="activity-sub-content">
+                                <div id="insightsListContainer" style="display: flex; flex-direction: column; gap: 12px;">
+                                    <!-- Dynamic insights cards -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SCREEN 4: PAYMENTS -->
+                    <div id="paymentsScreen" class="mobile-screen">
+                        <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">Billings & Payments</h3>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">Review invoice
+                            receipts and dues.</p>
+
+                        <div id="memberPaymentsList" style="display: flex; flex-direction: column;">
+                            <!-- Invoices -->
+                        </div>
+
+                        <div id="buyPlanSection" style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                            <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">Purchase Membership Plan</h4>
+                            <div id="memberPlansList" style="display: flex; flex-direction: column; gap: 10px;">
+                                <!-- Dynamic plans listings -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SCREEN 5: PROFILE -->
+                    <div id="profileScreen" class="mobile-screen">
+                        <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Profile Settings</h3>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px;">Manage emergency
+                            contact details and photo.</p>
+
+                        <form id="memberProfileForm">
+                            <!-- Edit Avatar Upload -->
+                            <label class="profile-photo-circle" for="profilePhotoInput">
+                                <img id="profileAvatarImg"
+                                    src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop"
+                                    alt="Avatar">
+                                <input type="hidden" id="profileAvatarBase64">
+                                <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" hidden>
+                                <div class="profile-photo-upload-overlay">Upload photo</div>
+                            </label>
+                            <p class="profile-photo-help">JPG, PNG or WebP · up to 2 MB</p>
+
+                            <div class="input-group">
+                                <label>First Name</label>
+                                <input type="text" id="profFirst" class="input-control"
+                                    style="background-color: var(--bg-raised); color: var(--text-secondary);" readonly>
+                            </div>
+
+                            <div class="input-group">
+                                <label>Last Name</label>
+                                <input type="text" id="profLast" class="input-control"
+                                    style="background-color: var(--bg-raised); color: var(--text-secondary);" readonly>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="profPhone">Phone Number</label>
+                                <input type="text" id="profPhone" class="input-control"
+                                    placeholder="Update physical phone" required>
+                            </div>
+
+                            <div class="input-group">
+                                <label for="profEmergency">Emergency Contact Info</label>
+                                <input type="text" id="profEmergency" class="input-control"
+                                    placeholder="Jane Doe / +155500000" required>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 16px;">Save
+                                Profiles Changes</button>
+                        </form>
+
+                        <!-- Log out Member Portal -->
+                        <button class="btn btn-secondary"
+                            style="width: 100%; border-color: rgba(239, 68, 68, 0.2); color: var(--danger-dark); margin-top: 16px;"
+                            onclick="logoutMemberApp()">
+                            Sign Out Account
+                        </button>
+                    </div>
+                </div>
+
+                <div id="checkoutConfirmModal" class="member-modal" role="dialog" aria-modal="true" aria-labelledby="checkoutConfirmTitle" style="display:none;">
+                    <div class="member-modal-card">
+                        <div class="member-modal-icon" style="background-color: var(--accent); color: white;">↗</div>
+                        <h3 id="checkoutConfirmTitle" style="font-size: 17px; font-weight: 700; color: var(--text-primary);">You already checked in today.</h3>
+                        
+                        <div style="margin: 16px 0; padding: 12px; background-color: var(--bg-raised); border-radius: var(--radius-md); text-align: left; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 13px; color: var(--text-secondary);">Check-in</span>
+                            <strong id="confirmCheckinTime" style="font-size: 15px; color: var(--text-primary); font-weight: 700;">7:15 AM</strong>
+                        </div>
+                        
+                        <p style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 20px;">Do you want to Check-out now?</p>
+                        
+                        <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%;">
+                            <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closeCheckoutConfirmation()">Cancel</button>
+                            <button type="button" class="btn btn-primary" style="flex: 1; font-weight: 600;" onclick="confirmCheckout()">Check Out</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cameraInstructionsModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
+                    <div class="member-modal-card" style="text-align: left; max-width: 320px;">
+                        <div class="member-modal-icon" style="background-color: var(--accent); color: white; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">⚙</div>
+                        <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary); text-align: center;">Camera Permissions Guide</h3>
+                        <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
+                            <strong>iOS (Safari):</strong> Go to <em>Settings</em> > <em>Safari</em> > <em>Camera</em>, and set permissions to <strong>Allow</strong>.
+                        </p>
+                        <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px;">
+                            <strong>Android (Chrome):</strong> Tap the settings icon next to the URL bar, go to <em>Permissions</em>, and set <em>Camera</em> to <strong>Allow</strong>.
+                        </p>
+                        <button class="btn btn-primary" style="width: 100%; font-weight: 600; padding: 10px;" onclick="document.getElementById('cameraInstructionsModal').style.display='none'">Got it</button>
+                    </div>
+                </div>
+
+                <!-- Simulated Payment Modal -->
+                <div id="memberPaymentModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
+                    <div class="member-modal-card" style="text-align: left; max-width: 340px;">
+                        <div class="member-modal-icon" style="background-color: var(--success-light); color: var(--success-dark); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; width: 56px; height: 56px; border-radius: 50%;">₹</div>
+                        <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); text-align: center;">Confirm Payment Request</h3>
+                        <p style="font-size: 13px; color: var(--text-secondary); text-align: center; margin-bottom: 16px;">
+                            To initiate your payment of <strong id="modalPaymentAmount">₹0.00</strong>, please transfer the amount and enter your transaction reference below.
+                        </p>
+                        <form id="memberSubmitPaymentForm" onsubmit="submitPaymentRequest(event)">
+                            <input type="hidden" id="modalPaymentId">
+                            <input type="hidden" id="modalPlanId">
+                            <div class="input-group" style="margin-bottom: 16px;">
+                                <label for="modalPaymentRef">Transaction Reference ID (e.g. UPI Ref / Cashier code)</label>
+                                <input type="text" id="modalPaymentRef" class="input-control" placeholder="UPI Ref ID or Cashier Code" required>
+                            </div>
+                            <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%;">
+                                <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closePaymentModal()">Cancel</button>
+                                <button type="submit" class="btn btn-primary" style="flex: 1; font-weight: 600;">Submit Request</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Simulated App Tab Bar navigation -->
+                <nav class="app-tabbar">
+                    <button class="tab-btn active" onclick="switchMobileNav('home')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                        <span>Home</span>
+                    </button>
+
+                    <button class="tab-btn" onclick="switchMobileNav('activity')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                        <span>Activity</span>
+                    </button>
+
+                    <!-- Big Scan Circular Button -->
+                    <button class="tab-btn scan-circular-btn" onclick="switchMobileNav('scan')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    </button>
+
+                    <button class="tab-btn" onclick="switchMobileNav('leaders')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                        <span>Leaders</span>
+                    </button>
+
+                    <button class="tab-btn" onclick="switchMobileNav('profile')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        <span>Account</span>
+                    </button>
+                </nav>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS LAYER -->
+    <div id="toastContainer" class="toast-container"
+        style="z-index: 2000; bottom: 40px; right: auto; left: 50%; transform: translateX(-50%);"></div>
+
+    <script src="/vendor/jsQR.js"></script>
+    <script src="/member/app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('Member Service Worker registered successfully:', reg.scope))
+                    .catch(err => console.error('Member Service Worker registration failed:', err));
+            });
+        }
+    </script>
+</body>
+
+</html>

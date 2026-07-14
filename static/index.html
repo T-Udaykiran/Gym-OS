@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GymOS - Gym Management Platform</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GymOS">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/shared/styles.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: radial-gradient(circle at 10% 20%, rgb(239, 246, 255) 0%, rgb(255, 255, 255) 90%);
+      padding: 20px;
+    }
+    .landing-card {
+      max-width: 650px;
+      text-align: center;
+      padding: 48px;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 30px 60px -10px rgba(15, 23, 42, 0.08), 0 18px 36px -18px rgba(15, 23, 42, 0.03);
+    }
+    .logo-container {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-radius: 18px;
+      color: white;
+      margin-bottom: 24px;
+      font-weight: 700;
+      font-size: 28px;
+      box-shadow: 0 10px 20px -5px rgba(15, 23, 42, 0.3);
+    }
+    .title {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+      letter-spacing: -0.03em;
+    }
+    .subtitle {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .portal-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .portal-box {
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 32px 24px;
+      text-decoration: none;
+      background-color: var(--bg-card);
+      transition: all var(--transition-normal);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+    }
+    .portal-box:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+      box-shadow: var(--shadow-premium);
+    }
+    .portal-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background-color: var(--accent-light);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      transition: all var(--transition-fast);
+    }
+    .portal-box:hover .portal-icon {
+      background-color: var(--accent);
+      color: white;
+    }
+    .portal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .portal-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: center;
+      line-height: 1.4;
+    }
+    
+    @media (max-width: 600px) {
+      .portal-options {
+        grid-template-columns: 1fr;
+      }
+      .landing-card {
+        padding: 32px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="landing-card card">
+    <div class="logo-container">G</div>
+    <h1 class="title">GymOS</h1>
+    <p class="subtitle">A unified platform for gym owners to manage memberships, check-ins, billings, and for members to scan codes and track their wellness attendance.</p>
+    
+    <div class="portal-options">
+      <a href="/admin/index.html" class="portal-box">
+        <div class="portal-icon">
+          <!-- Briefcase/Admin Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+        </div>
+        <h3 class="portal-title">Gym Owner Portal</h3>
+        <p class="portal-desc">Manage plans, verify checked-in members, view earnings and records, and register members.</p>
+      </a>
+      
+      <a href="/member/index.html" class="portal-box">
+        <div class="portal-icon">
+          <!-- Smartphone/Member Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+        </div>
+        <h3 class="portal-title">Gym Member App</h3>
+        <p class="portal-desc">View active membership pass, display scanned QR codes, check streaks, and download billing receipts.</p>
+      </a>
+    </div>
+  </div>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(reg => console.log('Service Worker registered successfully:', reg.scope))
+          .catch(err => console.error('Service Worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>

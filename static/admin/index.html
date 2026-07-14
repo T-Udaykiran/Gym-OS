@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GymOS Admin - FitZone Gym</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GymOS Admin">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="/shared/styles.css">
+    <link rel="stylesheet" href="/admin/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+    <!-- ================= AUTHENTICATION OVERLAY ================= -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box card">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <span class="brand-logo-fitzone" style="margin: 0 auto 12px auto;">⚡</span>
+                <h2 style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 10px;">Gym Owner
+                    Dashboard</h2>
+                <p style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Sign in to manage FitZone Gym
+                </p>
+            </div>
+            <div id="loginError"
+                style="display: none; background-color: var(--danger-light); color: var(--danger-dark); border: 1px solid rgba(239, 68, 68, 0.1); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 500; margin-bottom: 20px;">
+            </div>
+            <form id="loginForm">
+                <div class="input-group">
+                    <label for="loginEmail">Email Address</label>
+                    <input type="email" id="loginEmail" class="input-control" placeholder="owner@gymos.com" required>
+                </div>
+                <div class="input-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label for="loginPassword">Password</label>
+                        <a href="#" style="font-size: 13px; color: var(--accent); text-decoration: none;"
+                            onclick="alert('Demo Default: password123')">Forgot password?</a>
+                    </div>
+                    <input type="password" id="loginPassword" class="input-control" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary"
+                    style="width: 100%; margin-top: 10px; font-weight: 600; background-color: var(--sidebar-dark); color: #ffffff;">Sign
+                    In</button>
+            </form>
+            <div style="text-align: center; margin-top: 20px; font-size: 13px; color: var(--text-secondary);">
+                Need the member app? <a href="/member/index.html"
+                    style="color: var(--accent); text-decoration: none; font-weight: 500;">Click Here</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MAIN LAYOUT ================= -->
+    <div id="appLayout" class="admin-layout" style="display: none;">
+        <!-- SIDEBAR BACKDROP -->
+        <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleMobileSidebar(false)"></div>
+        
+        <!-- LEFT SIDEBAR -->
+        <aside class="sidebar" id="adminSidebar">
+            <div class="brand-section">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="brand-logo-fitzone">⚡</div>
+                    <div class="brand-title-fitzone">
+                        <span class="brand-main">FitZone</span>
+                        <span class="brand-sub">Gym Management</span>
+                    </div>
+                </div>
+                <button class="mobile-sidebar-close" onclick="toggleMobileSidebar(false)" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <nav class="nav-menu">
+                <li class="nav-item"><a class="nav-link active" data-tab="dashboard">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <rect x="3" y="3" width="7" height="9" rx="1"></rect>
+                            <rect x="14" y="3" width="7" height="5" rx="1"></rect>
+                            <rect x="14" y="12" width="7" height="9" rx="1"></rect>
+                            <rect x="3" y="16" width="7" height="5" rx="1"></rect>
+                        </svg>
+                        <span>Dashboard</span>
+                    </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="members">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        <span>Members</span>
+                    </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="attendance">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-1 7h-5m2-2v4H9" />
+                        </svg>
+                        <span>Attendance</span>
+                    </a></li>
+                <li class="nav-item" style="position: relative;"><a class="nav-link" data-tab="payments">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                            <span>Payments</span>
+                            <span id="paymentsBadge" class="badge-pending-approval" style="display: none; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; background-color: var(--danger-light); color: var(--danger-dark);">0</span>
+                        </span>
+                    </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="plans">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        <span>Membership Plans</span>
+                    </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="reports">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        <span>Reports</span>
+                    </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="reminders">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <span>Reminders</span>
+                    </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="settings">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>Settings</span>
+                    </a></li>
+            </nav>
+
+            <div class="upgrade-pro-card">
+                <h4>Upgrade to Pro</h4>
+                <p>Unlock premium metrics & features to scale.</p>
+                <button class="upgrade-btn" onclick="alert('Upgrade flow simulated!')">Upgrade Now</button>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="owner-profile-card" onclick="showTab('settings')">
+                    <div class="owner-details">
+                        <div class="owner-avatar">RK</div>
+                        <div class="owner-info-text">
+                            <span class="owner-name" id="profileOwnerName">Ramesh Kumar</span>
+                            <span class="owner-role">Owner Operator</span>
+                        </div>
+                    </div>
+                    <svg class="dropdown-caret-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </div>
+                <div class="live-indicator">
+                    <div id="ssePulse" class="indicator-dot"></div>
+                    <span id="sseStatusText">Sync Connecting</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN PANEL -->
+        <main class="main-content">
+            <!-- MOBILE TOP BAR -->
+            <header class="mobile-top-bar">
+                <button class="mobile-menu-btn" onclick="toggleMobileSidebar(true)" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+                <div class="mobile-brand">
+                    <span class="brand-logo-fitzone-mini" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; background-color: rgba(234, 179, 8, 0.1); border: 2px solid var(--gold); border-radius: 8px; color: var(--gold); font-size: 13px; font-weight: bold; margin-right: 8px;">⚡</span>
+                    <span style="font-weight: 700; font-size: 16px; color: var(--text-primary);">FitZone Admin</span>
+                </div>
+                <div style="width: 32px;"></div> <!-- spacer to balance -->
+            </header>
+
+            <!-- TOP CUSTOM HEADER -->
+            <header class="header-bar-fitzone">
+                <div class="greeting-block">
+                    <span class="greeting-text">Good Morning, <strong id="greetingUser">Ramesh 👋</strong></span>
+                    <h1 class="gym-title-headline" id="headerGymName">FitZone Gym</h1>
+                    <span class="current-date-info" id="realTimeHeaderDate">Friday, 10 July 2026</span>
+                </div>
+                <div class="header-controls">
+                    <div class="search-input-header">
+                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input type="text" placeholder="Search members..." oninput="triggerGlobalSearch(this.value)">
+                    </div>
+                    <button class="btn-round-control"
+                        onclick="alert('Notification Center: 5 outstanding items require attention.')">
+                        <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <span class="badge-count-red">5</span>
+                    </button>
+                    <button class="date-selector-trigger" onclick="alert('Simulated calendar schedule display.')"
+                        id="currentCalendarDisplayTrigger">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>10 Jul 2026</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- ================= 1. TAB: DASHBOARD ================= -->
+            <section id="dashboardTab" class="tab-content active">
+
+                <!-- 6 Top KPI Metrics -->
+                <div class="metric-kpi-grid">
+                    <!-- Active Members -->
+                    <div class="kpi-card">
+                        <div class="kpi-h-row">
+                            <span class="kpi-label">Active Members</span>
+                            <div class="kpi-badge-icon kpi-avatar-purple">
+                                <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-value" id="statActiveMembers">324</div>
+                        <span class="kpi-trend-growth growth-positive">
+                            <svg style="width: 12px; height: 12px;" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            </svg>
+                            <span>12 vs last month</span>
+                        </span>
+                    </div>
+
+                    <!-- New Members This Week -->
+                    <div class="kpi-card">
+                        <div class="kpi-h-row">
+                            <span class="kpi-label">New Members</span>
+                            <div class="kpi-badge-icon kpi-avatar-green">
+                                <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-value" id="statNewMembersWeek">8</div>
+                        <span class="kpi-trend-growth growth-positive">
+                            <svg style="width: 12px; height: 12px;" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            </svg>
+                            <span>3 vs last week</span>
+                        </span>
+                    </div>
+
+                    <!-- Today's Check-ins -->
+                    <div class="kpi-card">
+                        <div class="kpi-h-row">
+                            <span class="kpi-label">Today's Check-Ins</span>
+                            <div class="kpi-badge-icon kpi-avatar-blue">
+                                <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-value" id="statTodayCheckins">176</div>
+                        <span class="kpi-trend-growth growth-neutral" style="color: #3b82f6;">
+                            <span id="checkinRatioPercentText">65% of members</span>
+                        </span>
+                    </div>
+
+                    <!-- Monthly Revenue -->
+                    <div class="kpi-card">
+                        <div class="kpi-h-row">
+                            <span class="kpi-label">Monthly Revenue</span>
+                            <div class="kpi-badge-icon kpi-avatar-orange">
+                                <span style="font-weight: 700; font-size:16px;">₹</span>
+                            </div>
+                        </div>
+                        <div class="kpi-value" id="statMonthlyRevenue">₹3,48,000</div>
+                        <span class="kpi-trend-growth growth-positive">
+                            <svg style="width: 12px; height: 12px;" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                    d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            </svg>
+                            <span>18% vs last month</span>
+                        </span>
+                    </div>
+
+                    <!-- Pending Payments -->
+                    <div class="kpi-card">
+                        <div class="kpi-h-row">
+                            <span class="kpi-label">Pending Dues</span>
+                            <div class="kpi-badge-icon kpi-avatar-pink">
+                                <span style="font-weight:700; font-size:16px;">!</span>
+                            </div>
+                        </div>
+                        <div class="kpi-value" id="statPendingPayments">12</div>
+                        <span class="kpi-trend-growth growth-negative">
+                            <span id="statPendingAmountVal">₹18,600 total</span>
+                        </span>
+                    </div>
+
+                    <!-- Expiring Soon -->
+                    <div class="kpi-card">
+                        <div class="kpi-h-row">
+                            <span class="kpi-label">Expiring Soon</span>
+                            <div class="kpi-badge-icon kpi-avatar-yellow">
+                                <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-value" id="statExpiredCount">9</div>
+                        <span class="kpi-trend-growth growth-neutral" style="color: var(--warning);">
+                            <span>Next 7 days</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Main dashboard layout split (70% list / 30% stats) -->
+                <div class="dashboard-layout-split">
+                    <!-- LEFT COLUMN (70%) -->
+                    <div class="column-left">
+                        <!-- Revenue Overview Line Graph -->
+                        <div class="panel-card">
+                            <div class="panel-title-container">
+                                <div>
+                                    <h3 class="panel-title">Revenue Overview</h3>
+                                    <span class="panel-subtitle">Monthly earnings log</span>
+                                </div>
+                                <select class="chart-filter-select" id="revenueFilter">
+                                    <option value="year">This Year</option>
+                                    <option value="quarter">This Quarter</option>
+                                    <option value="month">This Month</option>
+                                </select>
+                            </div>
+                            <div class="line-canvas-box">
+                                <canvas id="revenueLineChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Pending Payments Table widget -->
+                        <div class="panel-card">
+                            <div class="panel-title-container">
+                                <div>
+                                    <h3 class="panel-title">Pending Payments</h3>
+                                    <span class="panel-subtitle">Outstanding membership invoices require action</span>
+                                </div>
+                                <span class="panel-link-viewall" onclick="showTab('payments')">View All</span>
+                            </div>
+                            <div class="custom-premium-table-wrap">
+                                <table class="premium-payment-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Member Name</th>
+                                            <th>Due Date</th>
+                                            <th>Amount</th>
+                                            <th>Status</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dashboardPendingPaymentsBody">
+                                        <!-- Populated dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 3 Bottom Columns (New members list, Actions panel, Activity log) -->
+                        <div class="bottom-three-cols-grid">
+                            <!-- Col 1: New Members -->
+                            <div class="panel-card">
+                                <div class="panel-title-container" style="margin-bottom: 16px;">
+                                    <h3 class="panel-title" style="font-size:14.5px;">New Members <span
+                                            style="font-size:12px; color:var(--text-tertiary); font-weight:normal;">(This
+                                            Week)</span></h3>
+                                    <span class="panel-link-viewall" style="font-size:12px;"
+                                        onclick="showTab('members')">View All</span>
+                                </div>
+                                <div class="recent-joiners-list" id="dashboardNewMembersList">
+                                    <!-- Injected -->
+                                </div>
+                            </div>
+
+                            <!-- Col 2: Quick Actions Grid -->
+                            <div class="panel-card">
+                                <h3 class="panel-title" style="font-size:14.5px; margin-bottom: 16px;">Quick Actions
+                                </h3>
+                                <div class="quick-actions-panel-grid">
+                                    <div class="quick-action-square-btn" onclick="openModal('addMemberModal')">
+                                        <div class="quick-square-icon"><svg width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                                <circle cx="8.5" cy="7" r="4" />
+                                                <line x1="20" y1="8" x2="20" y2="14" />
+                                                <line x1="23" y1="11" x2="17" y2="11" />
+                                            </svg></div>
+                                        <span class="quick-square-label">Add Member</span>
+                                    </div>
+                                    <div class="quick-action-square-btn" onclick="openModal('gymQRModal')">
+                                        <div class="quick-square-icon"><svg width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <rect x="3" y="3" width="7" height="7" />
+                                                <rect x="14" y="3" width="7" height="7" />
+                                                <rect x="14" y="14" width="7" height="7" />
+                                                <rect x="3" y="14" width="7" height="7" />
+                                            </svg></div>
+                                        <span class="quick-square-label">Scan QR</span>
+                                    </div>
+                                    <div class="quick-action-square-btn" onclick="openModal('recordPaymentModal')">
+                                        <div class="quick-square-icon"><svg width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                                                <line x1="2" y1="8" x2="22" y2="8" />
+                                            </svg></div>
+                                        <span class="quick-square-label">Record Pay</span>
+                                    </div>
+                                    <div class="quick-action-square-btn"
+                                        onclick="showTab('attendance'); triggerAttendanceExport()">
+                                        <div class="quick-square-icon"><svg width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                                <polyline points="14 2 14 8 20 8" />
+                                                <line x1="16" y1="13" x2="8" y2="13" />
+                                                <line x1="16" y1="17" x2="8" y2="17" />
+                                            </svg></div>
+                                        <span class="quick-square-label">Attendance CSV</span>
+                                    </div>
+                                    <div class="quick-action-square-btn" onclick="showTab('reminders')">
+                                        <div class="quick-square-icon"><svg width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <path
+                                                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                            </svg></div>
+                                        <span class="quick-square-label">Send Reminds</span>
+                                    </div>
+                                    <div class="quick-action-square-btn"
+                                        onclick="showTab('plans'); openModal('addPlanModal')">
+                                        <div class="quick-square-icon"><svg width="16" height="16" viewBox="0 0 24 24"
+                                                fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <line x1="12" y1="5" x2="12" y2="19" />
+                                                <line x1="5" y1="12" x2="19" y2="12" />
+                                            </svg></div>
+                                        <span class="quick-square-label">Create Plan</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Col 3: Recent Activity -->
+                            <div class="panel-card">
+                                <div class="panel-title-container" style="margin-bottom: 16px;">
+                                    <h3 class="panel-title" style="font-size:14.5px;">Recent Activity</h3>
+                                    <span class="panel-link-viewall" style="font-size:12px;"
+                                        onclick="showTab('attendance')">View All</span>
+                                </div>
+                                <div class="timeline-card-stream">
+                                    <div class="timeline-line-track"></div>
+                                    <div id="sseCheckinStream"
+                                        style="display: flex; flex-direction: column; gap:16px; width: 100%;">
+                                        <!-- Injected dynamic event nodes -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT COLUMN (30%) -->
+                    <div class="column-right">
+                        <!-- Today's Attendance donut graph container -->
+                        <div class="panel-card">
+                            <h3 class="panel-title" style="margin-bottom: 14px;">Today's Attendance</h3>
+                            <div class="donut-chart-box">
+                                <canvas id="attendanceDonutChart" class="donut-canvas-size"></canvas>
+                            </div>
+                            <div class="donut-chart-legend">
+                                <div class="legend-item">
+                                    <span class="legend-label-col">
+                                        <div class="legend-color-dot" style="background-color: var(--success);"></div>
+                                        Checked In
+                                    </span>
+                                    <strong id="donutCheckedInCount">176 (54%)</strong>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-label-col">
+                                        <div class="legend-color-dot" style="background-color: #cbd5e1;"></div>
+                                        Not Visited
+                                    </span>
+                                    <strong id="donutNotVisitedCount">148 (46%)</strong>
+                                </div>
+                            </div>
+                            <div class="peak-hours-card-box">
+                                <div class="btn-round-control peak-hours-icon"
+                                    style="border:none; background-color:#f5f3ff;">
+                                    <svg style="width:16px; height:16px;" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div class="peak-hours-text">
+                                    <span class="peak-hours-label">Peak Time</span>
+                                    <span class="peak-hours-value">6 PM - 8 PM</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Membership Expiring Soon List -->
+                        <div class="panel-card">
+                            <div class="panel-title-container">
+                                <h3 class="panel-title">Membership Expiring Soon</h3>
+                                <span class="panel-link-viewall" onclick="showTab('members')">View All</span>
+                            </div>
+                            <div class="expiring-soon-list" id="dashboardExpiringList">
+                                <!-- Dynamic items loaded -->
+                            </div>
+                        </div>
+
+                        <!-- Leaderboard Card -->
+                        <div class="panel-card" style="margin-top: 16px;">
+                            <div class="panel-title-container">
+                                <h3 class="panel-title">Top Members (Last 30 Days)</h3>
+                            </div>
+                            <div id="adminLeaderboardList" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+                                <!-- Dynamic items loaded -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="dashboard-copy-footer">
+                    &copy; 2026 FitZone Gym. All rights reserved. Powered by GymOS.
+                </footer>
+            </section>
+
+            <!-- ================= 2. TAB: MEMBERS ================= -->
+            <section id="membersTab" class="tab-content">
+                <div class="premium-table-card">
+                            <div class="premium-table-header">
+                                <div class="premium-table-header-left">
+                                    <div class="search-input-header"
+                                        style="width: 100%; max-width: 320px; float: left; margin-bottom: 0;">
+                                        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                        <input type="text" id="memberSearch" placeholder="Search by name or phone..."
+                                            oninput="resetMemberPageAndFetch()">
+                                    </div>
+                                    <select id="memberStatusFilter" class="input-control"
+                                        style="padding: 10px 14px; font-size: 13.5px; margin-bottom: 0;"
+                                        onchange="resetMemberPageAndFetch()">
+                                        <option value="">All Statuses</option>
+                                        <option value="active">Active Members</option>
+                                        <option value="suspended">Suspended Members</option>
+                                        <option value="expired">Expired Members</option>
+                                    </select>
+                                </div>
+                                <div class="premium-table-header-right">
+                                    <div class="vis-dropdown-relative">
+                                        <button class="btn btn-secondary" onclick="toggleVisDropdown('memberVisMenu')"
+                                            style="font-size:13.5px; padding: 10px 14px;">Columns ▾</button>
+                                        <div id="memberVisMenu" class="vis-dropdown-menu">
+                                            <label class="vis-dropdown-item"><input type="checkbox" checked
+                                                    onchange="toggleTableColumn('membersTable', 'col-id')"> Member
+                                                ID</label>
+                                            <label class="vis-dropdown-item"><input type="checkbox" checked
+                                                    onchange="toggleTableColumn('membersTable', 'col-phone')">
+                                                Phone</label>
+                                            <label class="vis-dropdown-item"><input type="checkbox" checked
+                                                    onchange="toggleTableColumn('membersTable', 'col-joined')"> Joined
+                                                Date</label>
+                                            <label class="vis-dropdown-item"><input type="checkbox" checked
+                                                    onchange="toggleTableColumn('membersTable', 'col-status')">
+                                                Status</label>
+                                            <label class="vis-dropdown-item"><input type="checkbox" checked
+                                                    onchange="toggleTableColumn('membersTable', 'col-plan')"> Plan
+                                                Detail</label>
+                                            <label class="vis-dropdown-item"><input type="checkbox" checked
+                                                    onchange="toggleTableColumn('membersTable', 'col-last-in')"> Last
+                                                Checkin</label>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="exportMembersCSV()"
+                                        style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
+
+                                    <select id="memberPageSize" class="input-control"
+                                        style="padding: 10px 10px; font-size: 13px; width: 80px; margin-bottom: 0;"
+                                        onchange="resetMemberPageAndFetch()">
+                                        <option value="10">10</option>
+                                        <option value="25" selected>25</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+
+                                    <button class="btn btn-primary" onclick="openModal('addMemberModal')"
+                                        style="font-size:13.5px; padding: 10px 18px; font-weight:600;"><span
+                                            style="font-size:15px; font-weight:700;">+</span> Add Member</button>
+                                </div>
+                            </div>
+
+                            <div class="premium-table-container">
+                                <table class="premium-table" id="membersTable">
+                                    <thead>
+                                        <tr>
+                                            <th class="col-checkbox"><input type="checkbox" class="table-checkbox"
+                                                    id="selectAllMembers"
+                                                    onchange="toggleAllRowCheckboxes('membersTable', this)"></th>
+                                            <th onclick="toggleSortMembers('first_name')">Member Info</th>
+                                            <th class="col-id" onclick="toggleSortMembers('id')">Member ID</th>
+                                            <th class="col-phone" onclick="toggleSortMembers('phone')">Phone</th>
+                                            <th class="col-joined" onclick="toggleSortMembers('joined_at')">Joined Date
+                                            </th>
+                                            <th class="col-status" onclick="toggleSortMembers('status')">Status</th>
+                                            <th class="col-plan" onclick="toggleSortMembers('plan_name')">Plan Details
+                                            </th>
+                                            <th class="col-last-in">Last Checkin</th>
+                                            <th style="text-align: right;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="membersTableBody"></tbody>
+                                </table>
+                            </div>
+
+                            <div class="premium-table-footer">
+                                <div class="pagination-info" id="memberPaginationInfo">Showing 0 to 0 of 0 entries</div>
+                                <div class="pagination-controls" id="memberPaginationControls"></div>
+                            </div>
+                        </div>
+            </section>
+
+            <!-- ================= 3. TAB: ATTENDANCE ================= -->
+            <section id="attendanceTab" class="tab-content">
+                <div class="premium-table-card">
+                    <div class="premium-table-header">
+                        <div class="premium-table-header-left">
+                            <div class="search-input-header"
+                                style="width: 100%; max-width: 320px; float: left; margin-bottom: 0;">
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input type="text" id="attendanceSearch" placeholder="Search check-ins by name/phone..."
+                                    oninput="resetAttendancePageAndFetch()">
+                            </div>
+                            <input type="date" id="attendanceDateFilter" class="input-control"
+                                style="padding: 10px 14px; font-size: 13.5px; margin-bottom: 0;"
+                                onchange="resetAttendancePageAndFetch()">
+                        </div>
+                        <div class="premium-table-header-right">
+                            <div class="vis-dropdown-relative">
+                                <button class="btn btn-secondary" onclick="toggleVisDropdown('attendanceVisMenu')"
+                                    style="font-size:13.5px; padding: 10px 14px;">Columns ▾</button>
+                                <div id="attendanceVisMenu" class="vis-dropdown-menu">
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('attendanceTable', 'col-phone')"> Phone</label>
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('attendanceTable', 'col-in')"> Check-In Time</label>
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('attendanceTable', 'col-out')"> Check-Out Time</label>
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('attendanceTable', 'col-duration')"> Workout Duration</label>
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('attendanceTable', 'col-verification')">
+                                        Verification State</label>
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('attendanceTable', 'col-feedback')"> Feedback
+                                        Message</label>
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="exportAttendanceCSV()"
+                                style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
+
+                            <select id="attendancePageSize" class="input-control"
+                                style="padding: 10px 10px; font-size: 13px; width: 80px; margin-bottom: 0;"
+                                onchange="resetAttendancePageAndFetch()">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="premium-table-container">
+                        <table class="premium-table" id="attendanceTable">
+                            <thead>
+                                <tr>
+                                    <th class="col-checkbox"><input type="checkbox" class="table-checkbox"
+                                            id="selectAllAttendance"
+                                            onchange="toggleAllRowCheckboxes('attendanceTable', this)"></th>
+                                    <th onclick="toggleSortAttendance('first_name')">Member</th>
+                                    <th class="col-phone" onclick="toggleSortAttendance('phone')">Phone</th>
+                                    <th class="col-in" onclick="toggleSortAttendance('check_in_time')">Check-In Time</th>
+                                    <th class="col-out" onclick="toggleSortAttendance('check_out_time')">Check-Out Time</th>
+                                    <th class="col-duration">Workout Duration</th>
+                                    <th class="col-verification" onclick="toggleSortAttendance('status')">Verification
+                                        State</th>
+                                    <th class="col-feedback">Feedback Message</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="premium-table-footer">
+                        <div class="pagination-info" id="attendancePaginationInfo">Showing 0 to 0 of 0 entries</div>
+                        <div class="pagination-controls" id="attendancePaginationControls"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= 4. TAB: PAYMENTS ================= -->
+            <section id="paymentsTab" class="tab-content">
+                <div class="premium-table-card">
+                    <div class="premium-table-header">
+                        <div class="premium-table-header-left">
+                            <div class="search-input-header"
+                                style="width: 100%; max-width: 320px; float: left; margin-bottom: 0;">
+                                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input type="text" id="paymentSearch" placeholder="Search invoices..."
+                                    oninput="resetPaymentPageAndFetch()">
+                            </div>
+                            <select id="paymentStatusFilter" class="input-control"
+                                style="padding: 10px 14px; font-size: 13.5px; margin-bottom: 0;"
+                                onchange="resetPaymentPageAndFetch()">
+                                <option value="">All Billings</option>
+                                <option value="paid">Paid Receipts</option>
+                                <option value="pending">Pending Bills</option>
+                                <option value="overdue">Overdue Reminders</option>
+                                <option value="pending_approval">Pending Approval</option>
+                            </select>
+                        </div>
+                        <div class="premium-table-header-right">
+                            <div class="vis-dropdown-relative">
+                                <button class="btn btn-secondary" onclick="toggleVisDropdown('paymentVisMenu')"
+                                    style="font-size:13.5px; padding: 10px 14px;">Columns ▾</button>
+                                <div id="paymentVisMenu" class="vis-dropdown-menu">
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('paymentsTable', 'col-receipt')"> Receipt
+                                        ID</label>
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('paymentsTable', 'col-amount')"> Amount</label>
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('paymentsTable', 'col-status')"> Status</label>
+                                    <label class="vis-dropdown-item"><input type="checkbox" checked
+                                            onchange="toggleTableColumn('paymentsTable', 'col-date')"> Payment/Due
+                                        Date</label>
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="exportPaymentsCSV()"
+                                style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
+
+                            <select id="paymentPageSize" class="input-control"
+                                style="padding: 10px 10px; font-size: 13px; width: 80px; margin-bottom: 0;"
+                                onchange="resetPaymentPageAndFetch()">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+
+                            <button class="btn btn-primary" onclick="openModal('recordPaymentModal')"
+                                style="font-size:13.5px; padding: 10px 18px;">Record Manual Payment</button>
+                        </div>
+                    </div>
+
+                    <div class="premium-table-container">
+                        <table class="premium-table" id="paymentsTable">
+                            <thead>
+                                <tr>
+                                    <th class="col-checkbox"><input type="checkbox" class="table-checkbox"
+                                            id="selectAllPayments"
+                                            onchange="toggleAllRowCheckboxes('paymentsTable', this)"></th>
+                                    <th class="col-receipt" onclick="toggleSortPayments('receipt_number')">Receipt ID
+                                    </th>
+                                    <th onclick="toggleSortPayments('first_name')">Member</th>
+                                    <th class="col-amount" onclick="toggleSortPayments('amount')">Amount</th>
+                                    <th class="col-status" onclick="toggleSortPayments('status')">Status</th>
+                                    <th class="col-date" onclick="toggleSortPayments('created_at')">Payment Date / Dues
+                                    </th>
+                                    <th style="text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentsTableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="premium-table-footer">
+                        <div class="pagination-info" id="paymentPaginationInfo">Showing 0 to 0 of 0 entries</div>
+                        <div class="pagination-controls" id="paymentPaginationControls"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= 5. TAB: MEMBERSHIP PLANS ================= -->
+            <section id="plansTab" class="tab-content">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h3 style="font-size: 18px; font-weight:700;">Define Active Membership Offerings</h3>
+                    <button class="btn btn-primary" onclick="openModal('addPlanModal')"
+                        style="font-size:13.5px; padding: 10px 18px;">Create New Plan</button>
+                </div>
+                <div class="grid-3" id="plansContainer" style="margin-top: 16px;"></div>
+            </section>
+
+            <!-- ================= 6. TAB: REPORTS ================= -->
+            <section id="reportsTab" class="tab-content">
+                <div class="card" style="max-width: 750px; margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 12px;">Analytics & System Reports</h3>
+                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 24px;">Compile reports,
+                        exports, and check statistics log summary details here.</p>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px;">
+                        <div class="card"
+                            style="padding: 16px; border-radius: var(--radius-md); text-align: center; background-color: var(--bg-app); border: none;">
+                            <span
+                                style="font-size:12px; color:var(--text-secondary); text-transform: uppercase;">Checkin
+                                Scans</span>
+                            <div style="font-size:24px; font-weight:800; margin-top:8px;" id="reportCheckinsCount">0
+                            </div>
+                        </div>
+                        <div class="card"
+                            style="padding: 16px; border-radius: var(--radius-md); text-align: center; background-color: var(--bg-app); border: none;">
+                            <span style="font-size:12px; color:var(--text-secondary); text-transform: uppercase;">Gross
+                                Paid</span>
+                            <div style="font-size:24px; font-weight:800; margin-top:8px; color: var(--success);"
+                                id="reportRevenueVal">₹0</div>
+                        </div>
+                        <div class="card"
+                            style="padding: 16px; border-radius: var(--radius-md); text-align: center; background-color: var(--bg-app); border: none;">
+                            <span
+                                style="font-size:12px; color:var(--text-secondary); text-transform: uppercase;">Outstanding</span>
+                            <div style="font-size:24px; font-weight:800; margin-top:8px; color: var(--danger);"
+                                id="reportOutstandingVal">₹0</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="triggerAttendanceExport()">Download All-Time Attendance
+                        CSV</button>
+                    <button class="btn btn-secondary" onclick="alert('Exporting Billing History PDF... done!');"
+                        style="margin-left: 10px;">Billing Summary PDF</button>
+                </div>
+            </section>
+
+            <!-- ================= 7. TAB: REMINDERS ================= -->
+            <section id="remindersTab" class="tab-content">
+                <div class="card" style="max-width: 800px;">
+                    <h3 style="margin-bottom: 12px;">Outstanding Dues Dispatcher</h3>
+                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;">Dispatch quick
+                        WhatsApp alert links to members with pending or overdue subscription balances.</p>
+                    <div class="premium-table-container">
+                        <table class="premium-table" id="remindersTable">
+                            <thead>
+                                <tr>
+                                    <th>Member Name</th>
+                                    <th>Membership Plan</th>
+                                    <th>Balance Due</th>
+                                    <th>Status</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="remindersTabTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= 8. TAB: SETTINGS ================= -->
+            <section id="settingsTab" class="tab-content">
+                <div class="card" style="max-width: 650px;">
+                    <h3 style="margin-bottom: 6px;">Business Configuration</h3>
+                    <p style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 24px;">Update details
+                        shown to members on receipts and dashboard checkins.</p>
+                    <form id="settingsForm">
+                        <div class="input-group">
+                            <label for="settingsGymName">Gym / Business Name</label>
+                            <input type="text" id="settingsGymName" class="input-control" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="settingsGymPhone">WhatsApp / Phone Number</label>
+                            <input type="text" id="settingsGymPhone" class="input-control">
+                        </div>
+                        <div class="input-group">
+                            <label for="settingsGymAddress">Physical Address</label>
+                            <input type="text" id="settingsGymAddress" class="input-control">
+                        </div>
+                        <div class="input-group">
+                            <label for="settingsQRToken">Universal Gym Check-In QR Token</label>
+                            <input type="text" id="settingsQRToken" class="input-control"
+                                placeholder="Update token key for security check-ins">
+                            <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">Modifying this
+                                token updates the QR validator. Members will need to refresh scan codes.</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ================= MODALS & DIALOGS LAYER ================= -->
+
+    <!-- MODAL: ADD MEMBER -->
+    <div id="addMemberModal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Add New Member Profile</h3>
+                <button class="modal-close" onclick="closeModal('addMemberModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="addMemberForm">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="input-group">
+                        <label for="mFirstName">First Name</label>
+                        <input type="text" id="mFirstName" class="input-control" placeholder="John" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="mLastName">Last Name</label>
+                        <input type="text" id="mLastName" class="input-control" placeholder="Doe" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="mEmail">Email Address</label>
+                    <input type="email" id="mEmail" class="input-control" placeholder="john.doe@gmail.com" required>
+                </div>
+                <div class="input-group">
+                    <label for="mPhone">Phone Number</label>
+                    <input type="text" id="mPhone" class="input-control" placeholder="+155512345" required>
+                </div>
+                <div class="input-group">
+                    <label for="mEmergency">Emergency Contact</label>
+                    <input type="text" id="mEmergency" class="input-control" placeholder="Name / Phone">
+                </div>
+                <div class="input-group">
+                    <label for="mPassword">Create Password (Optional)</label>
+                    <input type="password" id="mPassword" class="input-control" placeholder="Defaults to password123">
+                </div>
+                <button type="submit" class="btn btn-primary"
+                    style="width: 100%; margin-top: 12px; font-weight:600;">Create Account</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: REC PLAN UPDATE -->
+    <div id="assignPlanModal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Assign Membership Plan</h3>
+                <button class="modal-close" onclick="closeModal('assignPlanModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="assignPlanForm">
+                <input type="hidden" id="assignMemberId">
+                <div class="input-group"
+                    style="padding: 10px 14px; background-color: var(--bg-raised); border-radius: var(--radius-md); margin-bottom: 20px;">
+                    <div style="font-size: 13px; color: var(--text-secondary);">Assigning Plan for:</div>
+                    <div id="assignMemberName" style="font-weight: 600; font-size: 16px;">Member Name</div>
+                </div>
+                <div class="input-group">
+                    <label for="assignPlanSelect">Select Plan Tier</label>
+                    <select id="assignPlanSelect" class="input-control" required></select>
+                </div>
+                <div class="input-group">
+                    <label for="assignStartDate">Start Date</label>
+                    <input type="date" id="assignStartDate" class="input-control" required>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 24px;">
+                    <input type="checkbox" id="assignRecordPayment" checked style="width: 18px; height: 18px;">
+                    <label for="assignRecordPayment"
+                        style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-secondary);">Record
+                        Payment immediately (Paid)</label>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; font-weight:600;">Assign & Activate
+                    Plan</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: BILL RECORD MANUAL -->
+    <div id="recordPaymentModal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Record Manual Payment</h3>
+                <button class="modal-close" onclick="closeModal('recordPaymentModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="recordPaymentForm">
+                <div class="input-group">
+                    <label for="recordPaymentSelect">Select Pending Bill Ledger</label>
+                    <select id="recordPaymentSelect" class="input-control" required></select>
+                </div>
+                <div class="input-group" id="paymentAmountSummary"
+                    style="display: none; padding: 12px; border-radius: var(--radius-md); background-color: var(--accent-light); margin-bottom: 20px;">
+                    <div style="font-size: 13px; color: var(--text-secondary);">Billing Balance Due:</div>
+                    <div id="paymentAmountVal" style="font-size: 20px; font-weight: 700; color: var(--accent);">0.00
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; font-weight:600;">Confirm Payment
+                    Receipt</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: ADD PLAN TIERS -->
+    <div id="addPlanModal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="planModalTitle" style="font-weight:700;">Create Membership Plan</h3>
+                <button class="modal-close" onclick="closeModal('addPlanModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="addPlanForm">
+                <input type="hidden" id="editPlanId">
+                <div class="input-group">
+                    <label for="pName">Tier Name</label>
+                    <input type="text" id="pName" class="input-control" placeholder="e.g. Monthly Gold" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="input-group">
+                        <label for="pPrice">Price (₹)</label>
+                        <input type="number" step="0.01" id="pPrice" class="input-control" placeholder="2000" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="pDuration">Duration (Months)</label>
+                        <input type="number" id="pDuration" class="input-control" placeholder="3" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="pBenefits">Benefits description</label>
+                    <input type="text" id="pBenefits" class="input-control"
+                        placeholder="Access to weights, locker, pool...">
+                </div>
+                <button type="submit" class="btn btn-primary"
+                    style="width: 100%; margin-top: 12px; font-weight:600;">Save Plan Tier</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: REVIEWS WHATSAPP DIALOG -->
+    <div id="whatsappModal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Send Dues Notification</h3>
+                <button class="modal-close" onclick="closeModal('whatsappModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div style="margin-bottom: 24px;">
+                <p style="font-size: 14.5px; color: var(--text-secondary); margin-bottom: 12px;">This opens a prefilled
+                    WhatsApp chat with the customer to send their billing reminder.</p>
+                <div
+                    style="padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background-color: var(--bg-raised); font-size: 13.5px; line-height: 1.4; color: var(--text-primary);">
+                    <strong
+                        style="display: block; font-size: 12.5px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;">Message
+                        Preview:</strong>
+                    <span id="whatsappPreviewTxt">-</span>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeModal('whatsappModal')">Cancel</button>
+                <a id="whatsappTriggerLink" href="#" target="_blank" class="btn btn-primary"
+                    style="background-color:#22c55e;" onclick="closeModal('whatsappModal')">Open WhatsApp</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: GYM QR CHECKIN DISPLAY -->
+    <div id="gymQRModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 400px; text-align: center;">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Gym Entrance QR</h3>
+                <button class="modal-close" onclick="closeModal('gymQRModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="qr-modal-body">
+                <div class="qr-code-canvas" style="background-color: white;">
+                    <div
+                        style="border: 12px solid #0f172a; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center; position: relative;">
+                        <div
+                            style="position: absolute; top:0; left:0; width:30px; height:30px; background-color:#0f172a;">
+                        </div>
+                        <div
+                            style="position: absolute; top:0; right:0; width:30px; height:30px; background-color:#0f172a;">
+                        </div>
+                        <div
+                            style="position: absolute; bottom:0; left:0; width:30px; height:30px; background-color:#0f172a;">
+                        </div>
+                        <div id="qrSimulatedToken"
+                            style="font-family: monospace; font-size: 10px; font-weight:700; color: #0f172a; border: 1px solid var(--border-color); padding: 4px; border-radius: 4px; text-align: center; word-break: break-all; max-width: 110px;">
+                            -</div>
+                    </div>
+                </div>
+                <p style="font-size: 14px; color: var(--text-secondary); max-width: 300px;">Members scan this desk QR to
+                    check in instantly.</p>
+                <div style="background-color: var(--bg-raised); border-radius: var(--radius-sm); padding: 6px 12px; font-size: 13px; font-weight: 500; font-family: monospace;"
+                    id="qrTokenDisplayTxt">Token: -</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= BULK ACTIONS FLOATING OVERLAY ================= -->
+    <div id="bulkActionsBar" class="bulk-actions-overlay">
+        <div class="bulk-selected-count"><span id="bulkSelectedVal">0</span> selected</div>
+        <div class="bulk-actions-buttons">
+            <button class="btn-bulk-action" onclick="triggerBulkExport()">Export CSV</button>
+            <button class="btn-bulk-action" onclick="triggerBulkSuspend()">Suspend/Activate</button>
+            <button class="btn-bulk-action btn-bulk-danger" onclick="triggerBulkDelete()">Delete</button>
+            <button class="btn-bulk-action" onclick="clearAllSelections()" style="background:none;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- TOAST CONTAINER LAYER -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/admin/app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('Admin Service Worker registered successfully:', reg.scope))
+                    .catch(err => console.error('Admin Service Worker registration failed:', err));
+            });
+        }
+    </script>
+</body>
+
+</html>
