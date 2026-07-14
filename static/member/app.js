@@ -791,7 +791,7 @@ function formatDurationLong(durationStr) {
 
 async function simulateQuickScan() {
     try {
-        const res = await fetch('/api/admin/settings');
+        const res = await fetch('/api/member/qr-token');
         const settings = await res.json();
         const token = settings.qr_token || 'gymos-token-xyz-123';
         submitCheckinCode(token, scannerAttendanceAction);
