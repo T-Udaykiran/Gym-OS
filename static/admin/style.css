@@ -805,9 +805,10 @@
 }
 
 .quick-action-square-btn:hover {
-    border-color: #8b5cf6;
-    background-color: #f5f3ff;
+    border-color: #eab308;
+    background-color: #FFFCE8;
     transform: translateY(-2px);
+    box-shadow: 0px 8px 24px rgba(234, 179, 8, 0.12), var(--shadow-sm);
 }
 
 .quick-square-icon {
@@ -822,8 +823,8 @@
 }
 
 .quick-action-square-btn:hover .quick-square-icon {
-    background-color: #8b5cf6;
-    color: white;
+    background-color: #eab308;
+    color: #000000;
 }
 
 .quick-square-label {
@@ -833,7 +834,7 @@
 }
 
 .quick-action-square-btn:hover .quick-square-label {
-    color: #8b5cf6;
+    color: #eab308;
 }
 
 /* Col 3: Recent Activity Timeline */
@@ -2180,4 +2181,648 @@
     color: var(--danger);
     border-color: var(--danger);
 }
+
+/* ================= REDESIGNED LOGIN PAGE STYLES ================= */
+.login-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: #ffffff;
+    z-index: 99999;
+    display: flex;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+}
+
+.login-split-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+/* Left Panel - Dark illustration section */
+.login-left-panel {
+    width: 45%;
+    background-color: #0b0f19;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 40px;
+    color: #ffffff;
+    text-align: center;
+    position: relative;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Right Panel - White form section */
+.login-right-panel {
+    width: 55%;
+    background-color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40px 60px;
+    position: relative;
+}
+
+/* Tagline area */
+.tagline-container {
+    margin-top: 40px;
+    max-width: 440px;
+}
+
+.tagline-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 12px;
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+}
+
+.tagline-desc {
+    font-size: 14.5px;
+    color: #94a3b8;
+    line-height: 1.5;
+}
+
+/* GymOS Top Left Logo */
+.gymos-logo-top {
+    font-size: 16px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #0f172a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Login box placement */
+.login-form-center {
+    margin: auto auto;
+    max-width: 380px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.login-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+}
+
+.login-subtitle {
+    font-size: 13.5px;
+    color: #64748b;
+    margin-bottom: 28px;
+}
+
+.login-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 18px;
+}
+
+.login-input-group label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.login-input-control {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    background-color: #ffffff;
+    color: #0f172a;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.login-input-control:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.1);
+}
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+}
+
+.password-toggle-btn:hover {
+    color: #475569;
+}
+
+.login-btn-primary {
+    width: 100%;
+    background-color: #eab308;
+    color: #0f172a;
+    font-weight: 700;
+    border: none;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 14.5px;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    margin-top: 10px;
+    text-align: center;
+}
+
+.login-btn-primary:hover {
+    background-color: #d97706;
+}
+
+/* Footer layout */
+.login-footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.login-footer-links {
+    display: flex;
+    gap: 16px;
+}
+
+.login-footer-links a {
+    color: #64748b;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.login-footer-links a:hover {
+    color: #0f172a;
+}
+
+/* ================= ILLUSTRATION MOCKUP WIDGETS ================= */
+.illustration-container {
+    flex: 1;
+    width: 100%;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 380px;
+}
+
+/* Widget base styles */
+.mockup-card {
+    background-color: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    position: absolute;
+    overflow: hidden;
+}
+
+/* Widget 1: Members list card */
+.widget-members {
+    width: 220px;
+    height: 250px;
+    left: 8%;
+    top: 15%;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background-color: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(10px);
+    z-index: 2;
+}
+
+.widget-members-dots {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.widget-members-dots span {
+    width: 6px;
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+}
+
+.widget-member-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.widget-member-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #6366f1;
+    flex-shrink: 0;
+}
+
+.widget-member-avatar.teal { background-color: #0d9488; }
+.widget-member-avatar.blue { background-color: #3b82f6; }
+
+.widget-member-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.widget-member-lines span {
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.widget-member-lines span.short {
+    width: 60%;
+}
+
+/* Widget 2: Activity Chart Card */
+.widget-activity {
+    width: 190px;
+    height: 120px;
+    right: 10%;
+    top: 25%;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    color: #0f172a;
+    border: none;
+    z-index: 3;
+}
+
+.widget-activity-title {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: #0f172a;
+    text-align: left;
+}
+
+.widget-activity-bars {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex: 1;
+    padding: 0 4px;
+}
+
+.widget-activity-bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 12%;
+}
+
+.widget-activity-bar {
+    width: 100%;
+    background-color: #38bdf8;
+    border-radius: 2px;
+    height: 10px;
+}
+
+.widget-activity-bar-col:nth-child(2) .widget-activity-bar { height: 25px; }
+.widget-activity-bar-col:nth-child(3) .widget-activity-bar { height: 20px; }
+.widget-activity-bar-col:nth-child(4) .widget-activity-bar { height: 35px; }
+.widget-activity-bar-col:nth-child(5) .widget-activity-bar { height: 15px; }
+.widget-activity-bar-col:nth-child(6) .widget-activity-bar { height: 45px; }
+.widget-activity-bar-col:nth-child(7) .widget-activity-bar { height: 30px; }
+
+.widget-activity-day {
+    font-size: 8px;
+    color: #94a3b8;
+    font-weight: 700;
+}
+
+/* Widget 3: Progress & Payments */
+.widget-progress {
+    width: 200px;
+    height: 220px;
+    bottom: 8%;
+    right: 12%;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background-color: #ffffff;
+    color: #0f172a;
+    border: none;
+    z-index: 1;
+}
+
+.widget-progress-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.widget-progress-circle {
+    width: 50px;
+    height: 50px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.widget-progress-value {
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a;
+    position: absolute;
+}
+
+.widget-progress-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.widget-progress-lines span {
+    height: 6px;
+    background-color: #f1f5f9;
+    border-radius: 3px;
+}
+
+.widget-progress-lines span.short {
+    width: 50%;
+}
+
+.widget-progress-item {
+    border-top: 1px solid #f1f5f9;
+    padding-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.widget-progress-item-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.widget-progress-item-left span {
+    height: 5px;
+    background-color: #f1f5f9;
+    border-radius: 3px;
+    width: 60px;
+}
+
+.widget-progress-item-left span.short {
+    width: 35px;
+}
+
+.widget-progress-val-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+}
+
+.widget-progress-amount {
+    font-size: 10px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.widget-progress-status-badge {
+    font-size: 7px;
+    font-weight: 700;
+    color: #10b981;
+    background-color: #ecfdf5;
+    padding: 1px 4px;
+    border-radius: 3px;
+    text-transform: uppercase;
+}
+
+/* RESPONSIVE LAYOUT RULES FOR LOGIN */
+@media (max-width: 850px) {
+    .login-left-panel {
+        display: none !important;
+    }
+    
+    .login-right-panel {
+        width: 100% !important;
+        padding: 40px 24px !important;
+    }
+    
+    .login-form-center {
+        max-width: 100% !important;
+    }
+}
+
+/* ================= COLLAPSIBLE SIDEBAR STYLING ================= */
+.sidebar {
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease;
+}
+
+.main-content {
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Collapsed state */
+.sidebar.collapsed {
+    width: 72px !important;
+    padding: 32px 10px;
+    align-items: center;
+}
+
+.sidebar.collapsed .brand-title-fitzone,
+.sidebar.collapsed .nav-text,
+.sidebar.collapsed .owner-info-text,
+.sidebar.collapsed .live-indicator {
+    display: none !important;
+}
+
+.sidebar.collapsed .brand-section {
+    justify-content: center;
+    width: 100%;
+    padding: 0;
+}
+
+.sidebar.collapsed .nav-menu {
+    align-items: center;
+    width: 100%;
+}
+
+.sidebar.collapsed .nav-item {
+    width: auto;
+}
+
+.sidebar.collapsed .nav-link {
+    justify-content: center;
+    padding: 10px;
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+}
+
+.sidebar.collapsed .btn-logout-sidebar {
+    margin-left: 0;
+}
+
+.sidebar.collapsed .owner-profile-card {
+    justify-content: center;
+    padding: 4px;
+    width: 100%;
+}
+
+.sidebar.collapsed .owner-details {
+    justify-content: center;
+    width: 100%;
+}
+
+/* Sidebar collapsed sibling selector for main content */
+.sidebar.collapsed ~ .main-content {
+    margin-left: 72px !important;
+}
+
+/* CSS Native Tooltips on hover when collapsed */
+.sidebar.collapsed .nav-link {
+    position: relative;
+}
+
+.sidebar.collapsed .nav-link::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%) translateX(10px);
+    background-color: #0f172a;
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    box-shadow: var(--shadow-premium);
+    z-index: 9999;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar.collapsed .nav-link:hover::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(15px);
+}
+
+/* Sidebar Collapse Trigger Floating Button Style */
+.sidebar-toggle-trigger {
+    position: absolute;
+    right: -16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 9999px;
+    box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #475569;
+    z-index: 1100;
+    transition: all 200ms ease-in-out;
+    padding: 0;
+}
+
+.sidebar-toggle-trigger:hover {
+    transform: translateY(-50%) scale(1.08);
+    background-color: #f9fafb;
+    box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.10);
+    color: #0f172a;
+}
+
+.sidebar-toggle-trigger:active {
+    transform: translateY(-50%) scale(0.95);
+    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.sidebar-toggle-trigger svg {
+    transition: transform 300ms ease-in-out;
+}
+
+/* Rotate collapse arrow toggle icon when collapsed */
+.sidebar.collapsed .sidebar-toggle-trigger svg {
+    transform: rotate(180deg);
+}
+
+@media (max-width: 850px) {
+    .sidebar-toggle-trigger {
+        display: none !important;
+    }
+}
+
+/* ================= TASK 4 — FIX NEW MEMBERS CARD LAYOUT ================= */
+.recent-joiner-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color var(--transition-fast);
+}
+
+.recent-joiner-item:hover {
+    background-color: rgba(255, 255, 255, 0.01);
+}
+
+.recent-joiner-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.joiner-details {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+}
+
+.joiner-name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.joiner-plan-date {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.2;
+}
+
 

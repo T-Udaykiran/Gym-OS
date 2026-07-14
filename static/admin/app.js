@@ -652,7 +652,7 @@ async function renderFilteredDashboardData() {
             const div = document.createElement('div');
             div.className = 'recent-joiner-item';
             div.innerHTML = `
-                <div class="member-avatar-mini">${initials}</div>
+                <div class="member-avatar-mini" style="background-color: ${getRandomColorForChar(initials[0])}; color: white; border: none; font-weight: 700;">${initials}</div>
                 <div class="joiner-details">
                     <span class="joiner-name">${m.first_name} ${m.last_name}</span>
                     <span class="joiner-plan-date">${m.plan_name || 'No Plan'} &bull; ${new Date(m.joined_at).toLocaleDateString()}</span>
@@ -1223,9 +1223,10 @@ async function fetchPendingPaymentsDropDown() {
     summaryBox.style.display = 'none';
 
     try {
-        const res = await fetch('/api/admin/payments');
-        const payments = await res.json();
-        const pendingList = payments.filter(p => p.status !== 'paid');
+        const res = await fetch('/api/admin/payments?limit=all');
+        const resData = await res.json();
+        const paymentsList = resData.data || [];
+        const pendingList = paymentsList.filter(p => p.status !== 'paid');
 
         select.innerHTML = '<option value="" disabled selected>Select outstanding billing line</option>';
 
@@ -2923,5 +2924,93 @@ function clearAllNotifications() {
     updateNotificationBadge();
     filterNotificationHistory();
     showToast('All notifications cleared', 'info');
+}
+
+function togglePasswordVisibility() {
+    const pwdInput = document.getElementById('loginPassword');
+    const eyeIcon = document.getElementById('passwordEyeIcon');
+    if (!pwdInput || !eyeIcon) return;
+
+    if (pwdInput.type === 'password') {
+        pwdInput.type = 'text';
+        eyeIcon.innerHTML = `
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+        `;
+    } else {
+        pwdInput.type = 'password';
+        eyeIcon.innerHTML = `
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+        `;
+    }
+}
+
+// Sidebar toggle collapse
+function toggleSidebarCollapse() {
+    const sidebar = document.getElementById('adminSidebar');
+    const button = document.getElementById('sidebarCollapseBtn');
+    if (!sidebar) return;
+
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    localStorage.setItem('gymos_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+    
+    if (button) {
+        button.title = isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar';
+    }
+}
+
+// Restore sidebar state on load
+function restoreSidebarState() {
+    const sidebar = document.getElementById('adminSidebar');
+    const button = document.getElementById('sidebarCollapseBtn');
+    if (!sidebar) return;
+    
+    const isCollapsed = localStorage.getItem('gymos_sidebar_collapsed') === 'true';
+    if (isCollapsed) {
+        sidebar.classList.add('collapsed');
+        if (button) button.title = 'Expand Sidebar';
+    } else {
+        sidebar.classList.remove('collapsed');
+        if (button) button.title = 'Collapse Sidebar';
+    }
+}
+
+// Initialize on DOM ready
+if (typeof initializeOwnerNotifications === 'function') {
+    document.addEventListener('DOMContentLoaded', () => {
+        restoreSidebarState();
+    });
+}
+
+// Owner Logout Action
+async function triggerOwnerLogout(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    
+    const confirmed = confirm('Logout\n\nAre you sure you want to logout?');
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch('/api/auth/logout', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            // Reset state
+            localStorage.removeItem('gymos_owner_notifications');
+            // Redirect
+            loginOverlay.style.display = 'flex';
+            appLayout.style.display = 'none';
+            showToast('Logged out successfully', 'info');
+        } else {
+            showToast('Logout failed. Please try again.', 'error');
+        }
+    } catch (err) {
+        console.error('Logout error:', err);
+        // Force redirect to login anyway if network error
+        loginOverlay.style.display = 'flex';
+        appLayout.style.display = 'none';
+    }
 }
 

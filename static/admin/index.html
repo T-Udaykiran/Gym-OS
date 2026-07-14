@@ -20,37 +20,67 @@
 
     <!-- ================= AUTHENTICATION OVERLAY ================= -->
     <div id="loginOverlay" class="login-overlay">
-        <div class="login-box card">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <span class="brand-logo-fitzone" style="margin: 0 auto 12px auto;">⚡</span>
-                <h2 style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 10px;">Gym Owner
-                    Dashboard</h2>
-                <p style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Sign in to manage FitZone Gym
-                </p>
-            </div>
-            <div id="loginError"
-                style="display: none; background-color: var(--danger-light); color: var(--danger-dark); border: 1px solid rgba(239, 68, 68, 0.1); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 500; margin-bottom: 20px;">
-            </div>
-            <form id="loginForm">
-                <div class="input-group">
-                    <label for="loginEmail">Email Address</label>
-                    <input type="email" id="loginEmail" class="input-control" placeholder="owner@gymos.com" required>
+        <div class="login-split-container">
+            <!-- Left panel: Dark illustrations and taglines -->
+            <div class="login-left-panel">
+                <div class="illustration-container">
+                    <img src="/admin/login_illustration.png" alt="Dashboard Mockup Illustration" style="max-width: 90%; max-height: 420px; object-fit: contain;">
                 </div>
-                <div class="input-group">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <label for="loginPassword">Password</label>
-                        <a href="#" style="font-size: 13px; color: var(--accent); text-decoration: none;"
-                            onclick="alert('Demo Default: password123')">Forgot password?</a>
+                
+                <div class="tagline-container">
+                    <h2 class="tagline-title">One Platform to Streamline Every Gym Operation</h2>
+                    <p class="tagline-desc">Manage members, attendance, payments, and approvals from one powerful dashboard.</p>
+                </div>
+            </div>
+            
+            <!-- Right panel: Login form and footers -->
+            <div class="login-right-panel">
+                <div class="gymos-logo-top">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color: #0f172a; fill: #0f172a; width: 18px; height: 18px;">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>GYM OS</span>
+                </div>
+                
+                <div class="login-form-center">
+                    <h2 class="login-title">Welcome Back!</h2>
+                    <p class="login-subtitle">Please enter your details to sign in your account</p>
+                    
+                    <div id="loginError" style="display: none; background-color: var(--danger-light); color: var(--danger-dark); border: 1px solid rgba(239, 68, 68, 0.1); padding: 12px 14px; border-radius: 8px; font-size: 13.5px; font-weight: 500; margin-bottom: 20px;"></div>
+                    
+                    <form id="loginForm">
+                        <div class="login-input-group">
+                            <label for="loginEmail">Email</label>
+                            <input type="email" id="loginEmail" class="login-input-control" placeholder="johndoe@mail.com" required>
+                        </div>
+                        
+                        <div class="login-input-group">
+                            <label for="loginPassword">Password</label>
+                            <div class="password-wrapper">
+                                <input type="password" id="loginPassword" class="login-input-control" placeholder="minimum 8 character" required>
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility()" tabindex="-1">
+                                    <!-- Eye icon -->
+                                    <svg id="passwordEyeIcon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="login-btn-primary">Sign In</button>
+                    </form>
+                </div>
+                
+                <!-- Footer row -->
+                <div class="login-footer-row">
+                    <span>© 2026 Vikartha Digital Solutions</span>
+                    <div class="login-footer-links">
+                        <a href="#">Privacy Policy</a>
+                        <a href="#">Support</a>
                     </div>
-                    <input type="password" id="loginPassword" class="input-control" placeholder="••••••••" required>
                 </div>
-                <button type="submit" class="btn btn-primary"
-                    style="width: 100%; margin-top: 10px; font-weight: 600; background-color: var(--sidebar-dark); color: #ffffff;">Sign
-                    In</button>
-            </form>
-            <div style="text-align: center; margin-top: 20px; font-size: 13px; color: var(--text-secondary);">
-                Need the member app? <a href="/member/index.html"
-                    style="color: var(--accent); text-decoration: none; font-weight: 500;">Click Here</a>
             </div>
         </div>
     </div>
@@ -62,7 +92,12 @@
         
         <!-- LEFT SIDEBAR -->
         <aside class="sidebar" id="adminSidebar">
-            <div class="brand-section">
+            <button class="sidebar-toggle-trigger" id="sidebarCollapseBtn" onclick="toggleSidebarCollapse()" type="button" title="Collapse Sidebar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <div class="brand-section" style="display: flex; align-items: center; justify-content: space-between; position: relative;">
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <div class="brand-logo-fitzone">⚡</div>
                     <div class="brand-title-fitzone">
@@ -78,103 +113,101 @@
             </div>
 
             <nav class="nav-menu">
-                <li class="nav-item"><a class="nav-link active" data-tab="dashboard">
+                <li class="nav-item"><a class="nav-link active" data-tab="dashboard" data-tooltip="Dashboard">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <rect x="3" y="3" width="7" height="9" rx="1"></rect>
                             <rect x="14" y="3" width="7" height="5" rx="1"></rect>
                             <rect x="14" y="12" width="7" height="9" rx="1"></rect>
                             <rect x="3" y="16" width="7" height="5" rx="1"></rect>
                         </svg>
-                        <span>Dashboard</span>
+                        <span class="nav-text">Dashboard</span>
                     </a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="members">
+                <li class="nav-item"><a class="nav-link" data-tab="members" data-tooltip="Members">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
-                        <span>Members</span>
+                        <span class="nav-text">Members</span>
                     </a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="attendance">
+                <li class="nav-item"><a class="nav-link" data-tab="attendance" data-tooltip="Attendance">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-1 7h-5m2-2v4H9" />
                         </svg>
-                        <span>Attendance</span>
+                        <span class="nav-text">Attendance</span>
                     </a></li>
-                <li class="nav-item" style="position: relative;"><a class="nav-link" data-tab="payments">
+                <li class="nav-item" style="position: relative;"><a class="nav-link" data-tab="payments" data-tooltip="Payments">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span style="display: flex; align-items: center; gap: 6px;">
-                            <span>Payments</span>
+                            <span class="nav-text">Payments</span>
                             <span id="paymentsBadge" class="badge-pending-approval" style="display: none; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; background-color: var(--danger-light); color: var(--danger-dark);">0</span>
                         </span>
                     </a></li>
-                <li class="nav-item" style="position: relative;"><a class="nav-link" data-tab="pending-approvals">
+                <li class="nav-item" style="position: relative;"><a class="nav-link" data-tab="pending-approvals" data-tooltip="Pending Approvals">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                         </svg>
                         <span style="display: flex; align-items: center; gap: 6px;">
-                            <span>Pending Approvals</span>
+                            <span class="nav-text">Pending Approvals</span>
                             <span id="pendingApprovalsBadge" class="badge-pending-approval" style="display: none; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; background-color: var(--danger-light); color: var(--danger-dark);">0</span>
                         </span>
                     </a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="plans">
+                <li class="nav-item"><a class="nav-link" data-tab="plans" data-tooltip="Plans">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
-                        <span>Membership Plans</span>
+                        <span class="nav-text">Membership Plans</span>
                     </a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="reports">
+                <li class="nav-item"><a class="nav-link" data-tab="reports" data-tooltip="Reports">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
-                        <span>Reports</span>
+                        <span class="nav-text">Reports</span>
                     </a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="reminders">
+                <li class="nav-item"><a class="nav-link" data-tab="reminders" data-tooltip="Reminders">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                         </svg>
-                        <span>Reminders</span>
+                        <span class="nav-text">Reminders</span>
                     </a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="settings">
+                <li class="nav-item"><a class="nav-link" data-tab="settings" data-tooltip="Settings">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        <span>Settings</span>
+                        <span class="nav-text">Settings</span>
                     </a></li>
             </nav>
 
-            <div class="upgrade-pro-card">
-                <h4>Upgrade to Pro</h4>
-                <p>Unlock premium metrics & features to scale.</p>
-                <button class="upgrade-btn" onclick="alert('Upgrade flow simulated!')">Upgrade Now</button>
-            </div>
-
             <div class="sidebar-footer">
-                <div class="owner-profile-card" onclick="showTab('settings')">
-                    <div class="owner-details">
+                <div class="owner-profile-card" style="display: flex; align-items: center; justify-content: space-between;">
+                    <div class="owner-details" onclick="showTab('settings')" style="cursor: pointer; display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
                         <div class="owner-avatar">RK</div>
                         <div class="owner-info-text">
                             <span class="owner-name" id="profileOwnerName">Ramesh Kumar</span>
                             <span class="owner-role">Owner Operator</span>
                         </div>
                     </div>
-                    <svg class="dropdown-caret-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
-                    </svg>
+                    <button class="btn-logout-sidebar" onclick="triggerOwnerLogout(event)" style="background: none; border: none; color: #ef4444; padding: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background-color 0.2s;" title="Logout">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                    </button>
                 </div>
                 <div class="live-indicator">
                     <div id="ssePulse" class="indicator-dot"></div>
-                    <span id="sseStatusText">Sync Connecting</span>
+                    <span id="sseStatusText" class="nav-text">Sync Connecting</span>
                 </div>
             </div>
         </aside>
