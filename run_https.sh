@@ -10,11 +10,11 @@ if [ -z "$LAN_IP" ]; then
 fi
 
 mkdir -p .dev-certs
-openssl req -x509 -newkey rsa:2048 -nodes -days 7 \
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
   -keyout .dev-certs/gymos-key.pem \
   -out .dev-certs/gymos-cert.pem \
-  -subj "/CN=$LAN_IP" \
-  -addext "subjectAltName=IP:$LAN_IP" >/dev/null 2>&1
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:$LAN_IP" >/dev/null 2>&1
 
 echo "Starting secure GymOS development server: https://$LAN_IP:$PORT"
 HTTPS=1 PORT="$PORT" .venv/bin/python3 app.py

@@ -74,9 +74,9 @@ def auth_register():
         )
         user_id = cursor.lastrowid
         
-        # Create Member (status default is 'active', but without plans assigned yet)
+        # Create Member (status default is 'pending', waiting for approval)
         cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status) VALUES (?, ?, ?, ?, ?, 'active')",
+            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status) VALUES (?, ?, ?, ?, ?, 'pending')",
             (user_id, first_name, last_name, phone, emergency)
         )
         member_id = cursor.lastrowid
@@ -148,6 +148,26 @@ def auth_login():
             if m["status"] == "suspended":
                 conn.close()
                 return jsonify({"error": "Your GymOS account is currently suspended. Please contact the gym owner."}), 403
+            elif m["status"] == "pending":
+                session["user_id"] = user_id
+                session["role"] = role
+                session["email"] = user["email"]
+                session["member_id"] = m["id"]
+                conn.close()
+                return jsonify({
+                    "error": "Your account is waiting for approval from the gym owner.",
+                    "status": "pending",
+                    "member_id": m["id"],
+                    "user": {
+                        "id": user_id,
+                        "email": user["email"],
+                        "role": role,
+                        "member_id": m["id"]
+                    }
+                }), 403
+            elif m["status"] == "rejected":
+                conn.close()
+                return jsonify({"error": "Your registration request was rejected. Please contact your gym.", "status": "rejected"}), 403
             member_id = m["id"]
             
     session["user_id"] = user_id
@@ -237,7 +257,7 @@ def admin_stats():
     cursor = conn.cursor()
     
     # 1. Total Members
-    cursor.execute("SELECT COUNT(*) FROM members")
+    cursor.execute("SELECT COUNT(*) FROM members WHERE status NOT IN ('pending', 'rejected')")
     t_members = cursor.fetchone()[0]
     
     # 2. Active Members (Active status and active membership duration)
@@ -291,7 +311,7 @@ def admin_stats():
     
     # 8. New Members This Week
     week_start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute("SELECT COUNT(*) FROM members WHERE joined_at >= ?", (week_start,))
+    cursor.execute("SELECT COUNT(*) FROM members WHERE joined_at >= ? AND status NOT IN ('pending', 'rejected')", (week_start,))
     new_members_week = cursor.fetchone()[0]
     
     # 9. Chart Data: Monthly Revenue Last 6 Months
@@ -348,6 +368,7 @@ def admin_stats():
         FROM members m
         LEFT JOIN memberships ms ON ms.member_id = m.id AND ms.status = 'active'
         LEFT JOIN plans pl ON ms.plan_id = pl.id
+        WHERE m.status NOT IN ('pending', 'rejected')
         ORDER BY m.joined_at DESC LIMIT 5
     """)
     new_members_list = [dict(row) for row in cursor.fetchall()]
@@ -370,6 +391,10 @@ def admin_stats():
             "status": row["status"]
         })
         
+    # Count pending registrations
+    cursor.execute("SELECT COUNT(*) FROM members WHERE status = 'pending'")
+    pending_regs_count = cursor.fetchone()[0] or 0
+    
     conn.close()
     
     return jsonify({
@@ -384,6 +409,7 @@ def admin_stats():
             "pending_approvals": pending_approvals,
             "expiring_members": expiring_members,
             "new_members_week": new_members_week,
+            "pending_registrations_count": pending_regs_count,
         },
         "charts": {
             "revenue": revenue_chart,
@@ -394,6 +420,85 @@ def admin_stats():
         "new_members_list": new_members_list,
         "recent_activity": recent_activities
     })
+
+# ================= PENDING APPROVALS WORKFLOW ENDPOINTS =================
+
+@app.route("/api/admin/pending-approvals", methods=["GET"])
+@login_required("owner")
+def admin_get_pending_approvals():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT m.id, m.first_name, m.last_name, u.email, m.phone, m.joined_at, m.status, m.profile_photo
+        FROM members m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.status = 'pending'
+        ORDER BY m.joined_at DESC
+    """)
+    rows = cursor.fetchall()
+    pending = [dict(r) for r in rows]
+    conn.close()
+    return jsonify(pending)
+
+@app.route("/api/admin/pending-approvals/<int:id>/approve", methods=["POST"])
+@login_required("owner")
+def admin_approve_member(id):
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if member exists and is pending
+    cursor.execute("SELECT m.id, m.first_name, m.last_name, u.email FROM members m JOIN users u ON m.user_id = u.id WHERE m.id = ?", (id,))
+    member = cursor.fetchone()
+    if not member:
+        conn.close()
+        return jsonify({"error": "Member not found"}), 404
+        
+    try:
+        cursor.execute("UPDATE members SET status = 'active' WHERE id = ?", (id,))
+        conn.commit()
+        
+        fullname = f"{member['first_name']} {member['last_name']}"
+        broadcast_event("MEMBER_STATUS_CHANGED", {
+            "member_id": id,
+            "status": "active",
+            "name": fullname,
+            "email": member["email"]
+        })
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/api/admin/pending-approvals/<int:id>/reject", methods=["POST"])
+@login_required("owner")
+def admin_reject_member(id):
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if member exists
+    cursor.execute("SELECT m.id, m.first_name, m.last_name, u.email FROM members m JOIN users u ON m.user_id = u.id WHERE m.id = ?", (id,))
+    member = cursor.fetchone()
+    if not member:
+        conn.close()
+        return jsonify({"error": "Member not found"}), 404
+        
+    try:
+        cursor.execute("UPDATE members SET status = 'rejected' WHERE id = ?", (id,))
+        conn.commit()
+        
+        fullname = f"{member['first_name']} {member['last_name']}"
+        broadcast_event("MEMBER_STATUS_CHANGED", {
+            "member_id": id,
+            "status": "rejected",
+            "name": fullname,
+            "email": member["email"]
+        })
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
 # ================= MEMBER MANAGEMENT ENDPOINTS =================
 
@@ -453,6 +558,8 @@ def admin_get_members():
     if status_filter:
         filter_sql += " AND m.status = ?"
         params.append(status_filter)
+    else:
+        filter_sql += " AND m.status NOT IN ('pending', 'rejected')"
         
     count_query += filter_sql
     query += filter_sql
@@ -1535,6 +1642,12 @@ def member_dashboard():
         conn.close()
         session.clear()
         return jsonify({"error": "Account suspended. Session closed."}), 403
+    elif mb["status"] == "pending":
+        conn.close()
+        return jsonify({"error": "Your account is waiting for approval from the gym owner.", "status": "pending"}), 403
+    elif mb["status"] == "rejected":
+        conn.close()
+        return jsonify({"error": "Your registration request was rejected. Please contact your gym.", "status": "rejected"}), 403
         
     # Get active/latest membership details
     cursor.execute("""
@@ -2115,6 +2228,12 @@ def member_check_in():
         conn.commit()
         conn.close()
         return jsonify({"error": "Check-in failed. Member is suspended."}), 403
+    elif mbr["status"] == "pending":
+        conn.close()
+        return jsonify({"error": "Check-in failed. Member registration is pending approval."}), 403
+    elif mbr["status"] == "rejected":
+        conn.close()
+        return jsonify({"error": "Check-in failed. Member registration was rejected."}), 403
         
     # Edge case: expired profile
     today_str = datetime.now().strftime("%Y-%m-%d")
