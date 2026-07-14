@@ -197,7 +197,6 @@ function switchMobileNav(tabName) {
             renderLeaderboardSubScreen();
         }, 100);
     }
-    }
     if (targetTab === 'payments') { renderBillingBills(); fetchAndRenderPlans(); }
     if (targetTab === 'profile') populateProfileFields();
 
@@ -2352,8 +2351,7 @@ async function renderLeaderboardSubScreen() {
             currentMemberRank = activityDataGlobal.all_time_rank || 0;
         }
     }
-    }
-    
+
     // Populate Rank 1
     const r1 = leaderboard.find(u => u.rank === 1);
     const p1 = document.getElementById('podiumRank1');
