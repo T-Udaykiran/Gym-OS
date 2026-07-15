@@ -4,21 +4,31 @@ import os
 import json
 import shutil
 from datetime import datetime, timedelta
+import turso_db
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 PACKAGED_DB_FILE = os.path.join(PROJECT_DIR, "gymos.db")
 
-# Vercel mounts the deployed project as read-only.  SQLite needs a writable
-# directory, so use the only writable location available to a serverless
-# function.  The copy is a cold-start seed only; it is not durable storage.
+# Vercel's filesystem is ephemeral/read-only outside /tmp, so a plain local
+# SQLite file does not survive between requests there. When Turso credentials
+# are configured, every environment (local and Vercel) talks to that single
+# remote database instead, so there is one persistent source of truth.
+TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL")
+TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
+USE_TURSO = bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
+
 if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
     DB_FILE = os.path.join("/tmp", "gymos.db")
-    if not os.path.exists(DB_FILE) and os.path.exists(PACKAGED_DB_FILE):
+    if not USE_TURSO and not os.path.exists(DB_FILE) and os.path.exists(PACKAGED_DB_FILE):
         shutil.copy2(PACKAGED_DB_FILE, DB_FILE)
 else:
     DB_FILE = PACKAGED_DB_FILE
 
 def get_db_connection():
+    if USE_TURSO:
+        conn = turso_db.connect(TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)
+        conn.execute("PRAGMA foreign_keys = ON;")
+        return conn
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     # Enable foreign keys
