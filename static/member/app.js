@@ -1013,6 +1013,7 @@ function handleProfilePhotoUpload(event) {
             if (resData.success) {
                 document.getElementById('profileAvatarImg').src = base64;
                 document.getElementById('profileAvatarBase64').value = base64;
+                document.getElementById('profileHomeAvatar').src = base64;
                 activeMemberData.profile_photo = base64;
                 showMobileToast('Profile photo updated successfully', 'success');
             } else {
@@ -1372,6 +1373,31 @@ function selectGenderVal(val) {
         else btn.classList.remove('active');
     });
     closeGenderDropdown();
+}
+
+// Profile Photo View/Update Sheet
+function openPhotoOptionsSheet() {
+    document.getElementById('photoOptionsSheet').style.display = 'flex';
+}
+
+function closePhotoOptionsSheet() {
+    document.getElementById('photoOptionsSheet').style.display = 'none';
+}
+
+function viewProfilePhotoFull() {
+    closePhotoOptionsSheet();
+    const src = document.getElementById('profileHomeAvatar').src;
+    document.getElementById('photoViewerImg').src = src;
+    document.getElementById('photoViewerModal').style.display = 'flex';
+}
+
+function closePhotoViewer() {
+    document.getElementById('photoViewerModal').style.display = 'none';
+}
+
+function triggerProfilePhotoUpdate() {
+    closePhotoOptionsSheet();
+    document.getElementById('profilePhotoInput').click();
 }
 
 // Height Modal

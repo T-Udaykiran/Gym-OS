@@ -907,6 +907,7 @@ async function fetchMembers() {
         const members = result.data;
         memberTotal = result.total;
 
+        cleanupPortaledDotsMenus();
         tbody.innerHTML = '';
         if (members.length === 0) {
             tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-tertiary); padding: 40px 0;">No members matching criteria.</td></tr>';
@@ -1082,6 +1083,7 @@ async function fetchPayments() {
         const payments = result.data;
         paymentTotal = result.total;
 
+        cleanupPortaledDotsMenus();
         tbody.innerHTML = '';
         if (payments.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-tertiary); padding: 40px 0;">No billing records found.</td></tr>';
@@ -1996,21 +1998,58 @@ function applySavedColumnVisibility(tableId) {
     });
 }
 
+// Table wrappers scroll horizontally (overflow-x: auto), which clips any
+// absolutely-positioned dropdown nested inside them. To keep the menu fully
+// visible we portal it to <body> as a fixed-position overlay while open,
+// positioned from the toggle button's on-screen coordinates.
+function closeAllDotsMenus() {
+    document.querySelectorAll('.dots-dropdown-menu.active').forEach(m => {
+        m.classList.remove('active');
+        m.style.position = '';
+        m.style.top = '';
+        m.style.left = '';
+        m.style.right = '';
+        m.style.margin = '';
+    });
+}
+
+// Removes any dropdown menus left behind in <body> from a previous render of
+// a table (e.g. if the table refreshed while a menu was open). Call this
+// before rebuilding a table that contains .dots-dropdown-menu elements, so
+// stale, duplicate-id menus never pile up.
+function cleanupPortaledDotsMenus() {
+    document.querySelectorAll('body > .dots-dropdown-menu').forEach(m => m.remove());
+}
+
 function toggleDotsMenu(menuId, event) {
     event.stopPropagation();
-    const menus = document.querySelectorAll('.dots-dropdown-menu');
-    menus.forEach(m => {
-        if (m.id !== menuId) m.classList.remove('active');
-    });
-
     const target = document.getElementById(menuId);
-    if (target) target.classList.toggle('active');
+    if (!target) return;
+
+    const wasActive = target.classList.contains('active');
+    closeAllDotsMenus();
+    if (wasActive) return;
+
+    const btn = event.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    document.body.appendChild(target);
+    target.classList.add('active');
+    target.style.position = 'fixed';
+    target.style.margin = '0';
+    target.style.right = 'auto';
+    target.style.top = `${rect.bottom + 4}px`;
+
+    const menuWidth = target.offsetWidth || 160;
+    let left = rect.right - menuWidth;
+    if (left < 8) left = 8;
+    const maxLeft = window.innerWidth - menuWidth - 8;
+    if (left > maxLeft) left = maxLeft;
+    target.style.left = `${left}px`;
 }
 
 document.addEventListener('click', (event) => {
-    if (!event.target.closest('.dots-dropdown')) {
-        const menus = document.querySelectorAll('.dots-dropdown-menu');
-        menus.forEach(m => m.classList.remove('active'));
+    if (!event.target.closest('.dots-dropdown') && !event.target.closest('.dots-dropdown-menu')) {
+        closeAllDotsMenus();
     }
 
     if (!event.target.closest('.vis-dropdown-relative')) {

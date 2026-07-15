@@ -225,6 +225,14 @@ body {
     animation: mobile-fade 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* .mobile-screen has a fixed height (absolute + inset:0) and overflow-y:auto,
+   but as a flex column its direct children default to flex-shrink:1 — the
+   browser shrinks them to fit before it ever scrolls. Pin children to their
+   natural size so content that doesn't fit scrolls instead of squishing. */
+.mobile-screen.active > * {
+    flex-shrink: 0;
+}
+
 @keyframes mobile-fade {
     from {
         opacity: 0;
