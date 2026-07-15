@@ -2390,6 +2390,11 @@ async function renderLeaderboardSubScreen() {
     const container = document.getElementById('leaderboardListContainer');
     if (!container) return;
     container.innerHTML = '';
+
+    // This wrapper starts hidden (display:none) so nothing flashes before
+    // data is ready; reveal it now that we're about to populate it.
+    const mainContent = document.getElementById('leaderboardMainContent');
+    if (mainContent) mainContent.style.display = 'flex';
     
     let leaderboard = [];
     let currentMemberRank = 0;
