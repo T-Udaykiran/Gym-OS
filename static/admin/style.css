@@ -2825,4 +2825,84 @@
     line-height: 1.2;
 }
 
+/* ================= MOBILE BOTTOM NAVIGATION & RESPONSIVE LAYOUT OVERRIDES ================= */
+.admin-mobile-tabbar {
+    display: none;
+}
 
+@media (max-width: 768px) {
+    /* Hide desktop sidebar */
+    .sidebar {
+        display: none !important;
+    }
+
+    /* Adjust main content body to span full width and not be covered by bottom nav */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 16px 16px 88px 16px !important;
+    }
+
+    /* Admin top nav bar header adjustment */
+    .admin-main-header {
+        padding: 12px 16px !important;
+        position: sticky;
+        top: 0;
+        z-index: 99;
+        background-color: var(--bg-app);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    /* Mobile Bottom tab bar wrapper */
+    .admin-mobile-tabbar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background-color: var(--sidebar-dark);
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        z-index: 1000;
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* Tab bar buttons */
+    .admin-mobile-tabbar .nav-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        color: #94a3b8; /* slate-400 */
+        font-size: 10px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: color 0.15s ease;
+        padding: 6px 12px;
+        gap: 3px;
+        flex: 1;
+    }
+
+    .admin-mobile-tabbar .nav-link svg {
+        width: 20px;
+        height: 20px;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        transition: transform 0.15s ease;
+    }
+
+    .admin-mobile-tabbar .nav-link:active svg {
+        transform: scale(0.92);
+    }
+
+    /* Active tab style */
+    .admin-mobile-tabbar .nav-link.active {
+        color: var(--gold);
+    }
+}

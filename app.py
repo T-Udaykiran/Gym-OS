@@ -6,6 +6,13 @@ import queue
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, session, Response, send_file
 import database
+import firebase_sync
+
+# Seed the database from Firebase Storage if available before initializing schemas
+try:
+    firebase_sync.sync_down()
+except Exception as e:
+    print(f"Startup Firebase sync down failed (running locally): {e}")
 
 # Ensure existing local databases receive schema upgrades before requests.
 database.init_db()
@@ -13,8 +20,41 @@ database.init_db()
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.secret_key = "gymos-secret-secure-key-9988"
 
+# Firebase sync state tracking
+LAST_SYNC_TIME = None
+SYNC_INTERVAL = timedelta(seconds=5)
+
+@app.before_request
+def sync_before_request():
+    global LAST_SYNC_TIME
+    # Skip sync for static assets to keep page load lightning-fast
+    if request.path.startswith("/static") or "." in request.path.split("/")[-1]:
+        return
+        
+    now = datetime.now()
+    if not LAST_SYNC_TIME or (now - LAST_SYNC_TIME) > SYNC_INTERVAL:
+        try:
+            firebase_sync.sync_down()
+        except Exception as e:
+            app.logger.error(f"Failed to sync down database: {e}")
+        LAST_SYNC_TIME = now
+
+@app.after_request
+def sync_after_request(response):
+    # Only upload if the request was a write and was successful (status 200 or 201)
+    if request.method in ["POST", "PUT", "DELETE"] and response.status_code in [200, 201]:
+        try:
+            firebase_sync.sync_up()
+            # Update our sync time so we don't immediately download what we just uploaded
+            global LAST_SYNC_TIME
+            LAST_SYNC_TIME = datetime.now()
+        except Exception as e:
+            app.logger.error(f"Failed to sync up database: {e}")
+    return response
+
 # Global list of active SSE event queues
 SSE_LISTENERS = []
+
 
 def broadcast_event(event_type, payload):
     event_data = {

@@ -9,7 +9,7 @@ import sys
 PORT = 8000
 SERVER_URL = f"http://127.0.0.1:{PORT}"
 
-def wait_for_server(timeout=10):
+def wait_for_server(timeout=30):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -109,8 +109,19 @@ def test_integration():
     )
     assert status == 200, f"Assign plan failed: {res}"
     print("[PASS] Plan assignment to member successful.")
-    
-    # 5. Member dashboard checks
+    # 5. Member login to get active session cookie
+    status, res, cookie_member = make_request(
+        "/api/auth/login",
+        "POST",
+        {
+            "email": "testmember@gymos.com",
+            "password": "memberpassword"
+        }
+    )
+    assert status == 200, f"Member login failed: {res}"
+    headers_member = {"Cookie": cookie_member}
+
+    # 5.1 Member dashboard checks
     status, res, _ = make_request("/api/member/dashboard", "GET", headers=headers_member)
     assert status == 200, f"Dashboard retrieval failed: {res}"
     assert res["status"] == "active"

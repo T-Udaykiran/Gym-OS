@@ -286,8 +286,7 @@ function showTab(tabName) {
     clearAllSelections();
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
 
-    const activeLink = document.querySelector(`.nav-link[data-tab="${tabName}"]`);
-    if (activeLink) activeLink.classList.add('active');
+    document.querySelectorAll(`.nav-link[data-tab="${tabName}"]`).forEach(l => l.classList.add('active'));
 
     document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
     const tabEl = document.getElementById(`${tabName}Tab`);
