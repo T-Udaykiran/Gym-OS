@@ -16,6 +16,20 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics-compat.js"></script>
     <script src="/shared/firebase-init.js"></script>
+    <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+        var div = document.createElement('div');
+        div.style = "position:fixed;top:0;left:0;right:0;background:red;color:white;z-index:99999;padding:10px;font-size:12px;word-break:break-all;";
+        div.innerText = "Error: " + message + " at " + source + ":" + lineno + ":" + colno;
+        document.body.appendChild(div);
+    };
+    window.onunhandledrejection = function(event) {
+        var div = document.createElement('div');
+        div.style = "position:fixed;top:0;left:0;right:0;background:orange;color:white;z-index:99999;padding:10px;font-size:12px;word-break:break-all;";
+        div.innerText = "Unhandled Rejection: " + event.reason;
+        document.body.appendChild(div);
+    };
+    </script>
 </head>
 
 <body>
@@ -475,8 +489,10 @@
                                         <span style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.05em;">Status</span>
                                         <h4 style="font-size: 15px; font-weight: 800; color: var(--accent); margin: 4px 0 0 0;" id="homeStatusText">Active</h4>
                                     </div>
-                                </div>
                             </div>
+                            <button id="homeBuyPlanBtn" class="btn btn-primary" style="margin-top: 14px; width: 100%; display: none; background-color: var(--accent); color: #000; border-radius: var(--radius-md); font-weight: 700; border: none; height: 46px;" onclick="openPlanPurchaseDrawer()">
+                                Buy Membership Plan
+                            </button>
                         </div>
 
                     </div>
@@ -1257,30 +1273,9 @@
 
                     <!-- SCREEN 5: PROFILE -->
                     <div id="profileScreen" class="mobile-screen">
-                        <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Profile Settings</h3>
+                        <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Profile</h3>
                         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px;">Manage emergency
                             contact details and photo.</p>
-
-                        <form id="memberProfileForm">
-                            <!-- Edit Avatar Upload -->
-                            <label class="profile-photo-circle" for="profilePhotoInput">
-                                <img id="profileAvatarImg"
-                                    src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop"
-                                    alt="Avatar">
-                                <input type="hidden" id="profileAvatarBase64">
-                                <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" hidden>
-                                <div id="profilePhotoLoading" class="photo-loading-spinner">
-                                    <div class="spinner-ring"></div>
-                                </div>
-                                <div class="profile-photo-upload-overlay">Upload photo</div>
-                            </label>
-                            <p class="profile-photo-help">JPG, PNG or WebP · up to 2 MB</p>
-
-                            <div class="input-group">
-                                <label>First Name</label>
-                                <input type="text" id="profFirst" class="input-control"
-                                    style="background-color: var(--bg-raised); color: var(--text-secondary);" readonly>
-                            </div>
 
                             <!-- Avatar -->
                             <div class="profile-avatar-container">
@@ -1709,6 +1704,24 @@
                 </nav>
             </div>
 
+        </div>
+    </div>
+
+    <!-- BOTTOM DRAWER: PURCHASE PLAN -->
+    <div id="planPurchaseDrawer" class="personal-modal-overlay" style="display: none; align-items: flex-end; z-index: 2500;" onclick="closePlanPurchaseDrawer(event)">
+        <div class="bottom-sheet-card" style="width: 100%; background: #171717; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 24px 20px; box-sizing: border-box; transform: translateY(100%); max-height: 80vh; overflow-y: auto; border: 1px solid var(--border-color); border-bottom: none;">
+            <div style="width: 40px; height: 5px; background: #444; border-radius: 3px; margin: 0 auto 16px auto;"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-size: 18px; font-weight: 800; color: #fff; margin: 0;">Choose a Plan</h3>
+                <button class="btn btn-ghost" onclick="hidePlanPurchaseDrawer()" style="padding: 4px; min-height: unset; color: var(--text-secondary); background: none; border: none; outline: none; cursor: pointer;">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="drawerPlansList" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+                <!-- Plans list dynamically loaded -->
+            </div>
         </div>
     </div>
 

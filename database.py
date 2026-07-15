@@ -277,6 +277,14 @@ def seed_data(conn):
     cursor.execute("INSERT INTO settings (key, value) VALUES ('gym_address', '123 Gym Street, Wellness City')")
     cursor.execute("INSERT INTO settings (key, value) VALUES ('qr_token', 'gymos-token-xyz-123')")
     
+    # 4. Add Default Membership Plans
+    cursor.execute("""
+    INSERT INTO plans (name, price, duration_months, benefits) VALUES 
+    ('Monthly Fitness Pass', 999.0, 1, 'Full gym floor access + 1 free trainer consultation'),
+    ('Quarterly Power Pack', 2499.0, 3, 'Full gym floor access + locker access + personalized diet chart'),
+    ('Annual Elite Membership', 7999.0, 12, 'Full gym floor access + locker access + unlimited group classes + 5 guest passes')
+    """)
+    
     conn.commit()
     print("Database seeding completed.")
 

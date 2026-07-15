@@ -2315,4 +2315,7 @@ body { background: #080808; padding: 0; }
     to { transform: rotate(360deg); }
 }
 
-
+/* ================= PREMIUM BOTTOM DRAWER SHEET ================= */
+.bottom-sheet-card {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}

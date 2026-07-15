@@ -1801,7 +1801,7 @@ def member_dashboard():
 
     # Member notification center
     user_id = session["user_id"]
-    cursor.execute("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10", (user_id,))
+    cursor.execute("SELECT * FROM notifications WHERE user_id = ? AND read_status = 0 ORDER BY created_at DESC LIMIT 10", (user_id,))
     notifs = [dict(r) for r in cursor.fetchall()]
     
     # Payment status

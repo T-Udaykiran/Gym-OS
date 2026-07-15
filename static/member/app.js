@@ -160,6 +160,15 @@ function updateSimulatorClock() {
 
 // Screen navigation
 function switchMobileNav(tabName) {
+    if (tabName === 'scan') {
+        const hasActivePlan = activeMemberData && !!activeMemberData.membership;
+        if (!hasActivePlan) {
+            showMobileToast('Please activate a plan before workout.', 'warning');
+            openPlanPurchaseDrawer();
+            return;
+        }
+    }
+
     if (currentMobileTab === 'scan' && tabName !== 'scan') stopCameraScanner();
     
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -407,17 +416,23 @@ async function fetchDashboardData() {
             const expDate = data.membership ? data.membership.end_date : 'No Plan';
             document.getElementById('homeExpiryDate').innerText = formatExpiryDate(expDate);
         }
+        let hasActivePlan = !!data.membership;
         if (document.getElementById('homeStatusText')) {
             const rawStatus = data.status || 'inactive';
             const cleanStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1);
             document.getElementById('homeStatusText').innerText = cleanStatus;
-            
+
             const statusEl = document.getElementById('homeStatusText');
             if (rawStatus === 'active') {
                 statusEl.style.color = 'var(--accent)';
             } else {
                 statusEl.style.color = '#8e8e93';
             }
+        }
+        
+        const buyBtn = document.getElementById('homeBuyPlanBtn');
+        if (buyBtn) {
+            buyBtn.style.display = hasActivePlan ? 'none' : 'block';
         }
 
         // Notification indicator dot
@@ -671,15 +686,42 @@ function toggleNotificationsPanel() {
     } else {
         panel.style.display = 'block';
         notificationsPanelOpen = true;
-        // Auto-read on open
-        markMemberNotificationsRead();
+        // Just clear the unread badge visually on open
+        const badge = document.getElementById('notifBadgeCount');
+        if (badge) badge.style.display = 'none';
     }
 }
 
 async function markMemberNotificationsRead() {
     try {
+        const notifPanel = document.getElementById('notifPanelList');
+        if (notifPanel) {
+            const items = notifPanel.children;
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                // Check if element has style property
+                if (item.style) {
+                    item.style.transition = 'all 0.4s ease-out';
+                    item.style.transform = 'translateX(120%)';
+                    item.style.opacity = '0';
+                }
+            }
+        }
+        
+        // Wait for swipe transition to finish
+        await new Promise(resolve => setTimeout(resolve, 400));
+
         await fetch('/api/member/notifications/read', { method: 'POST' });
-        document.getElementById('notifBadgeCount').style.display = 'none';
+        
+        const badge = document.getElementById('notifBadgeCount');
+        if (badge) badge.style.display = 'none';
+        
+        const panel = document.getElementById('notifOverlayPanel');
+        if (panel) {
+            panel.style.display = 'none';
+            notificationsPanelOpen = false;
+        }
+        
         fetchDashboardData();
     } catch (err) {
         console.error(err);
@@ -1488,34 +1530,6 @@ function setupAuthForms() {
         });
     }
 
-    const profForm = document.getElementById('memberProfileForm');
-    if (profForm) {
-        profForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const data = {
-                phone: document.getElementById('profPhone').value,
-                emergency_contact: document.getElementById('profEmergency').value,
-                profile_photo: document.getElementById('profileAvatarBase64').value
-            };
-
-            try {
-                const res = await fetch('/api/member/profile', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                const resData = await res.json();
-                if (resData.success) {
-                    showMobileToast('Profile updated');
-                    fetchDashboardData();
-                } else {
-                    showMobileToast(resData.error, 'error');
-                }
-            } catch (err) {
-                showMobileToast('Network error saving profile', 'error');
-            }
-        });
-    }
 }
 
 async function logoutMemberApp() {
@@ -3008,6 +3022,88 @@ function addMockPaymentInvoice() {
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+// ================= PREMIUM BOTTOM DRAWER SHEET =================
+function openPlanPurchaseDrawer() {
+    const drawer = document.getElementById('planPurchaseDrawer');
+    if (!drawer) return;
+    drawer.style.display = 'flex';
+    drawer.offsetHeight; // trigger reflow
+    
+    fetchAndRenderDrawerPlans();
+    
+    const card = drawer.querySelector('.bottom-sheet-card');
+    if (card) {
+        card.style.transform = 'translateY(0)';
+    }
+}
+
+function hidePlanPurchaseDrawer() {
+    const drawer = document.getElementById('planPurchaseDrawer');
+    if (!drawer) return;
+    const card = drawer.querySelector('.bottom-sheet-card');
+    if (card) {
+        card.style.transform = 'translateY(100%)';
+    }
+    setTimeout(() => {
+        drawer.style.display = 'none';
+    }, 300);
+}
+
+function closePlanPurchaseDrawer(event) {
+    if (event.target.id === 'planPurchaseDrawer') {
+        hidePlanPurchaseDrawer();
+    }
+}
+
+async function fetchAndRenderDrawerPlans() {
+    const container = document.getElementById('drawerPlansList');
+    if (!container) return;
+    container.innerHTML = '<p style="text-align: center; color: var(--text-tertiary); font-size: 13px; padding: 20px;">Loading plans...</p>';
+    
+    try {
+        const res = await fetch('/api/member/plans');
+        const plans = await res.json();
+        
+        if (plans.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: var(--text-tertiary); font-size: 13px; padding: 20px;">No plans available.</p>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        plans.forEach(plan => {
+            const card = document.createElement('div');
+            card.style.padding = '16px';
+            card.style.display = 'flex';
+            card.style.flexDirection = 'column';
+            card.style.gap = '8px';
+            card.style.background = 'var(--bg-raised)';
+            card.style.borderRadius = 'var(--radius-md)';
+            card.style.border = '1px solid var(--border-color)';
+            
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="font-size: 14px; color: var(--text-primary);">${escapeHtml(plan.name)}</strong>
+                    <strong style="font-size: 15px; color: var(--accent);">₹${plan.price.toFixed(2)}</strong>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(plan.benefits || 'Standard Gym Dues')}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                    <span style="font-size: 11px; color: var(--text-tertiary);">${plan.duration_months} ${plan.duration_months === 1 ? 'Month' : 'Months'} duration</span>
+                    <button class="btn btn-primary" style="padding: 6px 14px; font-size: 11px; min-height: unset; height: 30px;" onclick="buyPlanFromDrawer(${plan.id}, ${plan.price})">Buy Now</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = '<p style="text-align: center; color: var(--danger); font-size: 13px; padding: 20px;">Failed to load plans.</p>';
+    }
+}
+
+function buyPlanFromDrawer(planId, price) {
+    hidePlanPurchaseDrawer();
+    initiatePlanPurchase(planId, price);
 }
 
 
