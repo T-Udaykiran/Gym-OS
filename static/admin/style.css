@@ -745,7 +745,7 @@
 /* ================= BOTTOM COLS GRID ================= */
 .bottom-three-cols-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 24px;
 }
 
@@ -785,7 +785,62 @@
     color: var(--text-secondary);
 }
 
-/* Col 2: Recent Activity Timeline */
+/* Col 2: Quick Actions Grid */
+.quick-actions-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.quick-action-square-btn {
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    text-align: center;
+    transition: all var(--transition-fast);
+}
+
+.quick-action-square-btn:hover {
+    border-color: #eab308;
+    background-color: #FFFCE8;
+    transform: translateY(-2px);
+    box-shadow: 0px 8px 24px rgba(234, 179, 8, 0.12), var(--shadow-sm);
+}
+
+.quick-square-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.quick-action-square-btn:hover .quick-square-icon {
+    background-color: #eab308;
+    color: #000000;
+}
+
+.quick-square-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.quick-action-square-btn:hover .quick-square-label {
+    color: #eab308;
+}
+
+/* Col 3: Recent Activity Timeline */
 .timeline-card-stream {
     display: flex;
     flex-direction: column;
@@ -1466,31 +1521,42 @@
     box-shadow: var(--shadow-sm);
 }
 
-.mobile-menu-btn {
+.mobile-brand {
+    display: flex;
+    align-items: center;
+}
+
+/* Small circular notification bell, top-right of the mobile top bar */
+.mobile-bell-btn {
+    position: relative;
     background: none;
     border: none;
     color: var(--text-primary);
     cursor: pointer;
-    padding: 6px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--radius-sm);
+    background-color: var(--bg-raised);
+    flex-shrink: 0;
     transition: background-color var(--transition-fast);
 }
 
-.mobile-menu-btn:hover {
-    background-color: var(--bg-raised);
+.mobile-bell-btn:hover {
+    background-color: var(--border-color);
 }
 
-.mobile-menu-btn svg {
-    width: 24px;
-    height: 24px;
+.mobile-bell-btn svg {
+    width: 18px;
+    height: 18px;
 }
 
-.mobile-brand {
-    display: flex;
-    align-items: center;
+.mobile-bell-btn .badge-count-red {
+    position: absolute;
+    top: -2px;
+    right: -2px;
 }
 
 /* Media Query for screens <= 850px (Mobile Navigation Drawer & stacked columns) */
@@ -1560,7 +1626,12 @@
         width: 100%;
         max-width: none;
     }
-    
+
+    /* Notifications live in the small circular button in .mobile-top-bar instead */
+    #ownerBellBtn {
+        display: none;
+    }
+
     .header-controls button,
     .header-controls .date-selector-trigger {
         width: 100%;
@@ -2842,8 +2913,12 @@
         transform: scale(0.92);
     }
 
-    /* Active tab style */
+    /* Active tab style — overrides the desktop sidebar's solid gold pill
+       (background-color + box-shadow from .nav-link.active) which would
+       otherwise render a gold icon on a gold background and disappear. */
     .admin-mobile-tabbar .nav-link.active {
         color: var(--gold);
+        background-color: transparent;
+        box-shadow: none;
     }
 }

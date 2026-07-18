@@ -2758,15 +2758,16 @@ function saveNotificationsToLocalStorage() {
 
 function updateNotificationBadge() {
     const unreadCount = ownerNotificationsList.filter(n => !n.read).length;
-    const badge = document.getElementById('ownerBellBadge');
-    if (badge) {
+    ['ownerBellBadge', 'mobileBellBadge'].forEach(id => {
+        const badge = document.getElementById(id);
+        if (!badge) return;
         if (unreadCount > 0) {
             badge.innerText = unreadCount;
             badge.style.display = 'inline-block';
         } else {
             badge.style.display = 'none';
         }
-    }
+    });
 }
 
 function renderOwnerNotificationsPopover() {
