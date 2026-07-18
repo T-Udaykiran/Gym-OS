@@ -259,9 +259,12 @@
 /* ================= MAIN CONTENT PANEL ================= */
 .main-content {
     margin-left: 280px;
-    flex-grow: 1;
+    width: calc(100% - 280px);
+    max-width: 100%;
+    box-sizing: border-box;
     padding: 40px 48px;
     background-color: var(--bg-app);
+    overflow-x: hidden;
 }
 
 /* ================= TOP CUSTOM HEADER ================= */
@@ -402,7 +405,7 @@
 /* ================= 6 METRIC TOP GRID ================= */
 .metric-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px;
     margin-bottom: 24px;
 }
@@ -981,12 +984,6 @@
     transform: translateY(0);
 }
 
-/* Responsive adjustment */
-@media (max-width: 1440px) {
-    .metric-kpi-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
 
 @media (max-width: 1200px) {
     .dashboard-layout-split {
@@ -1014,11 +1011,8 @@
 
     .main-content {
         margin-left: 72px;
+        width: calc(100% - 72px);
         padding: 30px 20px;
-    }
-
-    .metric-kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
     }
 }
 
@@ -1543,6 +1537,7 @@
     
     .main-content {
         margin-left: 0 !important;
+        width: 100% !important;
         padding: 20px 16px !important;
         min-height: calc(100vh - 60px);
     }
@@ -2649,6 +2644,7 @@
 /* Sidebar collapsed sibling selector for main content */
 .sidebar.collapsed ~ .main-content {
     margin-left: 72px !important;
+    width: calc(100% - 72px) !important;
 }
 
 /* CSS Native Tooltips on hover when collapsed */

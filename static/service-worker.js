@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gymos-cache-v16';
+const CACHE_NAME = 'gymos-cache-v17';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
