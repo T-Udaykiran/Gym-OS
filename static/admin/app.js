@@ -42,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupFormHandlers();
     setHeaderDates();
     if (typeof initializeOwnerNotifications === 'function') initializeOwnerNotifications();
-    if (typeof setupDashboardFilterListeners === 'function') setupDashboardFilterListeners();
 
     window.addEventListener('online', () => {
         showToast('Internet restored. Sync active.', 'success');
@@ -114,6 +113,84 @@ function openModal(modalId) {
 
 function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('active');
+}
+
+// Dashboard KPI drill-down (Pending Dues / Expiring Soon)
+async function openDashboardListModal(type) {
+    const isPending = type === 'pending';
+    document.getElementById('dashboardListModalTitle').innerText = isPending ? 'Pending Dues' : 'Expiring Soon';
+    const body = document.getElementById('dashboardListModalBody');
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">Loading…</td></tr>';
+    openModal('dashboardListModal');
+
+    try {
+        const res = await fetch(isPending ? '/api/admin/dashboard/pending-dues' : '/api/admin/dashboard/expiring-soon');
+        const data = await res.json();
+        const rows = data.data || [];
+
+        if (rows.length === 0) {
+            body.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">${isPending ? 'No pending dues!' : 'No memberships expiring soon.'}</td></tr>`;
+            return;
+        }
+
+        body.innerHTML = rows.map(r => {
+            const dueDate = isPending ? r.due_date : r.end_date;
+            const amount = r.amount != null ? formatINRCurrency(r.amount) : (r.amount_due != null ? formatINRCurrency(r.amount_due) : '—');
+            return `
+                <tr>
+                    <td style="font-weight:600;">${r.first_name} ${r.last_name}</td>
+                    <td>${dueDate || '—'}</td>
+                    <td style="font-weight:700;">${amount}</td>
+                    <td>${r.plan_name || 'No Plan'}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--danger);">Failed to load list.</td></tr>';
+    }
+}
+
+// Forgot Password flow (Owner login)
+function openForgotPasswordFlow(event) {
+    if (event) event.preventDefault();
+    document.getElementById('forgotPasswordForm').reset();
+    document.getElementById('forgotPasswordError').style.display = 'none';
+    openModal('forgotPasswordModal');
+}
+
+function closeForgotPasswordFlow() {
+    closeModal('forgotPasswordModal');
+}
+
+async function submitForgotPassword(event) {
+    event.preventDefault();
+    const errorBox = document.getElementById('forgotPasswordError');
+    errorBox.style.display = 'none';
+
+    const email = document.getElementById('fpEmail').value.trim();
+    const phone = document.getElementById('fpPhone').value.trim();
+    const new_password = document.getElementById('fpNewPassword').value;
+
+    try {
+        const res = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, phone, new_password })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            closeModal('forgotPasswordModal');
+            showToast('Password reset. Please sign in with your new password.', 'success');
+            document.getElementById('loginEmail').value = email;
+        } else {
+            errorBox.innerText = data.error || 'Password reset failed';
+            errorBox.style.display = 'block';
+        }
+    } catch (err) {
+        errorBox.innerText = 'Failed request: server offline';
+        errorBox.style.display = 'block';
+    }
 }
 
 // Auth validation
@@ -279,7 +356,6 @@ function showTab(tabName) {
     toggleMobileSidebar(false);
     
     // Close floating popovers
-    if (typeof closeDashboardFilterPanel === 'function') closeDashboardFilterPanel();
     if (typeof closeNotificationPopover === 'function') closeNotificationPopover();
     
     currentTab = tabName;
@@ -315,13 +391,6 @@ function triggerGlobalSearch(query) {
 }
 
 let rawDashboardStats = null;
-let dashboardFilters = {
-    status: [],
-    payment: [],
-    attendance: [],
-    plan: [],
-    sortBy: 'newest'
-};
 
 // Fetch stats and render dashboard elements
 async function fetchDashboardStats() {
@@ -330,7 +399,7 @@ async function fetchDashboardStats() {
         const data = await res.json();
         rawDashboardStats = data;
 
-        // Update Pending Approvals KPI Card (Never affected by dashboard filter)
+        // Update Pending Approvals KPI Card
         const pendingCount = data.stats.pending_registrations_count || 0;
         document.getElementById('statPendingApprovalsCount').innerText = pendingCount;
         document.getElementById('statPendingApprovalsSub').innerText = `${pendingCount} Member${pendingCount === 1 ? '' : 's'} Waiting`;
@@ -360,211 +429,25 @@ async function fetchDashboardStats() {
         // Fetch Leaderboard
         fetchAdminLeaderboard();
 
-        // Render dashboard data (applying filters if active)
-        await renderFilteredDashboardData();
+        // Render dashboard data
+        renderDashboardData();
 
     } catch (err) {
         console.error('Stats loading failed', err);
     }
 }
 
-async function renderFilteredDashboardData() {
+function renderDashboardData() {
     if (!rawDashboardStats) return;
 
-    let stats = { ...rawDashboardStats.stats };
-    let chartRevenue = [ ...rawDashboardStats.charts.revenue ];
-    let todayCheckins = stats.today_checkins;
-    let activeMembers = stats.active_members;
+    const stats = rawDashboardStats.stats;
 
-    // Check if any filter is active
-    const isFilterActive = dashboardFilters.status.length > 0 ||
-                          dashboardFilters.payment.length > 0 ||
-                          dashboardFilters.attendance.length > 0 ||
-                          dashboardFilters.plan.length > 0 ||
-                          dashboardFilters.sortBy !== 'newest';
-
-    // Update filter badge in UI
-    let activeCount = 0;
-    if (dashboardFilters.status.length > 0) activeCount += dashboardFilters.status.length;
-    if (dashboardFilters.payment.length > 0) activeCount += dashboardFilters.payment.length;
-    if (dashboardFilters.attendance.length > 0) activeCount += dashboardFilters.attendance.length;
-    if (dashboardFilters.plan.length > 0) activeCount += dashboardFilters.plan.length;
-    if (dashboardFilters.sortBy !== 'newest') activeCount += 1;
-
-    const filterBadge = document.getElementById('activeFilterBadge');
-    if (filterBadge) {
-        if (activeCount > 0) {
-            filterBadge.innerText = activeCount;
-            filterBadge.style.display = 'flex';
-        } else {
-            filterBadge.style.display = 'none';
-        }
-    }
-
-    if (isFilterActive) {
-        // Fetch all members, payments, and attendance to compute filtered stats
-        try {
-            const [membersRes, paymentsRes, attendanceRes] = await Promise.all([
-                fetch('/api/admin/members?limit=all'),
-                fetch('/api/admin/payments?limit=all'),
-                fetch('/api/admin/attendance?limit=1000')
-            ]);
-            
-            const membersData = await membersRes.json();
-            const paymentsData = await paymentsRes.json();
-            const attendanceData = await attendanceRes.json();
-
-            let members = membersData.data || [];
-            let payments = paymentsData.data || [];
-            let attendanceList = attendanceData.data || [];
-
-            // Filter members list
-            members = members.filter(m => {
-                // 1. Membership Status Filter
-                if (dashboardFilters.status.length > 0) {
-                    if (!dashboardFilters.status.includes(m.status)) return false;
-                }
-
-                // 2. Payment Status Filter
-                if (dashboardFilters.payment.length > 0) {
-                    const memberPayments = payments.filter(p => p.member_id === m.id);
-                    if (memberPayments.length === 0) return false;
-                    const latestPayment = memberPayments[0]; // ordered desc by date
-                    if (!dashboardFilters.payment.includes(latestPayment.status)) return false;
-                }
-
-                // 3. Attendance Filter
-                if (dashboardFilters.attendance.length > 0) {
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const checkedInToday = attendanceList.some(a => a.member_id === m.id && a.check_in_time.startsWith(todayStr));
-                    
-                    const oneWeekAgo = new Date();
-                    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-                    const activeThisWeek = attendanceList.some(a => a.member_id === m.id && new Date(a.check_in_time) >= oneWeekAgo);
-
-                    let matchesAttendance = false;
-                    if (dashboardFilters.attendance.includes('checked_in') && checkedInToday) matchesAttendance = true;
-                    if (dashboardFilters.attendance.includes('absent') && !checkedInToday) matchesAttendance = true;
-                    if (dashboardFilters.attendance.includes('active_week') && activeThisWeek) matchesAttendance = true;
-
-                    if (!matchesAttendance) return false;
-                }
-
-                // 4. Membership Plan Filter
-                if (dashboardFilters.plan.length > 0) {
-                    if (!m.plan_name) return false;
-                    const planLower = m.plan_name.toLowerCase();
-                    let planType = '';
-                    if (planLower.includes('monthly') || planLower.includes('1 month')) planType = 'monthly';
-                    else if (planLower.includes('quarterly') || planLower.includes('3 month')) planType = 'quarterly';
-                    else if (planLower.includes('half') || planLower.includes('6 month')) planType = 'half_yearly';
-                    else if (planLower.includes('annual') || planLower.includes('yearly') || planLower.includes('12 month')) planType = 'annual';
-
-                    if (!dashboardFilters.plan.includes(planType)) return false;
-                }
-
-                return true;
-            });
-
-            // Apply Sorting to members
-            if (dashboardFilters.sortBy === 'newest') {
-                members.sort((a, b) => new Date(b.joined_at) - new Date(a.joined_at));
-            } else if (dashboardFilters.sortBy === 'oldest') {
-                members.sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
-            } else if (dashboardFilters.sortBy === 'name_asc') {
-                members.sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`));
-            } else if (dashboardFilters.sortBy === 'name_desc') {
-                members.sort((a, b) => `${b.first_name} ${b.last_name}`.localeCompare(`${a.first_name} ${a.last_name}`));
-            } else if (dashboardFilters.sortBy === 'revenue') {
-                members.sort((a, b) => {
-                    const revA = payments.filter(p => p.member_id === a.id && p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
-                    const revB = payments.filter(p => p.member_id === b.id && p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
-                    return revB - revA;
-                });
-            } else if (dashboardFilters.sortBy === 'active_days') {
-                members.sort((a, b) => {
-                    const countA = attendanceList.filter(att => att.member_id === a.id && att.status === 'success').length;
-                    const countB = attendanceList.filter(att => att.member_id === b.id && att.status === 'success').length;
-                    return countB - countA;
-                });
-            }
-
-            const filteredMemberIds = new Set(members.map(m => m.id));
-
-            // Recompute stats metrics
-            const todayStr = new Date().toISOString().split('T')[0];
-            const activeFiltered = members.filter(m => m.status === 'active');
-            
-            stats.active_members = activeFiltered.length;
-            stats.new_members_week = members.filter(m => {
-                const oneWeekAgo = new Date();
-                oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-                return new Date(m.joined_at) >= oneWeekAgo;
-            }).length;
-            
-            stats.today_checkins = attendanceList.filter(a => filteredMemberIds.has(a.member_id) && a.check_in_time.startsWith(todayStr) && a.status === 'success').length;
-            
-            const currentMonthStart = new Date();
-            currentMonthStart.setDate(1);
-            currentMonthStart.setHours(0,0,0,0);
-            
-            const paidMonthPayments = payments.filter(p => filteredMemberIds.has(p.member_id) && p.status === 'paid' && new Date(p.payment_date) >= currentMonthStart);
-            stats.monthly_revenue = paidMonthPayments.reduce((sum, p) => sum + p.amount, 0);
-
-            const pendingPaymentsList = payments.filter(p => filteredMemberIds.has(p.member_id) && ['pending', 'overdue'].includes(p.status));
-            stats.pending_payments = pendingPaymentsList.length;
-            stats.pending_amount = pendingPaymentsList.reduce((sum, p) => sum + p.amount, 0);
-
-            const today = new Date();
-            const nextWeek = new Date();
-            nextWeek.setDate(today.getDate() + 7);
-            
-            stats.expiring_members = members.filter(m => m.end_date && new Date(m.end_date) >= today && new Date(m.end_date) <= nextWeek).length;
-
-            // Recompute revenue chart
-            chartRevenue = [];
-            for (let i = 5; i >= 0; i--) {
-                const targetMonth = new Date();
-                targetMonth.setDate(1);
-                targetMonth.setMonth(targetMonth.getMonth() - i);
-                const mStart = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1);
-                const mEnd = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 1);
-                const mLabel = targetMonth.toLocaleString('default', { month: 'short' });
-
-                const monthlyPaid = payments.filter(p => filteredMemberIds.has(p.member_id) && p.status === 'paid' && new Date(p.payment_date) >= mStart && new Date(p.payment_date) < mEnd);
-                const revSum = monthlyPaid.reduce((sum, p) => sum + p.amount, 0);
-                chartRevenue.push({ month: mLabel, revenue: revSum });
-            }
-
-            // Recompute attendance chart data
-            const attendanceChart = [];
-            for (let i = 6; i >= 0; i--) {
-                const targetDay = new Date();
-                targetDay.setDate(targetDay.getDate() - i);
-                const dStart = targetDay.toISOString().split('T')[0];
-                const dLabel = targetDay.toLocaleString('default', { weekday: 'short' });
-
-                const checkinCount = attendanceList.filter(a => filteredMemberIds.has(a.member_id) && a.check_in_time.startsWith(dStart) && a.status === 'success').length;
-                attendanceChart.push({ day: dLabel, count: checkinCount });
-            }
-            
-            todayCheckins = stats.today_checkins;
-            activeMembers = stats.active_members;
-
-            // Render recomputed attendance chart
-            renderAttendanceChart(attendanceChart);
-
-        } catch (e) {
-            console.error('Error calculating filtered dashboard stats:', e);
-        }
-    } else {
-        // Render raw default charts
-        renderRevenueChart(rawDashboardStats.charts.revenue);
-        renderAttendanceChart(rawDashboardStats.charts.attendance);
-    }
+    // Render raw default charts
+    renderRevenueChart(rawDashboardStats.charts.revenue);
+    renderAttendanceChart(rawDashboardStats.charts.attendance);
 
     // Render KPI Cards
-    document.getElementById('statActiveMembers').innerText = stats.active_members;
+    document.getElementById('statActiveMembers').innerText = stats.total_members;
     document.getElementById('statNewMembersWeek').innerText = stats.new_members_week;
     document.getElementById('statTodayCheckins').innerText = stats.today_checkins;
     document.getElementById('statMonthlyRevenue').innerText = formatINRCurrency(stats.monthly_revenue);
@@ -572,82 +455,19 @@ async function renderFilteredDashboardData() {
     document.getElementById('statPendingAmountVal').innerText = `${formatINRCurrency(stats.pending_amount)} total`;
     document.getElementById('statExpiredCount').innerText = stats.expiring_members;
 
-    // Render Revenue Chart
-    renderRevenueChart(chartRevenue);
-
     // Donut Chart & ratios
-    renderAttendanceDonut(todayCheckins, activeMembers);
+    renderAttendanceDonut(stats.today_checkins, stats.active_members);
 
-    // Table List: Pending Payments
-    const pTable = document.getElementById('dashboardPendingPaymentsBody');
-    pTable.innerHTML = '';
-    const rawPendingList = rawDashboardStats.pending_payments_list || [];
-    let filteredPendingList = rawPendingList;
-    
-    if (isFilterActive) {
-        // Filter pending payments list
-        const filteredMemberIds = new Set(members.map(m => m.id));
-        filteredPendingList = rawPendingList.filter(p => filteredMemberIds.has(p.member_id));
-    }
-
-    if (filteredPendingList.length === 0) {
-        pTable.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-tertiary); padding: 16px 0;">No pending payments!</td></tr>';
-    } else {
-        filteredPendingList.forEach(p => {
-            const tr = document.createElement('tr');
-            const badge = p.status === 'overdue' ? 'badge-suspended' : 'badge-expired';
-            const initials = (p.first_name[0] + p.last_name[0]).toUpperCase();
-            const dDate = new Date(p.due_date);
-            const diffTime = dDate - new Date();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            let dueStr = p.due_date;
-            if (diffDays === 0) dueStr = '<span style="color:var(--danger); font-weight:600;">Today</span>';
-            else if (diffDays < 0) dueStr = `<span style="color:var(--danger); font-weight:600;">${Math.abs(diffDays)}d Overdue</span>`;
-
-            tr.innerHTML = `
-                <td>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <div class="member-avatar-mini">${initials}</div>
-                        <div>
-                            <div style="font-weight:600;">${p.first_name} ${p.last_name}</div>
-                            <div style="font-size:11px; color:var(--text-secondary);">${p.plan_name || 'Membership'}</div>
-                        </div>
-                    </div>
-                </td>
-                <td>${dueStr}</td>
-                <td style="font-weight:700;">${formatINRCurrency(p.amount)}</td>
-                <td><span class="badge ${badge}">${p.status}</span></td>
-                <td>
-                    <div class="communication-action-group">
-                        <button class="btn-comms-circle btn-comms-whatsapp" onclick="triggerWhatsAppModal(${p.id})">
-                            <svg fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.503-5.722-1.465L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.965C16.59 1.977 14.113.953 11.5.953c-5.44 0-9.866 4.372-9.87 9.802 0 1.814.49 3.518 1.42 5.061l-.995 3.633 3.738-.971z"/></svg>
-                        </button>
-                        <a href="tel:${p.phone}" class="btn-comms-circle btn-comms-phone">
-                            <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
-                        </a>
-                    </div>
-                </td>
-            `;
-            pTable.appendChild(tr);
-        });
-    }
-
-    // List 1: New Members list (Bottom row left column)
+    // New Members list (Bottom row left column)
     const joinersList = document.getElementById('dashboardNewMembersList');
     joinersList.innerHTML = '';
-    const rawNewList = rawDashboardStats.new_members_list || [];
-    let filteredNewList = rawNewList;
-    
-    if (isFilterActive) {
-        const filteredMemberIds = new Set(members.map(m => m.id));
-        filteredNewList = rawNewList.filter(p => filteredMemberIds.has(p.id));
-    }
+    const newList = rawDashboardStats.new_members_list || [];
 
-    if (filteredNewList.length === 0) {
+    if (newList.length === 0) {
         joinersList.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px;">No registrations.</div>';
     } else {
-        filteredNewList.forEach(m => {
-            const initials = (m.first_name[0] + m.last_name[0]).toUpperCase();
+        newList.forEach(m => {
+            const initials = (m.first_name[0] + (m.last_name ? m.last_name[0] : '')).toUpperCase();
             const div = document.createElement('div');
             div.className = 'recent-joiner-item';
             div.innerHTML = `
@@ -661,62 +481,10 @@ async function renderFilteredDashboardData() {
         });
     }
 
-    // List 2: Membership Expiring list (Right column panel)
-    const expiringList = document.getElementById('dashboardExpiringList');
-    expiringList.innerHTML = '';
-    const rawExpiringList = rawDashboardStats.expiring_members_list || [];
-    let filteredExpiringList = rawExpiringList;
-    
-    if (isFilterActive) {
-        const filteredMemberIds = new Set(members.map(m => m.id));
-        filteredExpiringList = rawExpiringList.filter(p => filteredMemberIds.has(p.id));
-    }
-
-    if (filteredExpiringList.length === 0) {
-        expiringList.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px;">No memberships expiring.</div>';
-    } else {
-        filteredExpiringList.forEach(m => {
-            const initials = (m.first_name[0] + m.last_name[0]).toUpperCase();
-            const eDate = new Date(m.end_date);
-            const diffTime = eDate - new Date();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            let countdownStr = `Expires: ${m.end_date}`;
-            if (diffDays === 0) countdownStr = 'Expires TODAY';
-            else if (diffDays === 1) countdownStr = 'Expires Tomorrow';
-            else if (diffDays > 0) countdownStr = `Expires in ${diffDays} days`;
-
-            const div = document.createElement('div');
-            div.className = 'expiring-list-member-item';
-            const actBtn = m.payment_id ? `<button class="btn-send-whatsapp-remind" onclick="triggerWhatsAppModal(${m.payment_id})">Alert</button>` : '';
-            div.innerHTML = `
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <div class="member-avatar-mini">${initials}</div>
-                    <div class="member-info-mini">
-                        <span class="member-name-mini">${m.first_name} ${m.last_name}</span>
-                        <span class="member-subtitle-mini">${countdownStr}</span>
-                    </div>
-                </div>
-                ${actBtn}
-            `;
-            expiringList.appendChild(div);
-        });
-    }
-
     // Timeline feed checkin nodes
     const stream = document.getElementById('sseCheckinStream');
     stream.innerHTML = '';
-    const rawActivity = rawDashboardStats.recent_activity || [];
-    let filteredActivity = rawActivity;
-    
-    if (isFilterActive) {
-        const filteredMemberIds = new Set(members.map(m => m.id));
-        // Find member ID by searching recent activity names or match mapping
-        filteredActivity = rawActivity.filter(act => {
-            // Match name prefix or search mapping
-            const matchedM = members.find(m => `${m.first_name} ${m.last_name}` === act.name);
-            return !matchedM || filteredMemberIds.has(matchedM.id);
-        });
-    }
+    const filteredActivity = rawDashboardStats.recent_activity || [];
 
     if (filteredActivity.length === 0) {
         stream.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px 0;">Waiting for checks...</div>';
@@ -742,6 +510,128 @@ async function renderFilteredDashboardData() {
 
 // Global variable for Attendance Chart instance to re-draw correctly
 let dashboardAttendanceChartInstance = null;
+
+// Monthly Attendance Calendar (Attendance tab)
+let attendanceCalendarDate = new Date();
+
+function openMonthlyAttendanceModal() {
+    attendanceCalendarDate = new Date();
+    document.getElementById('attendanceCalendarDayListWrap').style.display = 'none';
+    openModal('attendanceMonthlyModal');
+    renderAttendanceCalendar();
+}
+
+function changeAttendanceCalendarMonth(offset) {
+    attendanceCalendarDate.setMonth(attendanceCalendarDate.getMonth() + offset);
+    document.getElementById('attendanceCalendarDayListWrap').style.display = 'none';
+    renderAttendanceCalendar();
+}
+
+async function renderAttendanceCalendar() {
+    const year = attendanceCalendarDate.getFullYear();
+    const month = attendanceCalendarDate.getMonth();
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    document.getElementById('attendanceCalendarMonthLabel').innerText = `${monthNames[month]} ${year}`;
+
+    const monthStr = String(month + 1).padStart(2, '0');
+    let counts = {};
+    try {
+        const res = await fetch(`/api/admin/attendance/calendar-summary?year=${year}&month=${monthStr}`);
+        const data = await res.json();
+        counts = data.counts || {};
+    } catch (err) {
+        console.error('Failed to load attendance calendar summary', err);
+    }
+
+    const grid = document.getElementById('attendanceCalendarGrid');
+    grid.innerHTML = '';
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const adjustedFirstDayIndex = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+
+    for (let i = 0; i < adjustedFirstDayIndex; i++) {
+        grid.appendChild(document.createElement('div'));
+    }
+
+    for (let d = 1; d <= lastDay; d++) {
+        const dayStr = String(d).padStart(2, '0');
+        const cnt = counts[dayStr] || 0;
+        const cell = document.createElement('div');
+        cell.style.cssText = 'padding:8px 0; border-radius:8px; cursor:pointer; font-size:13px; font-weight:700;';
+        cell.style.background = cnt > 0 ? 'var(--accent)' : 'var(--bg-raised)';
+        cell.style.color = cnt > 0 ? 'var(--sidebar-dark)' : 'var(--text-primary)';
+        cell.innerHTML = `${d}${cnt > 0 ? `<div style="font-size:9px; font-weight:600;">${cnt}</div>` : ''}`;
+        cell.onclick = () => loadAttendanceCalendarDay(`${year}-${monthStr}-${dayStr}`);
+        grid.appendChild(cell);
+    }
+}
+
+async function loadAttendanceCalendarDay(dateStr) {
+    const wrap = document.getElementById('attendanceCalendarDayListWrap');
+    const body = document.getElementById('attendanceCalendarDayListBody');
+    document.getElementById('attendanceCalendarDayListTitle').innerText = `Check-ins on ${dateStr}`;
+    wrap.style.display = 'block';
+    body.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:12px;">Loading…</td></tr>';
+
+    try {
+        const res = await fetch(`/api/admin/attendance?date=${dateStr}&limit=all`);
+        const data = await res.json();
+        const rows = (data.data || []).filter(r => r.status === 'success');
+
+        if (rows.length === 0) {
+            body.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-tertiary); padding:12px;">No check-ins on this date.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = rows.map(r => `
+            <tr>
+                <td style="font-weight:600;">${r.first_name} ${r.last_name}</td>
+                <td>${r.check_in_time ? formatDisplayTime(r.check_in_time) : '—'}</td>
+                <td>${r.check_out_time ? formatDisplayTime(r.check_out_time) : '—'}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        body.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--danger);">Failed to load check-ins.</td></tr>';
+    }
+}
+
+function formatDisplayTime(dateTimeStr) {
+    const d = new Date(dateTimeStr.replace(' ', 'T'));
+    if (isNaN(d.getTime())) return dateTimeStr;
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+async function downloadMonthlyAttendance() {
+    const year = attendanceCalendarDate.getFullYear();
+    const monthStr = String(attendanceCalendarDate.getMonth() + 1).padStart(2, '0');
+
+    try {
+        const res = await fetch(`/api/admin/attendance?month=${year}-${monthStr}&limit=all`);
+        const data = await res.json();
+        const rows = (data.data || []).filter(r => r.status === 'success');
+
+        if (rows.length === 0) {
+            alert('No attendance records for this month.');
+            return;
+        }
+
+        let csvContent = "data:text/csv;charset=utf-8,Member Name,Check-in Time,Check-out Time\n";
+        rows.forEach(r => {
+            csvContent += `"${r.first_name} ${r.last_name}","${r.check_in_time || ''}","${r.check_out_time || ''}"\n`;
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `attendance-${year}-${monthStr}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (err) {
+        showToast('Failed to download monthly attendance', 'error');
+    }
+}
 
 function renderAttendanceChart(chartData) {
     const canvas = document.getElementById('attendanceBarChart');
@@ -945,16 +835,20 @@ async function fetchMembers() {
                 <td class="col-id" data-label="Member ID"><span class="member-id-monospace">#${m.id}</span></td>
                 <td class="col-phone" data-label="Phone Number">${m.phone}</td>
                 <td class="col-joined" data-label="Joined Date">${new Date(m.joined_at).toLocaleDateString()}</td>
-                <td class="col-status" data-label="Status"><span class="badge ${badge}">${m.status}</span></td>
-                <td class="col-plan" data-label="Plan & Expiry">
-                    <div style="font-weight: 600;">${planName}</div>
-                    <div style="font-size: 11px; color: var(--text-secondary);">${expiryCell}</div>
+                <td class="col-status" data-label="Status">
+                    <span class="badge ${badge}">${m.status}</span>
+                    ${m.pending_payment_count > 0 ? '<span class="badge badge-suspended" style="margin-left:4px;" title="Fee pending">Fee Due</span>' : ''}
                 </td>
-                <td class="col-last-in" data-label="Last Scan">${m.last_checkin ? new Date(m.last_checkin).toLocaleDateString() + ' ' + new Date(m.last_checkin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</td>
+                <td class="col-plan" data-label="Plan">
+                    <div style="font-weight: 600;">${planName}</div>
+                </td>
+                <td class="col-expiry" data-label="Expiry Date">${expiryCell}</td>
+                <td class="col-last-in" data-label="Last Check-in">${m.last_checkin ? new Date(m.last_checkin).toLocaleDateString() + ' ' + new Date(m.last_checkin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}</td>
                 <td style="text-align: right;" class="col-actions">
                     <div class="dots-dropdown">
                         <button class="btn btn-ghost" style="padding: 6px;" onclick="toggleDotsMenu('member-dots-${m.id}', event)">•••</button>
                         <div id="member-dots-${m.id}" class="dots-dropdown-menu">
+                            <button class="dots-dropdown-item" onclick="openEditMemberModal(${m.id})">Edit Member</button>
                             <button class="dots-dropdown-item" onclick="triggerAssignModal(${m.id}, '${m.first_name} ${m.last_name}')">Assign Plan</button>
                             <button class="dots-dropdown-item" style="color: var(--success-dark);" onclick="adminManualCheckIn(${m.id})">Manual Check-In</button>
                             <button class="dots-dropdown-item" style="color: var(--accent-dark);" onclick="adminManualCheckOut(${m.id})">Manual Check-Out</button>
@@ -1262,6 +1156,37 @@ function triggerAssignModal(mbrId, name) {
     openModal('assignPlanModal');
 }
 
+let editMemberCurrentStatus = 'active';
+
+async function openEditMemberModal(mbrId) {
+    try {
+        const res = await fetch(`/api/admin/members/${mbrId}`);
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.error || 'Failed to load member', 'error');
+            return;
+        }
+
+        const m = data.member;
+        editMemberCurrentStatus = m.status;
+        document.getElementById('editMemberId').value = m.id;
+        document.getElementById('emFirstName').value = m.first_name || '';
+        document.getElementById('emLastName').value = m.last_name || '';
+        document.getElementById('emEmail').value = m.email || '';
+        document.getElementById('emPhone').value = m.phone || '';
+        document.getElementById('emEmergency').value = m.emergency_contact || '';
+        document.getElementById('emPassword').value = '';
+        document.getElementById('emPlan').value = data.membership ? data.membership.plan_name : 'No Plan';
+
+        const pendingPayment = (data.payments || []).find(p => p.status === 'pending' || p.status === 'overdue');
+        document.getElementById('emFeePending').value = pendingPayment ? 'true' : 'false';
+
+        openModal('editMemberModal');
+    } catch (err) {
+        showToast('Failed to load member details', 'error');
+    }
+}
+
 function triggerManualPaymentForm(paymentId) {
     openModal('recordPaymentModal');
     setTimeout(() => {
@@ -1346,6 +1271,89 @@ async function populateReportsTab() {
     } catch (err) {
         console.error(err);
     }
+
+    setupRevenueFilterDefaults();
+    fetchRevenueList();
+}
+
+function setupRevenueFilterDefaults() {
+    const yearSelect = document.getElementById('revenueYearFilter');
+    const monthSelect = document.getElementById('revenueMonthFilter');
+    if (!yearSelect || yearSelect.options.length > 0) return; // already initialized
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    for (let y = currentYear; y >= currentYear - 4; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.innerText = y;
+        yearSelect.appendChild(opt);
+    }
+    yearSelect.value = currentYear;
+    monthSelect.value = String(now.getMonth() + 1).padStart(2, '0');
+}
+
+async function fetchRevenueList() {
+    const year = document.getElementById('revenueYearFilter').value;
+    const month = document.getElementById('revenueMonthFilter').value;
+    const body = document.getElementById('revenueTableBody');
+    body.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:16px;">Loading…</td></tr>';
+
+    try {
+        const res = await fetch(`/api/admin/payments?status=paid&year=${year}&month=${month}&limit=all`);
+        const data = await res.json();
+        const rows = data.data || [];
+
+        let total = 0;
+        rows.forEach(r => total += r.amount);
+        document.getElementById('revenueTotalInfo').innerText = `Total: ${formatINRCurrency(total)} (${rows.length} payments)`;
+
+        if (rows.length === 0) {
+            body.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-tertiary); padding:16px;">No revenue recorded for this month.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = rows.map(r => `
+            <tr>
+                <td style="font-weight:600;">${r.first_name} ${r.last_name}</td>
+                <td style="font-weight:700;">${formatINRCurrency(r.amount)}</td>
+                <td>${r.plan_name || 'No Plan'}</td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        body.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--danger);">Failed to load revenue.</td></tr>';
+    }
+}
+
+async function downloadRevenueList() {
+    const year = document.getElementById('revenueYearFilter').value;
+    const month = document.getElementById('revenueMonthFilter').value;
+
+    try {
+        const res = await fetch(`/api/admin/payments?status=paid&year=${year}&month=${month}&limit=all`);
+        const data = await res.json();
+        const rows = data.data || [];
+
+        if (rows.length === 0) {
+            alert('No revenue recorded for this month.');
+            return;
+        }
+
+        let csvContent = "data:text/csv;charset=utf-8,Member Name,Fees,Plan\n";
+        rows.forEach(r => {
+            csvContent += `"${r.first_name} ${r.last_name}","${r.amount}","${r.plan_name || 'No Plan'}"\n`;
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `revenue-${year}-${month}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (err) {
+        showToast('Failed to download revenue', 'error');
+    }
 }
 
 // Settings fetch
@@ -1358,17 +1366,32 @@ async function fetchGymSettings() {
         const phoneInput = document.getElementById('settingsGymPhone');
         const addressInput = document.getElementById('settingsGymAddress');
         const tokenInput = document.getElementById('settingsQRToken');
+        const imageInput = document.getElementById('settingsGymImageUrl');
 
         if (nameInput) nameInput.value = gymSettings.gym_name || '';
         if (phoneInput) phoneInput.value = gymSettings.gym_phone || '';
         if (addressInput) addressInput.value = gymSettings.gym_address || '';
         if (tokenInput) tokenInput.value = gymSettings.qr_token || '';
+        if (imageInput) imageInput.value = gymSettings.gym_image_url || '';
 
         document.getElementById('headerGymName').innerText = gymSettings.gym_name || 'GymOS';
         const brandNameEl = document.querySelector('.brand-title-fitzone .brand-main');
         if (brandNameEl) brandNameEl.innerText = gymSettings.gym_name || 'GymOS';
+
+        renderDashboardGymImage(gymSettings.gym_image_url);
     } catch (err) {
         console.error('Gym settings loading error', err);
+    }
+}
+
+function renderDashboardGymImage(imageUrl) {
+    const el = document.getElementById('dashboardGymImage');
+    if (!el) return;
+    if (imageUrl) {
+        el.src = imageUrl;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
     }
 }
 
@@ -1408,6 +1431,12 @@ function setupFormHandlers() {
         }
     });
 
+    // Forgot Password
+    const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+    if (forgotPasswordForm) {
+        forgotPasswordForm.addEventListener('submit', submitForgotPassword);
+    }
+
     // Profile Trigger / Logout
     document.querySelector('.owner-profile-card').addEventListener('contextmenu', async (e) => {
         e.preventDefault();
@@ -1429,7 +1458,8 @@ function setupFormHandlers() {
             gym_name: document.getElementById('settingsGymName').value,
             gym_phone: document.getElementById('settingsGymPhone').value,
             gym_address: document.getElementById('settingsGymAddress').value,
-            qr_token: document.getElementById('settingsQRToken').value
+            qr_token: document.getElementById('settingsQRToken').value,
+            gym_image_url: document.getElementById('settingsGymImageUrl').value
         };
 
         try {
@@ -1480,6 +1510,41 @@ function setupFormHandlers() {
             }
         } catch (err) {
             showToast('Create request failed', 'error');
+        }
+    });
+
+    // Edit member
+    document.getElementById('editMemberForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('editMemberId').value;
+        const data = {
+            first_name: document.getElementById('emFirstName').value,
+            last_name: document.getElementById('emLastName').value,
+            email: document.getElementById('emEmail').value,
+            phone: document.getElementById('emPhone').value,
+            emergency_contact: document.getElementById('emEmergency').value,
+            status: editMemberCurrentStatus,
+            password: document.getElementById('emPassword').value || undefined,
+            fee_pending: document.getElementById('emFeePending').value === 'true'
+        };
+
+        try {
+            const res = await fetch(`/api/admin/members/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const resData = await res.json();
+            if (resData.success) {
+                closeModal('editMemberModal');
+                showToast('Member updated successfully.');
+                fetchMembers();
+                fetchDashboardStats();
+            } else {
+                showToast(resData.error, 'error');
+            }
+        } catch (err) {
+            showToast('Update request failed', 'error');
         }
     });
 
@@ -1657,8 +1722,39 @@ async function deletePlan(id) {
 
 function drawGymQR() {
     const token = gymSettings.qr_token || 'gymos-token-xyz-123';
-    document.getElementById('qrSimulatedToken').innerText = token;
     document.getElementById('qrTokenDisplayTxt').innerText = `Token: ${token}`;
+
+    const container = document.getElementById('gymQRCodeContainer');
+    container.innerHTML = '';
+    if (typeof QRCode !== 'undefined') {
+        new QRCode(container, {
+            text: token,
+            width: 180,
+            height: 180,
+            colorDark: '#0f172a',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    }
+}
+
+function downloadGymQRCode() {
+    const container = document.getElementById('gymQRCodeContainer');
+    const img = container.querySelector('img');
+    const canvas = container.querySelector('canvas');
+    const dataUrl = img ? img.src : (canvas ? canvas.toDataURL('image/png') : null);
+
+    if (!dataUrl) {
+        showToast('QR code is not ready yet', 'error');
+        return;
+    }
+
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = 'gym-entrance-qr.png';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 }
 
 function triggerAttendanceExport() {
@@ -2319,7 +2415,7 @@ async function fetchAdminLeaderboard() {
                 item.style.border = '1px solid rgba(234, 179, 8, 0.2)';
             }
             
-            const initials = (user.first_name[0] + user.last_name[0]).toUpperCase();
+            const initials = (user.first_name[0] + (user.last_name ? user.last_name[0] : '')).toUpperCase();
             const medals = ['🥇', '🥈', '🥉'];
             const rankBadge = idx < 3 ? medals[idx] : `<span style="font-weight:700; color:var(--text-tertiary); margin-right: 6px;">#${idx + 1}</span>`;
             
@@ -2563,118 +2659,7 @@ async function rejectPendingMember(id) {
     }
 }
 
-/* ================= OWNER FILTER & NOTIFICATION MODULE ================= */
-
-// DASHBOARD FILTERS FUNCTIONALITY
-function toggleDashboardFilterPanel(event) {
-    if (event) event.stopPropagation();
-    const panel = document.getElementById('dashboardFilterPanel');
-    if (!panel) return;
-    
-    // Close notifications popover if open
-    closeNotificationPopover();
-
-    const isActive = panel.classList.contains('active');
-    if (isActive) {
-        closeDashboardFilterPanel();
-    } else {
-        panel.style.display = 'flex';
-        // Force reflow for animation
-        panel.offsetHeight;
-        panel.classList.add('active');
-    }
-}
-
-function closeDashboardFilterPanel() {
-    const panel = document.getElementById('dashboardFilterPanel');
-    if (!panel) return;
-    panel.classList.remove('active');
-    setTimeout(() => {
-        if (!panel.classList.contains('active')) {
-            panel.style.display = 'none';
-        }
-    }, 250);
-}
-
-function setupDashboardFilterListeners() {
-    // Close on click outside
-    document.addEventListener('click', (event) => {
-        const panel = document.getElementById('dashboardFilterPanel');
-        const btn = document.getElementById('dashboardFilterBtn');
-        if (panel && panel.classList.contains('active')) {
-            if (!panel.contains(event.target) && !btn.contains(event.target)) {
-                closeDashboardFilterPanel();
-            }
-        }
-        
-        const notifPanel = document.getElementById('notificationBellPopover');
-        const notifBtn = document.getElementById('ownerBellBtn');
-        if (notifPanel && notifPanel.classList.contains('active')) {
-            if (!notifPanel.contains(event.target) && !notifBtn.contains(event.target)) {
-                closeNotificationPopover();
-            }
-        }
-    });
-
-    // Preset filter input checkbox values based on dashboardFilters object
-    const inputsStatus = document.querySelectorAll('input[name="filterMemberStatus"]');
-    const inputsPayment = document.querySelectorAll('input[name="filterPaymentStatus"]');
-    const inputsAttendance = document.querySelectorAll('input[name="filterAttendance"]');
-    const inputsPlan = document.querySelectorAll('input[name="filterPlan"]');
-    const selectSort = document.getElementById('filterSortBy');
-
-    // Restore selections
-    inputsStatus.forEach(i => i.checked = dashboardFilters.status.includes(i.value));
-    inputsPayment.forEach(i => i.checked = dashboardFilters.payment.includes(i.value));
-    inputsAttendance.forEach(i => i.checked = dashboardFilters.attendance.includes(i.value));
-    inputsPlan.forEach(i => i.checked = dashboardFilters.plan.includes(i.value));
-    if (selectSort) selectSort.value = dashboardFilters.sortBy;
-}
-
-function applyDashboardFilters() {
-    const status = [];
-    document.querySelectorAll('input[name="filterMemberStatus"]:checked').forEach(i => status.push(i.value));
-    
-    const payment = [];
-    document.querySelectorAll('input[name="filterPaymentStatus"]:checked').forEach(i => payment.push(i.value));
-    
-    const attendance = [];
-    document.querySelectorAll('input[name="filterAttendance"]:checked').forEach(i => attendance.push(i.value));
-    
-    const plan = [];
-    document.querySelectorAll('input[name="filterPlan"]:checked').forEach(i => plan.push(i.value));
-    
-    const sortBy = document.getElementById('filterSortBy').value;
-
-    dashboardFilters = { status, payment, attendance, plan, sortBy };
-    
-    renderFilteredDashboardData();
-    closeDashboardFilterPanel();
-    showToast('Filters applied successfully', 'success');
-}
-
-function resetDashboardFilters() {
-    document.querySelectorAll('input[name="filterMemberStatus"]').forEach(i => i.checked = false);
-    document.querySelectorAll('input[name="filterPaymentStatus"]').forEach(i => i.checked = false);
-    document.querySelectorAll('input[name="filterAttendance"]').forEach(i => i.checked = false);
-    document.querySelectorAll('input[name="filterPlan"]').forEach(i => i.checked = false);
-    
-    const selectSort = document.getElementById('filterSortBy');
-    if (selectSort) selectSort.value = 'newest';
-
-    dashboardFilters = {
-        status: [],
-        payment: [],
-        attendance: [],
-        plan: [],
-        sortBy: 'newest'
-    };
-
-    renderFilteredDashboardData();
-    closeDashboardFilterPanel();
-    showToast('Filters reset', 'info');
-}
-
+/* ================= OWNER NOTIFICATION MODULE ================= */
 
 // OWNER NOTIFICATIONS FUNCTIONALITY
 let ownerNotificationsList = [];
@@ -2684,9 +2669,6 @@ function toggleNotificationPopover(event) {
     if (event) event.stopPropagation();
     const panel = document.getElementById('notificationBellPopover');
     if (!panel) return;
-    
-    // Close dashboard filter panel if open
-    closeDashboardFilterPanel();
 
     const isActive = panel.classList.contains('active');
     if (isActive) {

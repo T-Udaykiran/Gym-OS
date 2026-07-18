@@ -16,6 +16,16 @@ database.init_db()
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.secret_key = "gymos-secret-secure-key-9988"
 
+# The server (e.g. Vercel's serverless runtime) may run in UTC while the gym
+# operates in India Standard Time. Using the naive server clock directly would
+# stamp check-ins hours away from the wall-clock time members actually
+# scanned at, so every "current time" lookup in this file goes through here.
+IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def now_ist():
+    return datetime.utcnow() + IST_OFFSET
+
 # Global list of active SSE event queues
 SSE_LISTENERS = []
 
@@ -24,7 +34,7 @@ def broadcast_event(event_type, payload):
     event_data = {
         "type": event_type,
         "payload": payload,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": now_ist().isoformat()
     }
     # Create copy of list to prevent modification during iteration
     for q in list(SSE_LISTENERS):
@@ -215,6 +225,54 @@ def auth_logout():
     session.clear()
     return jsonify({"success": True})
 
+@app.route("/api/auth/reset-password", methods=["POST"])
+def auth_reset_password():
+    # No email/SMS infrastructure is configured, so identity is verified with
+    # a second factor (phone on file) instead of a mailed reset link.
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    new_password = data.get("new_password") or ""
+
+    if not email or not phone or not new_password:
+        return jsonify({"error": "Email, phone number and a new password are required"}), 400
+    if len(new_password) < 8:
+        return jsonify({"error": "New password must be at least 8 characters"}), 400
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+
+    generic_error = jsonify({"error": "No account matches that email and phone number combination"}), 404
+
+    cursor.execute("SELECT id, role FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return generic_error
+
+    verified = False
+    if user["role"] == "member":
+        cursor.execute("SELECT phone FROM members WHERE user_id = ?", (user["id"],))
+        m = cursor.fetchone()
+        if m and m["phone"] and m["phone"].strip() == phone:
+            verified = True
+    else:
+        cursor.execute("SELECT phone FROM gyms ORDER BY id LIMIT 1")
+        g = cursor.fetchone()
+        if g and g["phone"] and g["phone"].strip() == phone:
+            verified = True
+
+    if not verified:
+        conn.close()
+        return generic_error
+
+    password_hash = database.hash_password(new_password)
+    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user["id"]))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True, "message": "Password updated. You can now sign in with your new password."})
+
 # ================= SERVER-SENT EVENTS (SSE) STREAM =================
 
 @app.route("/api/stream")
@@ -250,7 +308,7 @@ def admin_stats():
     t_members = cursor.fetchone()[0]
     
     # 2. Active Members (Active status and active membership duration)
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_ist().strftime("%Y-%m-%d")
     cursor.execute("""
         SELECT COUNT(distinct member_id) FROM memberships 
         WHERE status = 'active' AND end_date >= ?
@@ -258,7 +316,7 @@ def admin_stats():
     act_members = cursor.fetchone()[0]
     
     # 3. Today's Checkins
-    today_start = datetime.now().strftime("%Y-%m-%d 00:00:00")
+    today_start = now_ist().strftime("%Y-%m-%d 00:00:00")
     cursor.execute("""
         SELECT COUNT(*) FROM attendance 
         WHERE status = 'success' AND check_in_time >= ?
@@ -273,7 +331,7 @@ def admin_stats():
     today_revenue = cursor.fetchone()[0] or 0.0
     
     # 5. Monthly Revenue (Current Month)
-    month_start = datetime.now().strftime("%Y-%m-01 00:00:00")
+    month_start = now_ist().strftime("%Y-%m-01 00:00:00")
     cursor.execute("""
         SELECT SUM(amount) FROM payments 
         WHERE status = 'paid' AND payment_date >= ?
@@ -291,7 +349,7 @@ def admin_stats():
     pending_approvals = cursor.fetchone()[0] or 0
     
     # 7. Memberships Expiring (within 7 Days)
-    next_week = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+    next_week = (now_ist() + timedelta(days=7)).strftime("%Y-%m-%d")
     cursor.execute("""
         SELECT COUNT(*) FROM memberships 
         WHERE status = 'active' AND end_date >= ? AND end_date <= ?
@@ -299,14 +357,14 @@ def admin_stats():
     expiring_members = cursor.fetchone()[0]
     
     # 8. New Members This Week
-    week_start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+    week_start = (now_ist() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("SELECT COUNT(*) FROM members WHERE joined_at >= ? AND status NOT IN ('pending', 'rejected')", (week_start,))
     new_members_week = cursor.fetchone()[0]
     
     # 9. Chart Data: Monthly Revenue Last 6 Months
     revenue_chart = []
     for i in range(5, -1, -1):
-        target_month = (datetime.now() - timedelta(days=i*30))
+        target_month = (now_ist() - timedelta(days=i*30))
         m_start = target_month.strftime("%Y-%m-01 00:00:00")
         m_end = (target_month + timedelta(days=31)).strftime("%Y-%m-01 00:00:00")
         m_label = target_month.strftime("%b")
@@ -318,7 +376,7 @@ def admin_stats():
     # 10. Chart Data: Attendance Last 7 Days
     attendance_chart = []
     for i in range(6, -1, -1):
-        target_day = (datetime.now() - timedelta(days=i))
+        target_day = (now_ist() - timedelta(days=i))
         d_start = target_day.strftime("%Y-%m-%d 00:00:00")
         d_end = target_day.strftime("%Y-%m-%d 23:59:59")
         d_label = target_day.strftime("%a")
@@ -409,6 +467,44 @@ def admin_stats():
         "new_members_list": new_members_list,
         "recent_activity": recent_activities
     })
+
+@app.route("/api/admin/dashboard/pending-dues", methods=["GET"])
+@login_required("owner")
+def admin_dashboard_pending_dues():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.id, m.first_name, m.last_name, p.due_date, p.amount, pl.name as plan_name, p.status
+        FROM payments p
+        JOIN members m ON p.member_id = m.id
+        LEFT JOIN memberships ms ON p.membership_id = ms.id
+        LEFT JOIN plans pl ON ms.plan_id = pl.id
+        WHERE p.status IN ('pending', 'overdue')
+        ORDER BY p.due_date ASC
+    """)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify({"data": rows})
+
+@app.route("/api/admin/dashboard/expiring-soon", methods=["GET"])
+@login_required("owner")
+def admin_dashboard_expiring_soon():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    today = now_ist().strftime("%Y-%m-%d")
+    next_week = (now_ist() + timedelta(days=7)).strftime("%Y-%m-%d")
+    cursor.execute("""
+        SELECT m.id as member_id, m.first_name, m.last_name, ms.end_date, pl.name as plan_name,
+               (SELECT p.amount FROM payments p WHERE p.member_id = m.id AND p.status IN ('pending', 'overdue') ORDER BY p.due_date ASC LIMIT 1) as amount_due
+        FROM memberships ms
+        JOIN members m ON ms.member_id = m.id
+        LEFT JOIN plans pl ON ms.plan_id = pl.id
+        WHERE ms.status = 'active' AND ms.end_date >= ? AND ms.end_date <= ?
+        ORDER BY ms.end_date ASC
+    """, (today, next_week))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify({"data": rows})
 
 # ================= PENDING APPROVALS WORKFLOW ENDPOINTS =================
 
@@ -527,9 +623,11 @@ def admin_get_members():
     """
     
     query = """
-        SELECT m.*, u.email, 
+        SELECT m.*, u.email,
                mb.id as membership_id, mb.end_date, mb.status as membership_status,
-               p.name as plan_name
+               p.name as plan_name,
+               (SELECT MAX(check_in_time) FROM attendance WHERE member_id = m.id AND status = 'success') as last_checkin,
+               (SELECT COUNT(*) FROM payments WHERE member_id = m.id AND status IN ('pending', 'overdue')) as pending_payment_count
         FROM members m
         JOIN users u ON m.user_id = u.id
         LEFT JOIN memberships mb ON m.id = mb.member_id AND mb.status = 'active'
@@ -577,7 +675,7 @@ def admin_get_members():
     rows = cursor.fetchall()
     
     members_list = []
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_ist().strftime("%Y-%m-%d")
     
     for row in rows:
         m_dict = dict(row)
@@ -714,13 +812,16 @@ def admin_update_member(id):
     phone = data.get("phone")
     emergency = data.get("emergency_contact")
     status = data.get("status")
-    
+    email = data.get("email")
+    password = data.get("password")
+    fee_pending = data.get("fee_pending")  # true/false/None (None = leave unchanged)
+
     if not all([first_name, phone, status]):
         return jsonify({"error": "Missing required edit fields"}), 400
-        
+
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         # Check current status
         cursor.execute("SELECT status, user_id FROM members WHERE id = ?", (id,))
@@ -728,13 +829,31 @@ def admin_update_member(id):
         if not old_m:
             conn.close()
             return jsonify({"error": "Member not found"}), 404
-            
+
         cursor.execute("""
-            UPDATE members 
+            UPDATE members
             SET first_name = ?, last_name = ?, phone = ?, emergency_contact = ?, status = ?
             WHERE id = ?
         """, (first_name, last_name, phone, emergency, status, id))
-        
+
+        if email:
+            cursor.execute("UPDATE users SET email = ? WHERE id = ?", (email, old_m["user_id"]))
+        if password:
+            pw_hash = database.hash_password(password)
+            cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, old_m["user_id"]))
+
+        if fee_pending is not None:
+            cursor.execute("SELECT id FROM payments WHERE member_id = ? ORDER BY created_at DESC LIMIT 1", (id,))
+            latest_pay = cursor.fetchone()
+            if latest_pay:
+                if fee_pending:
+                    cursor.execute("UPDATE payments SET status = 'pending' WHERE id = ?", (latest_pay["id"],))
+                else:
+                    cursor.execute(
+                        "UPDATE payments SET status = 'paid', payment_date = ? WHERE id = ?",
+                        (now_ist().strftime("%Y-%m-%d %H:%M:%S"), latest_pay["id"])
+                    )
+
         # If status changed to suspended, also toggle memberships to suspended
         if status == "suspended":
             cursor.execute("UPDATE memberships SET status = 'suspended' WHERE member_id = ?", (id,))
@@ -742,15 +861,21 @@ def admin_update_member(id):
             cursor.execute("INSERT INTO notifications (user_id, type, message) VALUES (?, 'expiry', 'Your membership has been suspended by the Gym Owner.')", (old_m["user_id"],))
         elif status == "active":
             # If status unsuspended, reactivate active end-dated memberships
-            today = datetime.now().strftime("%Y-%m-%d")
+            today = now_ist().strftime("%Y-%m-%d")
             cursor.execute("UPDATE memberships SET status = 'active' WHERE member_id = ? AND end_date >= ?", (id, today))
-            
+
         conn.commit()
-        
+
         broadcast_event("MEMBER_UPDATED", {"id": id, "name": f"{first_name} {last_name}", "status": status})
-        
+
         return jsonify({"success": True})
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        if "email" in str(e).lower():
+            return jsonify({"error": "Email address already in use"}), 400
+        return jsonify({"error": f"Update failed: {e}"}), 400
     except Exception as e:
+        conn.rollback()
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
@@ -782,7 +907,7 @@ def admin_delete_member(id):
 def admin_assign_plan(id):
     data = request.get_json() or {}
     plan_id = data.get("plan_id")
-    start_date_str = data.get("start_date") or datetime.now().strftime("%Y-%m-%d")
+    start_date_str = data.get("start_date") or now_ist().strftime("%Y-%m-%d")
     record_payment = data.get("record_payment", True)
     
     if not plan_id:
@@ -831,9 +956,9 @@ def admin_assign_plan(id):
         
         # Record payment
         pay_status = "paid" if record_payment else "pending"
-        pay_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if record_payment else None
+        pay_date = now_ist().strftime("%Y-%m-%d %H:%M:%S") if record_payment else None
         due_date = start_date_str if not record_payment else None
-        receipt = f"RC-{int(datetime.now().timestamp())}-{id}"
+        receipt = f"RC-{int(now_ist().timestamp())}-{id}"
         
         cursor.execute("""
             INSERT INTO payments (membership_id, member_id, amount, status, payment_date, due_date, receipt_number)
@@ -937,6 +1062,7 @@ def admin_delete_plan(id):
 @login_required("owner")
 def admin_get_attendance():
     date_filter = request.args.get("date", "").strip()
+    month_filter = request.args.get("month", "").strip()  # "YYYY-MM"
     search = request.args.get("search", "").strip()
     page = request.args.get("page", 1, type=int)
     limit_param = request.args.get("limit", "25").strip()
@@ -979,7 +1105,11 @@ def admin_get_attendance():
     if date_filter:
         filter_sql += " AND date(a.check_in_time) = ?"
         params.append(date_filter)
-        
+
+    if month_filter:
+        filter_sql += " AND strftime('%Y-%m', a.check_in_time) = ?"
+        params.append(month_filter)
+
     if search:
         filter_sql += " AND (m.first_name LIKE ? OR m.last_name LIKE ? OR m.phone LIKE ?)"
         match = f"%{search}%"
@@ -1019,12 +1149,37 @@ def admin_get_attendance():
         "limit": limit
     })
 
+@app.route("/api/admin/attendance/calendar-summary", methods=["GET"])
+@login_required("owner")
+def admin_attendance_calendar_summary():
+    year = request.args.get("year", "").strip()
+    month = request.args.get("month", "").strip()
+    if not year or not month:
+        return jsonify({"error": "year and month are required"}), 400
+
+    year_month = f"{year}-{month.zfill(2)}"
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT strftime('%d', check_in_time) as day, COUNT(*) as cnt
+        FROM attendance
+        WHERE status = 'success' AND strftime('%Y-%m', check_in_time) = ?
+        GROUP BY day
+    """, (year_month,))
+    counts = {row["day"]: row["cnt"] for row in cursor.fetchall()}
+    conn.close()
+
+    return jsonify({"counts": counts})
+
 # ================= BILLING & PAYMENTS =================
 
 @app.route("/api/admin/payments", methods=["GET"])
 @login_required("owner")
 def admin_get_payments():
     status_filter = request.args.get("status", "").strip()
+    year_filter = request.args.get("year", "").strip()
+    month_filter = request.args.get("month", "").strip()  # "01".."12"
     search = request.args.get("search", "").strip()
     page = request.args.get("page", 1, type=int)
     limit_param = request.args.get("limit", "25").strip()
@@ -1072,7 +1227,14 @@ def admin_get_payments():
     if status_filter:
         filter_sql += " AND p.status = ?"
         params.append(status_filter)
-        
+
+    if year_filter and month_filter:
+        filter_sql += " AND strftime('%Y-%m', p.payment_date) = ?"
+        params.append(f"{year_filter}-{month_filter.zfill(2)}")
+    elif year_filter:
+        filter_sql += " AND strftime('%Y', p.payment_date) = ?"
+        params.append(year_filter)
+
     if search:
         filter_sql += " AND (m.first_name LIKE ? OR m.last_name LIKE ? OR m.phone LIKE ? OR p.receipt_number LIKE ?)"
         match = f"%{search}%"
@@ -1130,7 +1292,7 @@ def admin_record_payment():
         conn.close()
         return jsonify({"error": "Payment ledger not found"}), 404
         
-    pay_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pay_time = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     
     try:
         # Mark payment as paid
@@ -1192,7 +1354,7 @@ def admin_payment_reminder(id):
     name = f"{pay['first_name']} {pay['last_name']}"
     phone = pay["phone"]
     amount = pay["amount"]
-    due = pay["due_date"] or datetime.now().strftime("%Y-%m-%d")
+    due = pay["due_date"] or now_ist().strftime("%Y-%m-%d")
     plan = pay["plan_name"] or "Gym Membership"
     
     # Generate WhatsApp Prefilled web link
@@ -1227,11 +1389,12 @@ def admin_settings():
         gym_phone = data.get("gym_phone")
         gym_address = data.get("gym_address")
         qr_token = data.get("qr_token")
-        
+        gym_image_url = data.get("gym_image_url")
+
         if not gym_name:
             conn.close()
             return jsonify({"error": "Gym name cannot be empty"}), 400
-            
+
         cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('gym_name', ?)", (gym_name,))
         if gym_phone:
             cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('gym_phone', ?)", (gym_phone,))
@@ -1239,6 +1402,8 @@ def admin_settings():
             cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('gym_address', ?)", (gym_address,))
         if qr_token:
             cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('qr_token', ?)", (qr_token,))
+        if gym_image_url is not None:
+            cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('gym_image_url', ?)", (gym_image_url,))
             
         # Update gyms table
         cursor.execute("UPDATE gyms SET name = ?, phone = ?, address = ?, qr_code_token = ? WHERE id = 1", (gym_name, gym_phone, gym_address, qr_token))
@@ -1291,8 +1456,8 @@ def admin_manual_check_in(id):
         conn.close()
         return jsonify({"error": "Member not found"}), 404
         
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    now_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    today_str = now_ist().strftime("%Y-%m-%d")
+    now_time_str = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     
     # Check if already checked in today
     cursor.execute("""
@@ -1347,8 +1512,8 @@ def admin_manual_check_out(id):
         conn.close()
         return jsonify({"error": "Member not found"}), 404
         
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    now_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    today_str = now_ist().strftime("%Y-%m-%d")
+    now_time_str = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     
     # Find active check-in
     cursor.execute("""
@@ -1479,8 +1644,8 @@ def member_purchase_plan():
         conn.close()
         return jsonify({"error": "Member record missing"}), 404
         
-    start_date_str = datetime.now().strftime("%Y-%m-%d")
-    end_date = datetime.now() + timedelta(days=plan["duration_months"] * 30)
+    start_date_str = now_ist().strftime("%Y-%m-%d")
+    end_date = now_ist() + timedelta(days=plan["duration_months"] * 30)
     end_date_str = end_date.strftime("%Y-%m-%d")
     
     try:
@@ -1528,7 +1693,7 @@ def admin_approve_payment(id):
         conn.close()
         return jsonify({"error": "Payment not found"}), 404
         
-    pay_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pay_time = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     
     try:
         # Update payment status
@@ -1655,7 +1820,7 @@ def member_dashboard():
     
     membership_details = None
     days_remaining = 0
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = now_ist().strftime("%Y-%m-%d")
     
     if row:
         membership_details = dict(row)
@@ -1785,9 +1950,12 @@ def member_dashboard():
     """, (m_id,))
     m_rnk_row = cursor.fetchone()
     monthly_rank = m_rnk_row[0] if m_rnk_row else 0
-    
+
+    cursor.execute("SELECT value FROM settings WHERE key = 'gym_image_url'")
+    gym_image_row = cursor.fetchone()
+
     conn.close()
-    
+
     return jsonify({
         "first_name": mb["first_name"],
         "last_name": mb["last_name"],
@@ -1805,7 +1973,8 @@ def member_dashboard():
         "monthly_rank": monthly_rank,
         "attendance_history": attendance_history,
         "notifications": notifs,
-        "billing_history": billing_history
+        "billing_history": billing_history,
+        "gym_image_url": gym_image_row["value"] if gym_image_row else None
     })
 
 @app.route("/api/member/activity", methods=["GET"])
@@ -1866,7 +2035,7 @@ def member_activity_data():
         """, (m_id,))
         checkin_dates = [datetime.strptime(row[0], "%Y-%m-%d").date() for row in cursor.fetchall()]
         
-        today = datetime.now().date()
+        today = now_ist().date()
         yesterday = today - timedelta(days=1)
         
         streak = 0
@@ -1981,7 +2150,7 @@ def member_activity_data():
         points = len(logs) * 100
         
         # 7. Today status
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        today_str = now_ist().strftime("%Y-%m-%d")
         cursor.execute("""
             SELECT check_in_time, check_out_time FROM attendance 
             WHERE member_id = ? AND status = 'success' AND date(check_in_time) = ?
@@ -2240,7 +2409,7 @@ def member_check_in():
         return jsonify({"error": "Check-in failed. Member registration was rejected."}), 403
         
     # Edge case: expired profile
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = now_ist().strftime("%Y-%m-%d")
     cursor.execute("""
         SELECT * FROM memberships 
         WHERE member_id = ? AND status = 'active' AND end_date >= ?
@@ -2257,28 +2426,17 @@ def member_check_in():
         conn.close()
         return jsonify({"error": "Check-in failed. Membership has expired."}), 403
         
-    # Exactly one successful attendance record is permitted per member each day.
+    # Members can check in/out multiple times per day (e.g. a morning and an
+    # evening session) — only an *open* session (no check-out yet) blocks a
+    # fresh check-in and instead asks whether to check out.
     cursor.execute("""
         SELECT id, check_in_time, check_out_time, attendance_state FROM attendance
-        WHERE member_id = ? AND status = 'success' AND date(check_in_time) = ?
+        WHERE member_id = ? AND status = 'success' AND date(check_in_time) = ? AND check_out_time IS NULL
         ORDER BY check_in_time DESC LIMIT 1
     """, (m_id, today_str))
     latest_att = cursor.fetchone()
-    
-    now_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    if latest_att and latest_att["check_out_time"] is not None:
-        completed_in = datetime.strptime(latest_att["check_in_time"], "%Y-%m-%d %H:%M:%S")
-        completed_out = datetime.strptime(latest_att["check_out_time"], "%Y-%m-%d %H:%M:%S")
-        completed_minutes = int((completed_out - completed_in).total_seconds() / 60)
-        completed_duration = f"{completed_minutes // 60}h {completed_minutes % 60}m" if completed_minutes >= 60 else f"{completed_minutes}m"
-        conn.close()
-        return jsonify({
-            "completed_today": True,
-            "check_in_time": latest_att["check_in_time"],
-            "check_out_time": latest_att["check_out_time"],
-            "duration": completed_duration,
-            "message": "You've already completed today's attendance."
-        }), 409
+
+    now_time_str = now_ist().strftime("%Y-%m-%d %H:%M:%S")
 
     if latest_att and action != "checkout":
         conn.close()

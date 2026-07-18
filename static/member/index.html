@@ -80,10 +80,41 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.4)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                             </span>
                         </div>
+                        <div style="text-align: right; margin-top: -6px;">
+                            <span id="forgotPasswordLink" style="font-size: 12.5px; font-weight: 700; color: var(--accent); cursor: pointer;" onclick="showForgotPasswordView()">Forgot Password?</span>
+                        </div>
                         <button type="submit" class="auth-capsule-btn primary-btn" style="margin-top: 10px;">Login</button>
                     </form>
 
                     <button class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showRegisterView()">New to NGYM? Sign In</button>
+                </div>
+
+                <!-- 2b. FORGOT PASSWORD SCREEN -->
+                <div id="authForgotPasswordView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: #000; padding: 24px 20px 40px; justify-content: flex-end; z-index: 5;">
+                    <div style="margin-bottom: 20px;">
+                        <h1 style="font-size: 26px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin: 0;">Reset Password</h1>
+                        <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 6px; margin-bottom: 0;">Enter your account email and registered phone number to set a new password.</p>
+                    </div>
+
+                    <div id="authForgotPasswordError" class="auth-error-banner" style="display: none;"></div>
+
+                    <form id="authForgotPasswordForm" onsubmit="event.preventDefault(); submitMemberForgotPassword();" style="display: flex; flex-direction: column; gap: 14px;">
+                        <div class="input-block">
+                            <label class="input-lbl">Account Email</label>
+                            <input type="email" id="fpMemberEmail" class="custom-input" placeholder="Enter your Email ID" required>
+                        </div>
+                        <div class="input-block">
+                            <label class="input-lbl">Registered Phone Number</label>
+                            <input type="tel" id="fpMemberPhone" class="custom-input" placeholder="Enter your phone number" required>
+                        </div>
+                        <div class="input-block">
+                            <label class="input-lbl">New Password</label>
+                            <input type="password" id="fpMemberNewPassword" class="custom-input" placeholder="minimum 8 characters" minlength="8" required>
+                        </div>
+                        <button type="submit" class="auth-capsule-btn primary-btn" style="margin-top: 10px;">Reset Password</button>
+                    </form>
+
+                    <button class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showLoginView()">Back to Sign In</button>
                 </div>
 
                 <!-- 3. REGISTER SCREEN -->
@@ -386,6 +417,9 @@
                             <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin: 4px 0 0 0; letter-spacing: -0.02em;">Ready for your fitness routine today?</h2>
                         </div>
 
+                        <!-- Gym Photo Banner -->
+                        <img id="homeGymImage" src="" alt="Gym photo" style="display: none; width: 100%; height: 140px; object-fit: cover; border-radius: 16px;">
+
                         <!-- PWA INSTALL BANNER -->
                         <div id="pwaInstallBanner" style="display: none; background: #1c1c1e; border: 1.5px solid var(--accent); border-radius: 16px; padding: 14px 16px; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
                             <div style="display: flex; align-items: center; gap: 12px;">
@@ -410,7 +444,7 @@
                             <!-- Streak Card -->
                             <div style="background-color: #1c1c1e; border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
                                 <div>
-                                    <h4 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0;"><span id="homeStreakDaysText">0</span> Day</h4>
+                                    <h4 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0;"><span id="homeStreakDaysText">0</span> <span id="homeStreakDaysLabel">Days</span></h4>
                                     <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); margin: 4px 0 0 0;">Check-in consecutively to grow your streak!</p>
                                 </div>
 

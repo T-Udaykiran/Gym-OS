@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gymos-cache-v15';
+const CACHE_NAME = 'gymos-cache-v16';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -10,6 +10,7 @@ const ASSETS_TO_CACHE = [
   '/admin/style.css',
   '/admin/app.js',
   '/vendor/jsQR.js',
+  '/vendor/qrcode.min.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png'
 ];

@@ -368,7 +368,19 @@ async function fetchDashboardData() {
             document.getElementById('homeMemberFirstName').innerText = data.first_name;
         }
         if (document.getElementById('homeStreakDaysText')) {
-            document.getElementById('homeStreakDaysText').innerText = `${data.streak} Day`;
+            document.getElementById('homeStreakDaysText').innerText = data.streak;
+        }
+        if (document.getElementById('homeStreakDaysLabel')) {
+            document.getElementById('homeStreakDaysLabel').innerText = data.streak === 1 ? 'Day' : 'Days';
+        }
+        const gymImageEl = document.getElementById('homeGymImage');
+        if (gymImageEl) {
+            if (data.gym_image_url) {
+                gymImageEl.src = data.gym_image_url;
+                gymImageEl.style.display = 'block';
+            } else {
+                gymImageEl.style.display = 'none';
+            }
         }
 
         // Attendance stats
@@ -846,6 +858,9 @@ async function submitCheckinCode(token, action = 'scan') {
     if (!navigator.onLine) {
         showMobileToast('You are offline. Connect to the internet and scan again.', 'error');
         scanInProgress = false;
+        if (document.getElementById('scannerViewfinder').style.display !== 'none') {
+            startCameraScanner();
+        }
         return;
     }
 
@@ -917,9 +932,15 @@ async function submitCheckinCode(token, action = 'scan') {
             fetchDashboardData();
         } else {
             showMobileToast(data.error || 'Invalid code scanned', 'error');
+            if (document.getElementById('scannerViewfinder').style.display !== 'none') {
+                startCameraScanner();
+            }
         }
     } catch (err) {
         showMobileToast('Scanner request failed. Please try again.', 'error');
+        if (document.getElementById('scannerViewfinder').style.display !== 'none') {
+            startCameraScanner();
+        }
     } finally {
         scanInProgress = false;
     }
@@ -1057,6 +1078,43 @@ function showRegisterView() {
     document.getElementById('authRegisterView').style.display = 'flex';
 }
 
+function showForgotPasswordView() {
+    hideAllAuthViews();
+    document.getElementById('authForgotPasswordForm').reset();
+    document.getElementById('authForgotPasswordError').style.display = 'none';
+    document.getElementById('authForgotPasswordView').style.display = 'flex';
+}
+
+async function submitMemberForgotPassword() {
+    const errorBox = document.getElementById('authForgotPasswordError');
+    errorBox.style.display = 'none';
+
+    const email = document.getElementById('fpMemberEmail').value.trim();
+    const phone = document.getElementById('fpMemberPhone').value.trim();
+    const new_password = document.getElementById('fpMemberNewPassword').value;
+
+    try {
+        const res = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, phone, new_password })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            showLoginView();
+            document.getElementById('authEmailInput').value = email;
+            showMobileToast('Password reset. Please sign in with your new password.', 'success');
+        } else {
+            errorBox.innerText = data.error || 'Password reset failed';
+            errorBox.style.display = 'block';
+        }
+    } catch (err) {
+        errorBox.innerText = 'Network error. Please try again.';
+        errorBox.style.display = 'block';
+    }
+}
+
 function showVerifyView() {
     hideAllAuthViews();
     document.getElementById('authVerifyView').style.display = 'flex';
@@ -1088,7 +1146,7 @@ function showPersonalizeView() {
 }
 
 function hideAllAuthViews() {
-    const views = ['authSplashScreen', 'authLoginView', 'authRegisterView', 'authVerifyView', 'authPendingOTPView', 'authPendingView', 'authPersonalizeView'];
+    const views = ['authSplashScreen', 'authLoginView', 'authRegisterView', 'authForgotPasswordView', 'authVerifyView', 'authPendingOTPView', 'authPendingView', 'authPersonalizeView'];
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -1796,6 +1854,13 @@ async function fetchActivityData() {
         }
 
         const data = await res.json();
+        if (!res.ok || !data || !Array.isArray(data.logs)) {
+            // Backend/offline error payload (e.g. {error: "..."}) — keep whatever
+            // was already on screen instead of wiping it, and surface the failure.
+            showMobileToast((data && data.error) || 'Failed to load activity logs.', 'error');
+            return;
+        }
+
         activityDataGlobal = data;
         populateActivityDashboard(data);
         if (currentMobileTab === 'leaders') {
@@ -1854,7 +1919,7 @@ function renderActivityDashboardCalendar() {
     const prevLastDay = new Date(year, month, 0).getDate();
 
     const logDatesMap = {};
-    const logs = activityDataGlobal.logs || [];
+    const logs = (activityDataGlobal && activityDataGlobal.logs) || [];
     logs.forEach(log => {
         if (log.attendance_date) {
             logDatesMap[log.attendance_date] = log;
@@ -1996,7 +2061,7 @@ function populateActivityDashboard(data) {
     const emptyState = document.getElementById('activityEmptyState');
     const content = document.getElementById('activityDashboardContent');
     if (emptyState && content) {
-        if (data.logs.length === 0) {
+        if (!data.logs || data.logs.length === 0) {
             emptyState.style.display = 'flex';
             content.style.display = 'none';
         } else {
@@ -2531,7 +2596,7 @@ function renderCalendarSubScreen() {
     const prevLastDay = new Date(year, month, 0).getDate();
     
     const logDatesMap = {};
-    const logs = activityDataGlobal.logs || [];
+    const logs = (activityDataGlobal && activityDataGlobal.logs) || [];
     logs.forEach(log => {
         if (log.attendance_date) {
             logDatesMap[log.attendance_date] = log;
