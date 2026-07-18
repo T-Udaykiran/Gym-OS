@@ -428,6 +428,40 @@
     margin-bottom: 12px;
 }
 
+/* Cards that navigate to a dedicated page get a small arrow affordance
+   in the bottom-right corner, decorative only — the whole card is clickable. */
+.kpi-card-nav {
+    padding-bottom: 40px;
+}
+
+.kpi-nav-btn {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-raised);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.kpi-nav-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+.kpi-card-nav:hover .kpi-nav-btn {
+    background-color: var(--accent);
+    color: var(--sidebar-dark);
+    border-color: var(--accent);
+}
+
 /* KPI Circle Avatar colors */
 .kpi-badge-icon {
     width: 38px;

@@ -116,37 +116,126 @@ function closeModal(modalId) {
 }
 
 // Dashboard KPI drill-down (Pending Dues / Expiring Soon)
-async function openDashboardListModal(type) {
-    const isPending = type === 'pending';
-    document.getElementById('dashboardListModalTitle').innerText = isPending ? 'Pending Dues' : 'Expiring Soon';
-    const body = document.getElementById('dashboardListModalBody');
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">Loading…</td></tr>';
-    openModal('dashboardListModal');
+async function fetchPendingDuesPage() {
+    const body = document.getElementById('pendingDuesTableBody');
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">Loading…</td></tr>';
 
     try {
-        const res = await fetch(isPending ? '/api/admin/dashboard/pending-dues' : '/api/admin/dashboard/expiring-soon');
+        const res = await fetch('/api/admin/dashboard/pending-dues');
         const data = await res.json();
         const rows = data.data || [];
 
+        let total = 0;
+        rows.forEach(r => total += (r.amount || 0));
+        document.getElementById('pendingDuesTotalInfo').innerText = `Total: ${formatINRCurrency(total)} (${rows.length} member${rows.length === 1 ? '' : 's'})`;
+
         if (rows.length === 0) {
-            body.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">${isPending ? 'No pending dues!' : 'No memberships expiring soon.'}</td></tr>`;
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">No pending dues!</td></tr>';
             return;
         }
 
         body.innerHTML = rows.map(r => {
-            const dueDate = isPending ? r.due_date : r.end_date;
-            const amount = r.amount != null ? formatINRCurrency(r.amount) : (r.amount_due != null ? formatINRCurrency(r.amount_due) : '—');
+            const badge = r.status === 'overdue' ? 'badge-suspended' : 'badge-expired';
             return `
                 <tr>
                     <td style="font-weight:600;">${r.first_name} ${r.last_name}</td>
-                    <td>${dueDate || '—'}</td>
-                    <td style="font-weight:700;">${amount}</td>
+                    <td>${r.due_date || '—'}</td>
+                    <td style="font-weight:700;">${formatINRCurrency(r.amount)}</td>
                     <td>${r.plan_name || 'No Plan'}</td>
+                    <td><span class="badge ${badge}">${r.status}</span></td>
+                    <td style="text-align:right;"><button class="btn-comms-circle btn-comms-whatsapp" style="display:inline-flex;" onclick="triggerWhatsAppModal(${r.id})" title="Send WhatsApp reminder"><svg fill="currentColor" viewBox="0 0 24 24" width="14" height="14"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.503-5.722-1.465L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.965C16.59 1.977 14.113.953 11.5.953c-5.44 0-9.866 4.372-9.87 9.802 0 1.814.49 3.518 1.42 5.061l-.995 3.633 3.738-.971z"/></svg></button></td>
                 </tr>
             `;
         }).join('');
     } catch (err) {
-        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--danger);">Failed to load list.</td></tr>';
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--danger);">Failed to load pending dues.</td></tr>';
+    }
+}
+
+async function downloadPendingDuesCSV() {
+    try {
+        const res = await fetch('/api/admin/dashboard/pending-dues');
+        const data = await res.json();
+        const rows = data.data || [];
+
+        if (rows.length === 0) {
+            alert('No pending dues to export.');
+            return;
+        }
+
+        let csvContent = "data:text/csv;charset=utf-8,Member Name,Due Date,Amount Due,Plan,Status\n";
+        rows.forEach(r => {
+            csvContent += `"${r.first_name} ${r.last_name}","${r.due_date || ''}","${r.amount}","${r.plan_name || 'No Plan'}","${r.status}"\n`;
+        });
+
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", "pending-dues.csv");
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (err) {
+        showToast('Failed to download pending dues', 'error');
+    }
+}
+
+async function fetchExpiringSoonPage() {
+    const body = document.getElementById('expiringSoonTableBody');
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">Loading…</td></tr>';
+
+    try {
+        const res = await fetch('/api/admin/dashboard/expiring-soon');
+        const data = await res.json();
+        const rows = data.data || [];
+
+        document.getElementById('expiringSoonTotalInfo').innerText = `Total: ${rows.length} member${rows.length === 1 ? '' : 's'}`;
+
+        if (rows.length === 0) {
+            body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">No memberships expiring soon.</td></tr>';
+            return;
+        }
+
+        body.innerHTML = rows.map(r => {
+            const amount = r.amount_due != null ? formatINRCurrency(r.amount_due) : '—';
+            return `
+                <tr>
+                    <td style="font-weight:600;">${r.first_name} ${r.last_name}</td>
+                    <td>${r.end_date || '—'}</td>
+                    <td style="font-weight:700;">${amount}</td>
+                    <td>${r.plan_name || 'No Plan'}</td>
+                    <td style="text-align:right;">${r.payment_id ? `<button class="btn-send-whatsapp-remind" onclick="triggerWhatsAppModal(${r.payment_id})">Alert</button>` : '—'}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--danger);">Failed to load expiring memberships.</td></tr>';
+    }
+}
+
+async function downloadExpiringSoonCSV() {
+    try {
+        const res = await fetch('/api/admin/dashboard/expiring-soon');
+        const data = await res.json();
+        const rows = data.data || [];
+
+        if (rows.length === 0) {
+            alert('No memberships expiring soon to export.');
+            return;
+        }
+
+        let csvContent = "data:text/csv;charset=utf-8,Member Name,Due Date,Amount Due,Plan\n";
+        rows.forEach(r => {
+            csvContent += `"${r.first_name} ${r.last_name}","${r.end_date || ''}","${r.amount_due != null ? r.amount_due : ''}","${r.plan_name || 'No Plan'}"\n`;
+        });
+
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", "expiring-soon.csv");
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (err) {
+        showToast('Failed to download expiring soon list', 'error');
     }
 }
 
@@ -378,6 +467,8 @@ function showTab(tabName) {
     if (tabName === 'reports') populateReportsTab();
     if (tabName === 'reminders') populateRemindersTab();
     if (tabName === 'pending-approvals') fetchPendingApprovals();
+    if (tabName === 'pending-dues') fetchPendingDuesPage();
+    if (tabName === 'expiring-soon') fetchExpiringSoonPage();
     if (tabName === 'notifications' && typeof filterNotificationHistory === 'function') filterNotificationHistory();
 }
 

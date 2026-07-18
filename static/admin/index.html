@@ -184,6 +184,20 @@
                             <span id="paymentsBadge" class="badge-pending-approval" style="display: none; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; background-color: var(--danger-light); color: var(--danger-dark);">0</span>
                         </span>
                     </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="pending-dues" data-tooltip="Pending Dues">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.7-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+                        </svg>
+                        <span class="nav-text">Pending Dues</span>
+                    </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="expiring-soon" data-tooltip="Expiring Soon">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span class="nav-text">Expiring Soon</span>
+                    </a></li>
                 <li class="nav-item" style="position: relative;"><a class="nav-link" data-tab="pending-approvals" data-tooltip="Pending Approvals">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -394,7 +408,7 @@
                     </div>
 
                     <!-- Pending Payments -->
-                    <div class="kpi-card" style="cursor: pointer;" onclick="openDashboardListModal('pending')">
+                    <div class="kpi-card kpi-card-nav" style="cursor: pointer;" onclick="showTab('pending-dues')">
                         <div class="kpi-h-row">
                             <span class="kpi-label">Pending Dues</span>
                             <div class="kpi-badge-icon kpi-avatar-pink">
@@ -405,10 +419,13 @@
                         <span class="kpi-trend-growth growth-negative">
                             <span id="statPendingAmountVal">₹18,600 total</span>
                         </span>
+                        <button class="kpi-nav-btn" type="button" title="View Pending Dues" aria-label="View Pending Dues">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
                     </div>
 
                     <!-- Expiring Soon -->
-                    <div class="kpi-card" style="cursor: pointer;" onclick="openDashboardListModal('expiring')">
+                    <div class="kpi-card kpi-card-nav" style="cursor: pointer;" onclick="showTab('expiring-soon')">
                         <div class="kpi-h-row">
                             <span class="kpi-label">Expiring Soon</span>
                             <div class="kpi-badge-icon kpi-avatar-yellow">
@@ -423,10 +440,13 @@
                         <span class="kpi-trend-growth growth-neutral" style="color: var(--warning);">
                             <span>Next 7 days</span>
                         </span>
+                        <button class="kpi-nav-btn" type="button" title="View Expiring Soon" aria-label="View Expiring Soon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
                     </div>
 
                     <!-- Pending Approvals -->
-                    <div class="kpi-card" style="cursor: pointer;" onclick="showTab('pending-approvals')">
+                    <div class="kpi-card kpi-card-nav" style="cursor: pointer;" onclick="showTab('pending-approvals')">
                         <div class="kpi-h-row">
                             <span class="kpi-label">Pending Approvals</span>
                             <div class="kpi-badge-icon" style="background-color: var(--danger-light); color: var(--danger-dark);">
@@ -439,6 +459,9 @@
                         <span class="kpi-trend-growth" style="color: var(--danger-dark); display: inline-flex; align-items: center; gap: 4px;">
                             <span id="statPendingApprovalsSub">0 Members Waiting</span>
                         </span>
+                        <button class="kpi-nav-btn" type="button" title="View Pending Approvals" aria-label="View Pending Approvals">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
                     </div>
                 </div>
 
@@ -888,6 +911,71 @@
                     <div class="premium-table-footer">
                         <div class="pagination-info" id="paymentPaginationInfo">Showing 0 to 0 of 0 entries</div>
                         <div class="pagination-controls" id="paymentPaginationControls"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= TAB: PENDING DUES ================= -->
+            <section id="pending-duesTab" class="tab-content">
+                <div class="premium-table-card">
+                    <div class="premium-table-header">
+                        <div class="premium-table-header-left">
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 800;">Pending Dues</h3>
+                            <span class="panel-subtitle" style="margin-left: 10px;">Members with pending or overdue payments</span>
+                        </div>
+                        <div class="premium-table-header-right">
+                            <button class="btn btn-secondary" onclick="downloadPendingDuesCSV()" style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
+                        </div>
+                    </div>
+                    <div class="premium-table-container">
+                        <table class="premium-table" id="pendingDuesTable">
+                            <thead>
+                                <tr>
+                                    <th>Member Name</th>
+                                    <th>Due Date</th>
+                                    <th>Amount Due</th>
+                                    <th>Plan</th>
+                                    <th>Status</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pendingDuesTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="premium-table-footer">
+                        <div class="pagination-info" id="pendingDuesTotalInfo">Total: ₹0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= TAB: EXPIRING SOON ================= -->
+            <section id="expiring-soonTab" class="tab-content">
+                <div class="premium-table-card">
+                    <div class="premium-table-header">
+                        <div class="premium-table-header-left">
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 800;">Expiring Soon</h3>
+                            <span class="panel-subtitle" style="margin-left: 10px;">Memberships expiring in the next 7 days</span>
+                        </div>
+                        <div class="premium-table-header-right">
+                            <button class="btn btn-secondary" onclick="downloadExpiringSoonCSV()" style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
+                        </div>
+                    </div>
+                    <div class="premium-table-container">
+                        <table class="premium-table" id="expiringSoonTable">
+                            <thead>
+                                <tr>
+                                    <th>Member Name</th>
+                                    <th>Due Date</th>
+                                    <th>Amount Due</th>
+                                    <th>Plan</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expiringSoonTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="premium-table-footer">
+                        <div class="pagination-info" id="expiringSoonTotalInfo">Total: 0 members</div>
                     </div>
                 </div>
             </section>
@@ -1346,35 +1434,6 @@
                 <button class="btn btn-secondary" onclick="closeModal('whatsappModal')">Cancel</button>
                 <a id="whatsappTriggerLink" href="#" target="_blank" class="btn btn-primary"
                     style="background-color:#22c55e;" onclick="closeModal('whatsappModal')">Open WhatsApp</a>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: DASHBOARD DRILL-DOWN LIST (Pending Dues / Expiring Soon) -->
-    <div id="dashboardListModal" class="modal-overlay">
-        <div class="modal-container" style="max-width: 560px;">
-            <div class="modal-header">
-                <h3 id="dashboardListModalTitle" style="font-weight:700;">Pending Dues</h3>
-                <button class="modal-close" onclick="closeModal('dashboardListModal')">
-                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-            <div class="custom-premium-table-wrap">
-                <table class="premium-payment-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Due Date</th>
-                            <th>Amount Due</th>
-                            <th>Plan</th>
-                        </tr>
-                    </thead>
-                    <tbody id="dashboardListModalBody">
-                        <!-- Populated dynamically -->
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>
