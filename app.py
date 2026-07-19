@@ -25,18 +25,21 @@ IST_OFFSET = timedelta(hours=5, minutes=30)
 def now_ist():
     return datetime.utcnow() + IST_OFFSET
 
-# Global list of active SSE event queues
-SSE_LISTENERS = []
+# Active SSE event queues, each tagged with the gym they belong to so a
+# check-in at one gym never reaches another gym's dashboard.
+SSE_LISTENERS = []  # list of (gym_id, queue.Queue)
 
 
-def broadcast_event(event_type, payload):
+def broadcast_event(event_type, payload, gym_id):
     event_data = {
         "type": event_type,
         "payload": payload,
         "timestamp": now_ist().isoformat()
     }
     # Create copy of list to prevent modification during iteration
-    for q in list(SSE_LISTENERS):
+    for listener_gym_id, q in list(SSE_LISTENERS):
+        if listener_gym_id != gym_id:
+            continue
         try:
             q.put(event_data)
         except Exception:
@@ -66,8 +69,8 @@ def log_action(cursor, action, entity_type=None, entity_id=None, details=None):
     later deleted - that's the whole point of an audit trail.
     """
     cursor.execute(
-        "INSERT INTO audit_log (actor_user_id, actor_email, actor_role, action, entity_type, entity_id, details) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO audit_log (actor_user_id, actor_email, actor_role, action, entity_type, entity_id, details, gym_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             session.get("user_id"),
             session.get("email"),
@@ -76,11 +79,28 @@ def log_action(cursor, action, entity_type=None, entity_id=None, details=None):
             entity_type,
             entity_id,
             json.dumps(details) if details is not None else None,
+            session.get("gym_id"),
         ),
     )
 
+def is_subscription_active(gym_id):
+    """Whether a tenant's (manually-managed) company subscription is current."""
+    if not gym_id:
+        return False
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT subscription_status, subscription_end_date FROM gyms WHERE id = ?", (gym_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row or row["subscription_status"] != "active":
+        return False
+    end_date = row["subscription_end_date"]
+    if not end_date:
+        return False
+    return end_date >= now_ist().strftime("%Y-%m-%d")
+
 # Helper decorator for authentication & role protection
-def login_required(role=None):
+def login_required(role=None, allow_expired=False):
     def decorator(f):
         from functools import wraps
         @wraps(f)
@@ -89,9 +109,27 @@ def login_required(role=None):
                 return jsonify({"error": "Unauthorized. Please login."}), 401
             if role and session.get("role") != role:
                 return jsonify({"error": "Forbidden. Insufficient permissions."}), 403
+            if not allow_expired and session.get("role") in ("owner", "member"):
+                if not is_subscription_active(session.get("gym_id")):
+                    return jsonify({
+                        "error": "This gym's subscription is inactive. Please renew to continue.",
+                        "subscription_expired": True
+                    }), 402
             return f(*args, **kwargs)
         return wrapper
     return decorator
+
+# Company-portal auth: separate role/session space from owner/member. A
+# company account isn't scoped to any single gym, so it never sets
+# session["gym_id"] and is exempt from the subscription check above.
+def company_login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "company_user_id" not in session:
+            return jsonify({"error": "Unauthorized. Please login."}), 401
+        return f(*args, **kwargs)
+    return wrapper
 
 @app.route("/")
 def index():
@@ -108,33 +146,45 @@ def auth_register():
     last_name = data.get("last_name") or ""
     phone = data.get("phone")
     emergency = data.get("emergency_contact")
+    # Transitional default: the gym-picker UI isn't wired up on the
+    # registration screen yet, so fall back to tenant #1 until it is.
+    gym_id = data.get("gym_id") or 1
 
     if not all([email, password, first_name, phone]):
         return jsonify({"error": "Missing required registration fields"}), 400
 
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
+
+    cursor.execute("SELECT id, subscription_status, subscription_end_date FROM gyms WHERE id = ?", (gym_id,))
+    gym = cursor.fetchone()
+    if not gym:
+        conn.close()
+        return jsonify({"error": "Selected gym not found"}), 404
+    if not is_subscription_active(gym_id):
+        conn.close()
+        return jsonify({"error": "This gym isn't currently accepting new registrations."}), 403
+
     try:
         # Create User
         password_hash = database.hash_password(password)
         cursor.execute(
-            "INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'member')",
-            (email, password_hash)
+            "INSERT INTO users (email, password_hash, role, gym_id) VALUES (?, ?, 'member', ?)",
+            (email, password_hash, gym_id)
         )
         user_id = cursor.lastrowid
-        
+
         # Create Member (status default is 'pending' and requires owner approval)
         cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status) VALUES (?, ?, ?, ?, ?, 'pending')",
-            (user_id, first_name, last_name, phone, emergency)
+            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status, gym_id) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
+            (user_id, first_name, last_name, phone, emergency, gym_id)
         )
         member_id = cursor.lastrowid
-        
+
         # Create a welcome notification
         cursor.execute(
-            "INSERT INTO notifications (user_id, type, message) VALUES (?, 'welcome', ?)",
-            (user_id, f"Welcome to GymOS, {first_name}! Access granted once approved. Please see the owner to purchase a membership plan.")
+            "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'welcome', ?, ?)",
+            (user_id, f"Welcome to GymOS, {first_name}! Access granted once approved. Please see the owner to purchase a membership plan.", gym_id)
         )
         
         log_action(cursor, "member_self_registered", "member", member_id, {
@@ -148,7 +198,7 @@ def auth_register():
             "name": f"{first_name} {last_name}",
             "email": email,
             "phone": phone
-        })
+        }, gym_id)
         
         return jsonify({
             "success": True,
@@ -177,16 +227,17 @@ def auth_login():
         
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, email, password_hash, role FROM users WHERE email = ?", (email,))
+    cursor.execute("SELECT id, email, password_hash, role, gym_id FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
-    
+
     if not user or not database.verify_password(user["password_hash"], password):
         conn.close()
         return jsonify({"error": "Invalid email or password"}), 401
-        
+
     user_id = user["id"]
     role = user["role"]
-    
+    gym_id = user["gym_id"]
+
     member_id = None
     if role == "member":
         cursor.execute("SELECT id, status, first_name, last_name FROM members WHERE user_id = ?", (user_id,))
@@ -206,6 +257,7 @@ def auth_login():
     session["user_id"] = user_id
     session["role"] = role
     session["email"] = user["email"]
+    session["gym_id"] = gym_id
     if member_id:
         session["member_id"] = member_id
 
@@ -219,7 +271,8 @@ def auth_login():
             "id": user_id,
             "email": user["email"],
             "role": role,
-            "member_id": member_id
+            "member_id": member_id,
+            "subscription_active": is_subscription_active(gym_id) if role == "owner" else None
         }
     })
 
@@ -239,7 +292,10 @@ def auth_me():
         "email": session["email"],
         "role": role
     }
-    
+
+    if role == "owner":
+        user_data["subscription_active"] = is_subscription_active(session.get("gym_id"))
+
     if role == "member":
         cursor.execute("""
             SELECT m.*, mb.end_date, mb.status as membership_status 
@@ -261,6 +317,42 @@ def auth_logout():
     session.clear()
     return jsonify({"success": True})
 
+# ================= COMPANY PORTAL AUTH =================
+# Separate credential space from gym owners/members: a company account
+# manages tenants rather than belonging to one, so it never gets a gym_id.
+
+@app.route("/api/company/auth/login", methods=["POST"])
+def company_auth_login():
+    data = request.get_json() or {}
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        return jsonify({"error": "Email and password are required"}), 400
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, email, password_hash FROM company_users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if not user or not database.verify_password(user["password_hash"], password):
+        conn.close()
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    session.clear()
+    session["company_user_id"] = user["id"]
+    session["role"] = "company"
+    session["email"] = user["email"]
+    conn.close()
+
+    return jsonify({"success": True, "user": {"id": user["id"], "email": user["email"]}})
+
+@app.route("/api/company/auth/me", methods=["GET"])
+def company_auth_me():
+    if "company_user_id" not in session:
+        return jsonify({"user": None})
+    return jsonify({"user": {"id": session["company_user_id"], "email": session.get("email")}})
+
 @app.route("/api/auth/reset-password", methods=["POST"])
 def auth_reset_password():
     # No email/SMS infrastructure is configured, so identity is verified with
@@ -280,7 +372,7 @@ def auth_reset_password():
 
     generic_error = jsonify({"error": "No account matches that email and phone number combination"}), 404
 
-    cursor.execute("SELECT id, role FROM users WHERE email = ?", (email,))
+    cursor.execute("SELECT id, role, gym_id FROM users WHERE email = ?", (email,))
     user = cursor.fetchone()
     if not user:
         conn.close()
@@ -293,7 +385,7 @@ def auth_reset_password():
         if m and m["phone"] and m["phone"].strip() == phone:
             verified = True
     else:
-        cursor.execute("SELECT phone FROM gyms ORDER BY id LIMIT 1")
+        cursor.execute("SELECT phone FROM gyms WHERE id = ?", (user["gym_id"],))
         g = cursor.fetchone()
         if g and g["phone"] and g["phone"].strip() == phone:
             verified = True
@@ -313,10 +405,14 @@ def auth_reset_password():
 # ================= SERVER-SENT EVENTS (SSE) STREAM =================
 
 @app.route("/api/stream")
+@login_required()
 def sse_stream():
+    gym_id = session["gym_id"]
+
     def event_generator():
         q = queue.Queue()
-        SSE_LISTENERS.append(q)
+        listener = (gym_id, q)
+        SSE_LISTENERS.append(listener)
         try:
             # Send initial connected event
             yield f"data: {json.dumps({'type': 'CONNECTED', 'payload': {}})}\n\n"
@@ -328,8 +424,8 @@ def sse_stream():
                 except queue.Empty:
                     yield ":keepalive\n\n"
         except GeneratorExit:
-            if q in SSE_LISTENERS:
-                SSE_LISTENERS.remove(q)
+            if listener in SSE_LISTENERS:
+                SSE_LISTENERS.remove(listener)
     return Response(event_generator(), mimetype="text/event-stream")
 
 # ================= ADMIN STATS & ANALYTICS =================
@@ -339,65 +435,66 @@ def sse_stream():
 def admin_stats():
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
+    gym_id = session["gym_id"]
+
     # 1. Total Members
-    cursor.execute("SELECT COUNT(*) FROM members WHERE status NOT IN ('pending', 'rejected')")
+    cursor.execute("SELECT COUNT(*) FROM members WHERE gym_id = ? AND status NOT IN ('pending', 'rejected')", (gym_id,))
     t_members = cursor.fetchone()[0]
-    
+
     # 2. Active Members (Active status and active membership duration)
     today = now_ist().strftime("%Y-%m-%d")
     cursor.execute("""
-        SELECT COUNT(distinct member_id) FROM memberships 
-        WHERE status = 'active' AND end_date >= ?
-    """, (today,))
+        SELECT COUNT(distinct member_id) FROM memberships
+        WHERE gym_id = ? AND status = 'active' AND end_date >= ?
+    """, (gym_id, today))
     act_members = cursor.fetchone()[0]
-    
+
     # 3. Today's Checkins
     today_start = now_ist().strftime("%Y-%m-%d 00:00:00")
     cursor.execute("""
-        SELECT COUNT(*) FROM attendance 
-        WHERE status = 'success' AND check_in_time >= ?
-    """, (today_start,))
+        SELECT COUNT(*) FROM attendance
+        WHERE gym_id = ? AND status = 'success' AND check_in_time >= ?
+    """, (gym_id, today_start))
     today_checkins = cursor.fetchone()[0]
-    
+
     # 4. Today's Revenue
     cursor.execute("""
-        SELECT SUM(amount) FROM payments 
-        WHERE status = 'paid' AND payment_date >= ?
-    """, (today_start,))
+        SELECT SUM(amount) FROM payments
+        WHERE gym_id = ? AND status = 'paid' AND payment_date >= ?
+    """, (gym_id, today_start))
     today_revenue = cursor.fetchone()[0] or 0.0
-    
+
     # 5. Monthly Revenue (Current Month)
     month_start = now_ist().strftime("%Y-%m-01 00:00:00")
     cursor.execute("""
-        SELECT SUM(amount) FROM payments 
-        WHERE status = 'paid' AND payment_date >= ?
-    """, (month_start,))
+        SELECT SUM(amount) FROM payments
+        WHERE gym_id = ? AND status = 'paid' AND payment_date >= ?
+    """, (gym_id, month_start))
     monthly_revenue = cursor.fetchone()[0] or 0.0
-    
+
     # 6. Pending / Overdue Payments
-    cursor.execute("SELECT COUNT(*), SUM(amount) FROM payments WHERE status IN ('pending', 'overdue')")
+    cursor.execute("SELECT COUNT(*), SUM(amount) FROM payments WHERE gym_id = ? AND status IN ('pending', 'overdue')", (gym_id,))
     row_pending = cursor.fetchone()
     pending_payments = row_pending[0] or 0
     pending_amount = row_pending[1] or 0.0
 
     # 6b. Pending Approval Payments
-    cursor.execute("SELECT COUNT(*) FROM payments WHERE status = 'pending_approval'")
+    cursor.execute("SELECT COUNT(*) FROM payments WHERE gym_id = ? AND status = 'pending_approval'", (gym_id,))
     pending_approvals = cursor.fetchone()[0] or 0
-    
+
     # 7. Memberships Expiring (within 7 Days)
     next_week = (now_ist() + timedelta(days=7)).strftime("%Y-%m-%d")
     cursor.execute("""
-        SELECT COUNT(*) FROM memberships 
-        WHERE status = 'active' AND end_date >= ? AND end_date <= ?
-    """, (today, next_week))
+        SELECT COUNT(*) FROM memberships
+        WHERE gym_id = ? AND status = 'active' AND end_date >= ? AND end_date <= ?
+    """, (gym_id, today, next_week))
     expiring_members = cursor.fetchone()[0]
-    
+
     # 8. New Members This Week
     week_start = (now_ist() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute("SELECT COUNT(*) FROM members WHERE joined_at >= ? AND status NOT IN ('pending', 'rejected')", (week_start,))
+    cursor.execute("SELECT COUNT(*) FROM members WHERE gym_id = ? AND joined_at >= ? AND status NOT IN ('pending', 'rejected')", (gym_id, week_start))
     new_members_week = cursor.fetchone()[0]
-    
+
     # 9. Chart Data: Monthly Revenue Last 6 Months
     revenue_chart = []
     for i in range(5, -1, -1):
@@ -405,11 +502,11 @@ def admin_stats():
         m_start = target_month.strftime("%Y-%m-01 00:00:00")
         m_end = (target_month + timedelta(days=31)).strftime("%Y-%m-01 00:00:00")
         m_label = target_month.strftime("%b")
-        
-        cursor.execute("SELECT SUM(amount) FROM payments WHERE status = 'paid' AND payment_date >= ? AND payment_date < ?", (m_start, m_end))
+
+        cursor.execute("SELECT SUM(amount) FROM payments WHERE gym_id = ? AND status = 'paid' AND payment_date >= ? AND payment_date < ?", (gym_id, m_start, m_end))
         rev = cursor.fetchone()[0] or 0.0
         revenue_chart.append({"month": m_label, "revenue": rev})
-        
+
     # 10. Chart Data: Attendance Last 7 Days
     attendance_chart = []
     for i in range(6, -1, -1):
@@ -417,11 +514,11 @@ def admin_stats():
         d_start = target_day.strftime("%Y-%m-%d 00:00:00")
         d_end = target_day.strftime("%Y-%m-%d 23:59:59")
         d_label = target_day.strftime("%a")
-        
-        cursor.execute("SELECT COUNT(*) FROM attendance WHERE status = 'success' AND check_in_time >= ? AND check_in_time <= ?", (d_start, d_end))
+
+        cursor.execute("SELECT COUNT(*) FROM attendance WHERE gym_id = ? AND status = 'success' AND check_in_time >= ? AND check_in_time <= ?", (gym_id, d_start, d_end))
         cnt = cursor.fetchone()[0]
         attendance_chart.append({"day": d_label, "count": cnt})
-        
+
     # 11. Pending Payments List
     cursor.execute("""
         SELECT p.*, m.first_name, m.last_name, m.phone, pl.name as plan_name
@@ -429,11 +526,11 @@ def admin_stats():
         JOIN members m ON p.member_id = m.id
         LEFT JOIN memberships ms ON p.membership_id = ms.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE p.status IN ('pending', 'overdue')
+        WHERE p.gym_id = ? AND p.status IN ('pending', 'overdue')
         ORDER BY p.due_date ASC LIMIT 5
-    """)
+    """, (gym_id,))
     pending_payments_list = [dict(row) for row in cursor.fetchall()]
-    
+
     # 12. Membership Expiring Soon List
     cursor.execute("""
         SELECT m.id as member_id, m.first_name, m.last_name, ms.end_date, pl.name as plan_name, p.id as payment_id
@@ -441,29 +538,30 @@ def admin_stats():
         JOIN members m ON ms.member_id = m.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
         LEFT JOIN payments p ON p.membership_id = ms.id AND p.status != 'paid'
-        WHERE ms.status = 'active' AND ms.end_date >= ? AND ms.end_date <= ?
+        WHERE ms.gym_id = ? AND ms.status = 'active' AND ms.end_date >= ? AND ms.end_date <= ?
         ORDER BY ms.end_date ASC LIMIT 5
-    """, (today, next_week))
+    """, (gym_id, today, next_week))
     expiring_members_list = [dict(row) for row in cursor.fetchall()]
-    
+
     # 13. New Members Recent Joiners List
     cursor.execute("""
         SELECT m.id, m.first_name, m.last_name, m.joined_at, pl.name as plan_name
         FROM members m
         LEFT JOIN memberships ms ON ms.member_id = m.id AND ms.status = 'active'
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE m.status NOT IN ('pending', 'rejected')
+        WHERE m.gym_id = ? AND m.status NOT IN ('pending', 'rejected')
         ORDER BY m.joined_at DESC LIMIT 5
-    """)
+    """, (gym_id,))
     new_members_list = [dict(row) for row in cursor.fetchall()]
-    
+
     # 14. Recent Activity Log
     cursor.execute("""
-        SELECT a.id, m.first_name, m.last_name, a.check_in_time, a.status, a.error_msg 
+        SELECT a.id, m.first_name, m.last_name, a.check_in_time, a.status, a.error_msg
         FROM attendance a
         JOIN members m ON a.member_id = m.id
+        WHERE a.gym_id = ?
         ORDER BY a.check_in_time DESC LIMIT 5
-    """)
+    """, (gym_id,))
     recent_activities = []
     for row in cursor.fetchall():
         status_text = "checked in" if row["status"] == "success" else f"check-in failed: {row['error_msg']}"
@@ -476,7 +574,7 @@ def admin_stats():
         })
         
     # Count pending registrations
-    cursor.execute("SELECT COUNT(*) FROM members WHERE status = 'pending'")
+    cursor.execute("SELECT COUNT(*) FROM members WHERE gym_id = ? AND status = 'pending'", (gym_id,))
     pending_regs_count = cursor.fetchone()[0] or 0
     
     conn.close()
@@ -516,9 +614,9 @@ def admin_dashboard_pending_dues():
         JOIN members m ON p.member_id = m.id
         LEFT JOIN memberships ms ON p.membership_id = ms.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE p.status IN ('pending', 'overdue')
+        WHERE p.gym_id = ? AND p.status IN ('pending', 'overdue')
         ORDER BY p.due_date ASC
-    """)
+    """, (session["gym_id"],))
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return jsonify({"data": rows})
@@ -536,9 +634,9 @@ def admin_dashboard_expiring_soon():
         FROM memberships ms
         JOIN members m ON ms.member_id = m.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE ms.status = 'active' AND ms.end_date >= ? AND ms.end_date <= ?
+        WHERE ms.gym_id = ? AND ms.status = 'active' AND ms.end_date >= ? AND ms.end_date <= ?
         ORDER BY ms.end_date ASC
-    """, (today, next_week))
+    """, (session["gym_id"], today, next_week))
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return jsonify({"data": rows})
@@ -554,9 +652,9 @@ def admin_get_pending_approvals():
         SELECT m.id, m.first_name, m.last_name, u.email, m.phone, m.joined_at, m.status, m.profile_photo
         FROM members m
         JOIN users u ON m.user_id = u.id
-        WHERE m.status = 'pending'
+        WHERE m.gym_id = ? AND m.status = 'pending'
         ORDER BY m.joined_at DESC
-    """)
+    """, (session["gym_id"],))
     rows = cursor.fetchall()
     pending = [dict(r) for r in rows]
     conn.close()
@@ -567,16 +665,16 @@ def admin_get_pending_approvals():
 def admin_approve_member(id):
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
+
     # Check if member exists and is pending
-    cursor.execute("SELECT m.id, m.first_name, m.last_name, u.email FROM members m JOIN users u ON m.user_id = u.id WHERE m.id = ?", (id,))
+    cursor.execute("SELECT m.id, m.first_name, m.last_name, u.email FROM members m JOIN users u ON m.user_id = u.id WHERE m.id = ? AND m.gym_id = ?", (id, session["gym_id"]))
     member = cursor.fetchone()
     if not member:
         conn.close()
         return jsonify({"error": "Member not found"}), 404
         
     try:
-        cursor.execute("UPDATE members SET status = 'active' WHERE id = ?", (id,))
+        cursor.execute("UPDATE members SET status = 'active' WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
         fullname = f"{member['first_name']} {member['last_name']}"
         log_action(cursor, "member_approved", "member", id, {"name": fullname, "email": member["email"]})
         conn.commit()
@@ -586,7 +684,7 @@ def admin_approve_member(id):
             "status": "active",
             "name": fullname,
             "email": member["email"]
-        })
+        }, session["gym_id"])
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -600,14 +698,14 @@ def admin_reject_member(id):
     cursor = conn.cursor()
     
     # Check if member exists
-    cursor.execute("SELECT m.id, m.first_name, m.last_name, u.email FROM members m JOIN users u ON m.user_id = u.id WHERE m.id = ?", (id,))
+    cursor.execute("SELECT m.id, m.first_name, m.last_name, u.email FROM members m JOIN users u ON m.user_id = u.id WHERE m.id = ? AND m.gym_id = ?", (id, session["gym_id"]))
     member = cursor.fetchone()
     if not member:
         conn.close()
         return jsonify({"error": "Member not found"}), 404
-        
+
     try:
-        cursor.execute("UPDATE members SET status = 'rejected' WHERE id = ?", (id,))
+        cursor.execute("UPDATE members SET status = 'rejected' WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
         fullname = f"{member['first_name']} {member['last_name']}"
         log_action(cursor, "member_rejected", "member", id, {"name": fullname, "email": member["email"]})
         conn.commit()
@@ -617,7 +715,7 @@ def admin_reject_member(id):
             "status": "rejected",
             "name": fullname,
             "email": member["email"]
-        })
+        }, session["gym_id"])
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -658,9 +756,9 @@ def admin_get_members():
         JOIN users u ON m.user_id = u.id
         LEFT JOIN memberships mb ON m.id = mb.member_id AND mb.status = 'active'
         LEFT JOIN plans p ON mb.plan_id = p.id
-        WHERE 1=1
+        WHERE m.gym_id = ?
     """
-    
+
     query = """
         SELECT m.*, u.email,
                mb.id as membership_id, mb.end_date, mb.status as membership_status,
@@ -671,9 +769,9 @@ def admin_get_members():
         JOIN users u ON m.user_id = u.id
         LEFT JOIN memberships mb ON m.id = mb.member_id AND mb.status = 'active'
         LEFT JOIN plans p ON mb.plan_id = p.id
-        WHERE 1=1
+        WHERE m.gym_id = ?
     """
-    params = []
+    params = [session["gym_id"]]
     filter_sql = ""
     
     if search:
@@ -722,8 +820,8 @@ def admin_get_members():
         m_status = m_dict.get("status")
         
         if m_status == "active" and end_date and end_date < today:
-            cursor.execute("UPDATE members SET status = 'expired' WHERE id = ?", (m_dict["id"],))
-            cursor.execute("UPDATE memberships SET status = 'expired' WHERE id = ?", (m_dict["membership_id"],))
+            cursor.execute("UPDATE members SET status = 'expired' WHERE id = ? AND gym_id = ?", (m_dict["id"], session["gym_id"]))
+            cursor.execute("UPDATE memberships SET status = 'expired' WHERE id = ? AND gym_id = ?", (m_dict["membership_id"], session["gym_id"]))
             m_dict["status"] = "expired"
             m_dict["membership_status"] = "expired"
             
@@ -757,19 +855,20 @@ def admin_create_member():
     cursor = conn.cursor()
     
     try:
+        gym_id = session["gym_id"]
         pw_hash = database.hash_password(password)
-        cursor.execute("INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'member')", (email, pw_hash))
+        cursor.execute("INSERT INTO users (email, password_hash, role, gym_id) VALUES (?, ?, 'member', ?)", (email, pw_hash, gym_id))
         u_id = cursor.lastrowid
-        
+
         cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status) VALUES (?, ?, ?, ?, ?, 'active')",
-            (u_id, first_name, last_name, phone, emergency)
+            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status, gym_id) VALUES (?, ?, ?, ?, ?, 'active', ?)",
+            (u_id, first_name, last_name, phone, emergency, gym_id)
         )
         member_id = cursor.lastrowid
-        
+
         cursor.execute(
-            "INSERT INTO notifications (user_id, type, message) VALUES (?, 'welcome', ?)",
-            (u_id, f"Welcome to GymOS, {first_name}! An account has been created for you by the Owner. Password: {password}")
+            "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'welcome', ?, ?)",
+            (u_id, f"Welcome to GymOS, {first_name}! An account has been created for you by the Owner. Password: {password}", gym_id)
         )
         
         log_action(cursor, "member_created_by_owner", "member", member_id, {"name": f"{first_name} {last_name}", "email": email})
@@ -779,7 +878,7 @@ def admin_create_member():
             "id": member_id,
             "name": f"{first_name} {last_name}",
             "email": email
-        })
+        }, gym_id)
 
         return jsonify({"success": True, "member_id": member_id})
     except sqlite3.IntegrityError:
@@ -797,11 +896,11 @@ def admin_member_detail(id):
     
     # Member basic info
     cursor.execute("""
-        SELECT m.*, u.email 
+        SELECT m.*, u.email
         FROM members m
         JOIN users u ON m.user_id = u.id
-        WHERE m.id = ?
-    """, (id,))
+        WHERE m.id = ? AND m.gym_id = ?
+    """, (id, session["gym_id"]))
     member = cursor.fetchone()
     
     if not member:
@@ -864,7 +963,7 @@ def admin_update_member(id):
 
     try:
         # Check current status
-        cursor.execute("SELECT status, user_id FROM members WHERE id = ?", (id,))
+        cursor.execute("SELECT status, user_id FROM members WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
         old_m = cursor.fetchone()
         if not old_m:
             conn.close()
@@ -898,7 +997,7 @@ def admin_update_member(id):
         if status == "suspended":
             cursor.execute("UPDATE memberships SET status = 'suspended' WHERE member_id = ?", (id,))
             cursor.execute("UPDATE payments SET status = 'overdue' WHERE member_id = ? AND status = 'pending'", (id,))
-            cursor.execute("INSERT INTO notifications (user_id, type, message) VALUES (?, 'expiry', 'Your membership has been suspended by the Gym Owner.')", (old_m["user_id"],))
+            cursor.execute("INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'expiry', 'Your membership has been suspended by the Gym Owner.', ?)", (old_m["user_id"], session["gym_id"]))
         elif status == "active":
             # If status unsuspended, reactivate active end-dated memberships
             today = now_ist().strftime("%Y-%m-%d")
@@ -910,7 +1009,7 @@ def admin_update_member(id):
         })
         conn.commit()
 
-        broadcast_event("MEMBER_UPDATED", {"id": id, "name": f"{first_name} {last_name}", "status": status})
+        broadcast_event("MEMBER_UPDATED", {"id": id, "name": f"{first_name} {last_name}", "status": status}, session["gym_id"])
 
         return jsonify({"success": True})
     except sqlite3.IntegrityError as e:
@@ -930,12 +1029,12 @@ def admin_delete_member(id):
     conn = database.get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT user_id, first_name, last_name FROM members WHERE id = ?", (id,))
+    cursor.execute("SELECT user_id, first_name, last_name FROM members WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
     member = cursor.fetchone()
     if not member:
         conn.close()
         return jsonify({"error": "Member not found"}), 404
-        
+
     user_id = member["user_id"]
     name = f"{member['first_name']} {member['last_name']}"
 
@@ -946,7 +1045,7 @@ def admin_delete_member(id):
     conn.commit()
     conn.close()
 
-    broadcast_event("MEMBER_DELETED", {"id": id, "name": name})
+    broadcast_event("MEMBER_DELETED", {"id": id, "name": name}, session["gym_id"])
     return jsonify({"success": True})
 
 @app.route("/api/admin/members/<int:id>/assign-plan", methods=["POST"])
@@ -964,15 +1063,17 @@ def admin_assign_plan(id):
     conn = database.get_db_connection()
     cursor = conn.cursor()
 
+    gym_id = session["gym_id"]
+
     # 1. Verify Member exists
-    cursor.execute("SELECT user_id, first_name, last_name, status FROM members WHERE id = ?", (id,))
+    cursor.execute("SELECT user_id, first_name, last_name, status FROM members WHERE id = ? AND gym_id = ?", (id, gym_id))
     member = cursor.fetchone()
     if not member:
         conn.close()
         return jsonify({"error": "Member not found"}), 404
 
     # 2. Get Plan duration and price
-    cursor.execute("SELECT name, price, duration_months FROM plans WHERE id = ?", (plan_id,))
+    cursor.execute("SELECT name, price, duration_months FROM plans WHERE id = ? AND gym_id = ?", (plan_id, gym_id))
     plan = cursor.fetchone()
     if not plan:
         conn.close()
@@ -1005,9 +1106,9 @@ def admin_assign_plan(id):
         
         # Create fresh membership
         cursor.execute("""
-            INSERT INTO memberships (member_id, plan_id, status, start_date, end_date, price_paid)
-            VALUES (?, ?, 'active', ?, ?, ?)
-        """, (id, plan_id, start_date_str, end_date_str, plan["price"]))
+            INSERT INTO memberships (member_id, plan_id, status, start_date, end_date, price_paid, gym_id)
+            VALUES (?, ?, 'active', ?, ?, ?, ?)
+        """, (id, plan_id, start_date_str, end_date_str, plan["price"], gym_id))
         membership_id = cursor.lastrowid
         
         # Bring Member state back to active
@@ -1020,14 +1121,14 @@ def admin_assign_plan(id):
         receipt = f"RC-{int(now_ist().timestamp())}-{id}"
         
         cursor.execute("""
-            INSERT INTO payments (membership_id, member_id, amount, status, payment_date, due_date, receipt_number)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (membership_id, id, plan["price"], pay_status, pay_date, due_date, receipt))
+            INSERT INTO payments (membership_id, member_id, amount, status, payment_date, due_date, receipt_number, gym_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (membership_id, id, plan["price"], pay_status, pay_date, due_date, receipt, gym_id))
         payment_id = cursor.lastrowid
 
         # Notifications
         notif_msg = f"Your new membership '{plan['name']}' has been activated! Expires on: {end_date_str}."
-        cursor.execute("INSERT INTO notifications (user_id, type, message) VALUES (?, 'renewal', ?)", (member["user_id"], notif_msg))
+        cursor.execute("INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'renewal', ?, ?)", (member["user_id"], notif_msg, gym_id))
 
         log_action(cursor, "plan_assigned", "member", id, {
             "plan_name": plan["name"], "plan_id": plan_id, "membership_id": membership_id,
@@ -1041,7 +1142,7 @@ def admin_assign_plan(id):
             "member_name": f"{member['first_name']} {member['last_name']}",
             "plan_name": plan["name"],
             "expiry": end_date_str
-        })
+        }, gym_id)
         
         return jsonify({"success": True, "membership_id": membership_id, "expiry": end_date_str})
     except Exception as e:
@@ -1056,7 +1157,7 @@ def admin_assign_plan(id):
 def admin_get_plans():
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM plans ORDER BY price ASC")
+    cursor.execute("SELECT * FROM plans WHERE gym_id = ? ORDER BY price ASC", (session["gym_id"],))
     p_list = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return jsonify(p_list)
@@ -1076,8 +1177,8 @@ def admin_create_plan():
     conn = database.get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO plans (name, price, duration_months, benefits) VALUES (?, ?, ?, ?)",
-        (name, float(price), int(duration), benefits)
+        "INSERT INTO plans (name, price, duration_months, benefits, gym_id) VALUES (?, ?, ?, ?, ?)",
+        (name, float(price), int(duration), benefits, session["gym_id"])
     )
     plan_id = cursor.lastrowid
     log_action(cursor, "plan_created", "plan", plan_id, {"name": name, "price": price, "duration_months": duration})
@@ -1101,8 +1202,8 @@ def admin_update_plan(id):
     conn = database.get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE plans SET name = ?, price = ?, duration_months = ?, benefits = ? WHERE id = ?",
-        (name, float(price), int(duration), benefits, id)
+        "UPDATE plans SET name = ?, price = ?, duration_months = ?, benefits = ? WHERE id = ? AND gym_id = ?",
+        (name, float(price), int(duration), benefits, id, session["gym_id"])
     )
     log_action(cursor, "plan_updated", "plan", id, {"name": name, "price": price, "duration_months": duration})
     conn.commit()
@@ -1115,7 +1216,7 @@ def admin_delete_plan(id):
     conn = database.get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM plans WHERE id = ?", (id,))
+        cursor.execute("DELETE FROM plans WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
         log_action(cursor, "plan_deleted", "plan", id, {})
         conn.commit()
         return jsonify({"success": True})
@@ -1159,18 +1260,18 @@ def admin_get_attendance():
         SELECT COUNT(*)
         FROM attendance a
         JOIN members m ON a.member_id = m.id
-        WHERE 1=1
+        WHERE a.gym_id = ?
     """
-    
+
     query = """
         SELECT a.id, a.check_in_time, a.check_out_time, a.status, a.attendance_state, a.attendance_date, a.error_msg,
                m.first_name, m.last_name, m.phone, m.id as member_id
         FROM attendance a
         JOIN members m ON a.member_id = m.id
-        WHERE 1=1
+        WHERE a.gym_id = ?
     """
-    
-    params = []
+
+    params = [session["gym_id"]]
     filter_sql = ""
     
     if date_filter:
@@ -1247,9 +1348,9 @@ def admin_attendance_calendar_summary():
     cursor.execute("""
         SELECT TO_CHAR(check_in_time::timestamp, 'DD') as day, COUNT(*) as cnt
         FROM attendance
-        WHERE status = 'success' AND TO_CHAR(check_in_time::timestamp, 'YYYY-MM') = ?
+        WHERE gym_id = ? AND status = 'success' AND TO_CHAR(check_in_time::timestamp, 'YYYY-MM') = ?
         GROUP BY day
-    """, (year_month,))
+    """, (session["gym_id"], year_month))
     counts = {row["day"]: row["cnt"] for row in cursor.fetchall()}
     conn.close()
 
@@ -1292,19 +1393,19 @@ def admin_get_payments():
         JOIN members m ON p.member_id = m.id
         LEFT JOIN memberships ms ON p.membership_id = ms.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE 1=1
+        WHERE p.gym_id = ?
     """
-    
+
     query = """
         SELECT p.*, m.first_name, m.last_name, m.phone, pl.name as plan_name
         FROM payments p
         JOIN members m ON p.member_id = m.id
         LEFT JOIN memberships ms ON p.membership_id = ms.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE 1=1
+        WHERE p.gym_id = ?
     """
-    
-    params = []
+
+    params = [session["gym_id"]]
     filter_sql = ""
     
     if status_filter:
@@ -1369,12 +1470,12 @@ def admin_record_payment():
     conn = database.get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM payments WHERE id = ?", (payment_id,))
+    cursor.execute("SELECT * FROM payments WHERE id = ? AND gym_id = ?", (payment_id, session["gym_id"]))
     pay = cursor.fetchone()
     if not pay:
         conn.close()
         return jsonify({"error": "Payment ledger not found"}), 404
-        
+
     pay_time = now_ist().strftime("%Y-%m-%d %H:%M:%S")
     
     try:
@@ -1396,10 +1497,10 @@ def admin_record_payment():
         m = cursor.fetchone()
         if m:
             cursor.execute(
-                "INSERT INTO notifications (user_id, type, message) VALUES (?, 'renewal', ?)",
-                (m["user_id"], f"Payment of ${pay['amount']} recorded successfully. Membership is set to ACTIVE.")
+                "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'renewal', ?, ?)",
+                (m["user_id"], f"Payment of ₹{pay['amount']} recorded successfully. Membership is set to ACTIVE.", session["gym_id"])
             )
-            
+
         log_action(cursor, "payment_recorded_manual", "payment", payment_id, {
             "member_id": pay["member_id"], "amount": pay["amount"]
         })
@@ -1409,7 +1510,7 @@ def admin_record_payment():
             "id": payment_id,
             "member_id": pay["member_id"],
             "amount": pay["amount"]
-        })
+        }, session["gym_id"])
 
         return jsonify({"success": True})
     except Exception as e:
@@ -1424,19 +1525,19 @@ def admin_payment_reminder(id):
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT p.*, m.first_name, m.last_name, m.phone, pl.name as plan_name 
+        SELECT p.*, m.first_name, m.last_name, m.phone, pl.name as plan_name
         FROM payments p
         JOIN members m ON p.member_id = m.id
         LEFT JOIN memberships ms ON p.membership_id = ms.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE p.id = ?
-    """, (id,))
+        WHERE p.id = ? AND p.gym_id = ?
+    """, (id, session["gym_id"]))
     pay = cursor.fetchone()
     conn.close()
-    
+
     if not pay:
         return jsonify({"error": "Payment ledger not found"}), 404
-        
+
     name = f"{pay['first_name']} {pay['last_name']}"
     phone = pay["phone"]
     amount = pay["amount"]
@@ -1463,9 +1564,9 @@ def admin_member_renewal_reminder(id):
         FROM members m
         JOIN memberships ms ON ms.member_id = m.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE m.id = ?
+        WHERE m.id = ? AND m.gym_id = ?
         ORDER BY ms.end_date DESC LIMIT 1
-    """, (id,))
+    """, (id, session["gym_id"]))
     row = cursor.fetchone()
     conn.close()
 
@@ -1506,30 +1607,31 @@ def admin_settings():
             conn.close()
             return jsonify({"error": "Gym name cannot be empty"}), 400
 
-        cursor.execute("INSERT INTO settings (key, value) VALUES ('gym_name', ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (gym_name,))
+        gym_id = session["gym_id"]
+        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_name', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_name, gym_id))
         if gym_phone:
-            cursor.execute("INSERT INTO settings (key, value) VALUES ('gym_phone', ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (gym_phone,))
+            cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_phone', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_phone, gym_id))
         if gym_address:
-            cursor.execute("INSERT INTO settings (key, value) VALUES ('gym_address', ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (gym_address,))
+            cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_address', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_address, gym_id))
         if qr_token:
-            cursor.execute("INSERT INTO settings (key, value) VALUES ('qr_token', ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (qr_token,))
+            cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('qr_token', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (qr_token, gym_id))
         if gym_image_url is not None:
-            cursor.execute("INSERT INTO settings (key, value) VALUES ('gym_image_url', ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (gym_image_url,))
-            
-        # Update gyms table
-        cursor.execute("UPDATE gyms SET name = ?, phone = ?, address = ?, qr_code_token = ? WHERE id = 1", (gym_name, gym_phone, gym_address, qr_token))
+            cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_image_url', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_image_url, gym_id))
 
-        log_action(cursor, "settings_updated", "gym", 1, {
+        # Update gyms table
+        cursor.execute("UPDATE gyms SET name = ?, phone = ?, address = ?, qr_code_token = ? WHERE id = ?", (gym_name, gym_phone, gym_address, qr_token, gym_id))
+
+        log_action(cursor, "settings_updated", "gym", gym_id, {
             "gym_name": gym_name, "gym_phone": gym_phone, "gym_address": gym_address, "qr_token_changed": bool(qr_token)
         })
         conn.commit()
         conn.close()
 
-        broadcast_event("GYM_SETTINGS_UPDATED", {"gym_name": gym_name})
+        broadcast_event("GYM_SETTINGS_UPDATED", {"gym_name": gym_name}, gym_id)
         return jsonify({"success": True})
-        
+
     # GET method
-    cursor.execute("SELECT * FROM settings")
+    cursor.execute("SELECT * FROM settings WHERE gym_id = ?", (session["gym_id"],))
     settings = {row["key"]: row["value"] for row in cursor.fetchall()}
     conn.close()
     return jsonify(settings)
@@ -1546,9 +1648,9 @@ def admin_audit_log():
     conn = database.get_db_connection()
     cursor = conn.cursor()
 
-    count_query = "SELECT COUNT(*) FROM audit_log WHERE 1=1"
-    query = "SELECT * FROM audit_log WHERE 1=1"
-    params = []
+    count_query = "SELECT COUNT(*) FROM audit_log WHERE gym_id = ?"
+    query = "SELECT * FROM audit_log WHERE gym_id = ?"
+    params = [session["gym_id"]]
     filter_sql = ""
 
     if action_filter:
@@ -1594,6 +1696,7 @@ def admin_audit_log():
 # ================= LEADERBOARD, MANUAL CHECK-IN & PAYMENTS ENDPOINTS =================
 
 @app.route("/api/leaderboard", methods=["GET"])
+@login_required()
 def get_leaderboard():
     conn = database.get_db_connection()
     cursor = conn.cursor()
@@ -1604,11 +1707,11 @@ def get_leaderboard():
                COUNT(a.id) as checkin_count
         FROM members m
         JOIN attendance a ON m.id = a.member_id
-        WHERE a.status = 'success' AND a.check_in_time::date >= CURRENT_DATE - INTERVAL '30 days'
+        WHERE m.gym_id = ? AND a.status = 'success' AND a.check_in_time::date >= CURRENT_DATE - INTERVAL '30 days'
         GROUP BY m.id
         ORDER BY checkin_count DESC, m.first_name ASC
         LIMIT 10
-    """)
+    """, (session["gym_id"],))
     rows = cursor.fetchall()
     leaderboard = [dict(r) for r in rows]
     conn.close()
@@ -1620,36 +1723,34 @@ def admin_manual_check_in(id):
     conn = database.get_db_connection()
     cursor = conn.cursor()
     
+    gym_id = session["gym_id"]
+
     # Verify member exists
-    cursor.execute("SELECT first_name, last_name, status, user_id FROM members WHERE id = ?", (id,))
+    cursor.execute("SELECT first_name, last_name, status, user_id FROM members WHERE id = ? AND gym_id = ?", (id, gym_id))
     mbr = cursor.fetchone()
     if not mbr:
         conn.close()
         return jsonify({"error": "Member not found"}), 404
-        
+
     today_str = now_ist().strftime("%Y-%m-%d")
     now_time_str = now_ist().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     # Check if already checked in today
     cursor.execute("""
-        SELECT id FROM attendance 
+        SELECT id FROM attendance
         WHERE member_id = ? AND status = 'success' AND check_in_time::date = ?
         ORDER BY check_in_time DESC LIMIT 1
     """, (id, today_str))
     if cursor.fetchone():
         conn.close()
         return jsonify({"error": "Member has already logged attendance today."}), 409
-        
+
     try:
-        cursor.execute("SELECT id FROM gyms ORDER BY id LIMIT 1")
-        gym = cursor.fetchone()
-        gym_id = gym["id"] if gym else None
-        
         cursor.execute("""
             INSERT INTO attendance (member_id, check_in_time, attendance_date, gym_id, attendance_state, status)
             VALUES (?, ?, ?, ?, 'checked_in', 'success')
         """, (id, now_time_str, today_str, gym_id))
-        
+
         # Update member status to active if it was expired
         if mbr["status"] == "expired":
             cursor.execute("UPDATE members SET status = 'active' WHERE id = ?", (id,))
@@ -1662,8 +1763,8 @@ def admin_manual_check_in(id):
             "name": fullname,
             "time": now_time_str,
             "manual": True
-        })
-        
+        }, gym_id)
+
         return jsonify({"success": True, "check_in_time": now_time_str})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1677,18 +1778,18 @@ def admin_manual_check_out(id):
     cursor = conn.cursor()
     
     # Verify member exists
-    cursor.execute("SELECT first_name, last_name, status, user_id FROM members WHERE id = ?", (id,))
+    cursor.execute("SELECT first_name, last_name, status, user_id FROM members WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
     mbr = cursor.fetchone()
     if not mbr:
         conn.close()
         return jsonify({"error": "Member not found"}), 404
-        
+
     today_str = now_ist().strftime("%Y-%m-%d")
     now_time_str = now_ist().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     # Find active check-in
     cursor.execute("""
-        SELECT id, check_in_time FROM attendance 
+        SELECT id, check_in_time FROM attendance
         WHERE member_id = ? AND status = 'success' AND check_out_time IS NULL AND check_in_time::date = ?
         ORDER BY check_in_time DESC LIMIT 1
     """, (id, today_str))
@@ -1720,7 +1821,7 @@ def admin_manual_check_out(id):
             "check_out": now_time_str,
             "duration": duration_str,
             "manual": True
-        })
+        }, session["gym_id"])
         
         return jsonify({"success": True, "check_out_time": now_time_str, "duration": duration_str})
     except Exception as e:
@@ -1733,7 +1834,7 @@ def admin_manual_check_out(id):
 def member_get_plans():
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM plans ORDER BY price ASC")
+    cursor.execute("SELECT * FROM plans WHERE gym_id = ? ORDER BY price ASC", (session["gym_id"],))
     p_list = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return jsonify(p_list)
@@ -1782,7 +1883,7 @@ def member_submit_payment(id):
             "name": f"{m['first_name']} {m['last_name']}",
             "amount": pay["amount"],
             "reference": tx_ref
-        })
+        }, session["gym_id"])
         conn.commit()
         return jsonify({"success": True})
     except sqlite3.IntegrityError:
@@ -1802,40 +1903,41 @@ def member_purchase_plan():
         return jsonify({"error": "Plan ID and Transaction reference are required"}), 400
         
     m_id = session.get("member_id")
+    gym_id = session["gym_id"]
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
+
     # Get plan details
-    cursor.execute("SELECT name, price, duration_months FROM plans WHERE id = ?", (plan_id,))
+    cursor.execute("SELECT name, price, duration_months FROM plans WHERE id = ? AND gym_id = ?", (plan_id, gym_id))
     plan = cursor.fetchone()
     if not plan:
         conn.close()
         return jsonify({"error": "Plan not found"}), 404
-        
+
     # Get member info
     cursor.execute("SELECT user_id, first_name, last_name FROM members WHERE id = ?", (m_id,))
     mbr = cursor.fetchone()
     if not mbr:
         conn.close()
         return jsonify({"error": "Member record missing"}), 404
-        
+
     start_date_str = now_ist().strftime("%Y-%m-%d")
     end_date = now_ist() + timedelta(days=plan["duration_months"] * 30)
     end_date_str = end_date.strftime("%Y-%m-%d")
-    
+
     try:
         # Create a new membership with status suspended (awaits payment approval)
         cursor.execute("""
-            INSERT INTO memberships (member_id, plan_id, status, start_date, end_date, price_paid)
-            VALUES (?, ?, 'suspended', ?, ?, ?)
-        """, (m_id, plan_id, start_date_str, end_date_str, plan["price"]))
+            INSERT INTO memberships (member_id, plan_id, status, start_date, end_date, price_paid, gym_id)
+            VALUES (?, ?, 'suspended', ?, ?, ?, ?)
+        """, (m_id, plan_id, start_date_str, end_date_str, plan["price"], gym_id))
         membership_id = cursor.lastrowid
-        
+
         # Create payment request in pending_approval status
         cursor.execute("""
-            INSERT INTO payments (membership_id, member_id, amount, status, receipt_number)
-            VALUES (?, ?, ?, 'pending_approval', ?)
-        """, (membership_id, m_id, plan["price"], tx_ref))
+            INSERT INTO payments (membership_id, member_id, amount, status, receipt_number, gym_id)
+            VALUES (?, ?, ?, 'pending_approval', ?, ?)
+        """, (membership_id, m_id, plan["price"], tx_ref, gym_id))
         payment_id = cursor.lastrowid
 
         log_action(cursor, "plan_purchased_by_member", "payment", payment_id, {
@@ -1850,7 +1952,7 @@ def member_purchase_plan():
             "name": f"{mbr['first_name']} {mbr['last_name']}",
             "amount": plan["price"],
             "reference": tx_ref
-        })
+        }, gym_id)
 
         return jsonify({"success": True, "payment_id": payment_id})
     except sqlite3.IntegrityError:
@@ -1865,8 +1967,8 @@ def member_purchase_plan():
 def admin_approve_payment(id):
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM payments WHERE id = ?", (id,))
+
+    cursor.execute("SELECT * FROM payments WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
     pay = cursor.fetchone()
     if not pay:
         conn.close()
@@ -1894,10 +1996,10 @@ def admin_approve_payment(id):
         m = cursor.fetchone()
         if m:
             cursor.execute(
-                "INSERT INTO notifications (user_id, type, message) VALUES (?, 'renewal', ?)",
-                (m["user_id"], f"Payment of ₹{pay['amount']} has been approved! Your membership is active.")
+                "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'renewal', ?, ?)",
+                (m["user_id"], f"Payment of ₹{pay['amount']} has been approved! Your membership is active.", session["gym_id"])
             )
-            
+
         log_action(cursor, "payment_approved", "payment", id, {
             "member_id": pay["member_id"], "amount": pay["amount"], "membership_id": membership_id
         })
@@ -1907,7 +2009,7 @@ def admin_approve_payment(id):
             "id": id,
             "member_id": pay["member_id"],
             "amount": pay["amount"]
-        })
+        }, session["gym_id"])
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1919,8 +2021,8 @@ def admin_approve_payment(id):
 def admin_reject_payment(id):
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM payments WHERE id = ?", (id,))
+
+    cursor.execute("SELECT * FROM payments WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
     pay = cursor.fetchone()
     if not pay:
         conn.close()
@@ -1938,10 +2040,10 @@ def admin_reject_payment(id):
         m = cursor.fetchone()
         if m:
             cursor.execute(
-                "INSERT INTO notifications (user_id, type, message) VALUES (?, 'payment', ?)",
-                (m["user_id"], f"Your payment request for ₹{pay['amount']} was rejected by the owner. Please verify details.")
+                "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'payment', ?, ?)",
+                (m["user_id"], f"Your payment request for ₹{pay['amount']} was rejected by the owner. Please verify details.", session["gym_id"])
             )
-            
+
         log_action(cursor, "payment_rejected", "payment", id, {
             "member_id": pay["member_id"], "amount": pay["amount"]
         })
@@ -1951,7 +2053,7 @@ def admin_reject_payment(id):
             "id": id,
             "member_id": pay["member_id"],
             "amount": pay["amount"]
-        })
+        }, session["gym_id"])
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -2128,15 +2230,15 @@ def member_dashboard():
             SELECT member_id, COUNT(id) as cnt,
                    RANK() OVER (ORDER BY COUNT(id) DESC) as rnk
             FROM attendance
-            WHERE status = 'success' AND TO_CHAR(check_in_time::timestamp, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+            WHERE gym_id = ? AND status = 'success' AND TO_CHAR(check_in_time::timestamp, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
             GROUP BY member_id
         )
         SELECT rnk FROM ranks WHERE member_id = ?
-    """, (m_id,))
+    """, (session["gym_id"], m_id))
     m_rnk_row = cursor.fetchone()
     monthly_rank = m_rnk_row[0] if m_rnk_row else 0
 
-    cursor.execute("SELECT value FROM settings WHERE key = 'gym_image_url'")
+    cursor.execute("SELECT value FROM settings WHERE key = 'gym_image_url' AND gym_id = ?", (session["gym_id"],))
     gym_image_row = cursor.fetchone()
 
     conn.close()
@@ -2297,11 +2399,11 @@ def member_activity_data():
                 SELECT member_id, COUNT(id) as cnt,
                        RANK() OVER (ORDER BY COUNT(id) DESC) as rnk
                 FROM attendance
-                WHERE status = 'success' AND check_in_time::date >= CURRENT_DATE - INTERVAL '6 days'
+                WHERE gym_id = ? AND status = 'success' AND check_in_time::date >= CURRENT_DATE - INTERVAL '6 days'
                 GROUP BY member_id
             )
             SELECT rnk FROM ranks WHERE member_id = ?
-        """, (m_id,))
+        """, (session["gym_id"], m_id))
         w_rnk_row = cursor.fetchone()
         weekly_rank = w_rnk_row[0] if w_rnk_row else 0
 
@@ -2310,24 +2412,24 @@ def member_activity_data():
                 SELECT member_id, COUNT(id) as cnt,
                        RANK() OVER (ORDER BY COUNT(id) DESC) as rnk
                 FROM attendance
-                WHERE status = 'success' AND check_in_time::date >= CURRENT_DATE - INTERVAL '29 days'
+                WHERE gym_id = ? AND status = 'success' AND check_in_time::date >= CURRENT_DATE - INTERVAL '29 days'
                 GROUP BY member_id
             )
             SELECT rnk FROM ranks WHERE member_id = ?
-        """, (m_id,))
+        """, (session["gym_id"], m_id))
         m_rnk_row = cursor.fetchone()
         monthly_rank = m_rnk_row[0] if m_rnk_row else 0
-        
+
         cursor.execute("""
             WITH ranks AS (
                 SELECT member_id, COUNT(id) as cnt,
                        RANK() OVER (ORDER BY COUNT(id) DESC) as rnk
                 FROM attendance
-                WHERE status = 'success'
+                WHERE gym_id = ? AND status = 'success'
                 GROUP BY member_id
             )
             SELECT rnk FROM ranks WHERE member_id = ?
-        """, (m_id,))
+        """, (session["gym_id"], m_id))
         a_rnk_row = cursor.fetchone()
         all_time_rank = a_rnk_row[0] if a_rnk_row else 0
         
@@ -2352,38 +2454,38 @@ def member_activity_data():
             SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
             FROM members m
             JOIN attendance a ON m.id = a.member_id
-            WHERE a.status = 'success' AND a.check_in_time::date >= CURRENT_DATE - INTERVAL '6 days'
+            WHERE m.gym_id = ? AND a.status = 'success' AND a.check_in_time::date >= CURRENT_DATE - INTERVAL '6 days'
             GROUP BY m.id
             ORDER BY checkin_count DESC, m.first_name ASC LIMIT 10
-        """)
+        """, (session["gym_id"],))
         leaderboard_weekly = [dict(r) for r in cursor.fetchall()]
         for idx, u in enumerate(leaderboard_weekly):
             u["rank"] = idx + 1
             u["points"] = u["checkin_count"] * 100
-            
+
         # Monthly
         cursor.execute("""
             SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
             FROM members m
             JOIN attendance a ON m.id = a.member_id
-            WHERE a.status = 'success' AND a.check_in_time::date >= CURRENT_DATE - INTERVAL '29 days'
+            WHERE m.gym_id = ? AND a.status = 'success' AND a.check_in_time::date >= CURRENT_DATE - INTERVAL '29 days'
             GROUP BY m.id
             ORDER BY checkin_count DESC, m.first_name ASC LIMIT 10
-        """)
+        """, (session["gym_id"],))
         leaderboard_monthly = [dict(r) for r in cursor.fetchall()]
         for idx, u in enumerate(leaderboard_monthly):
             u["rank"] = idx + 1
             u["points"] = u["checkin_count"] * 100
-            
+
         # All Time
         cursor.execute("""
             SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
             FROM members m
             JOIN attendance a ON m.id = a.member_id
-            WHERE a.status = 'success'
+            WHERE m.gym_id = ? AND a.status = 'success'
             GROUP BY m.id
             ORDER BY checkin_count DESC, m.first_name ASC LIMIT 10
-        """)
+        """, (session["gym_id"],))
         leaderboard_all = [dict(r) for r in cursor.fetchall()]
         for idx, u in enumerate(leaderboard_all):
             u["rank"] = idx + 1
@@ -2544,7 +2646,7 @@ def member_activity_data():
 def member_get_qr_token():
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT value FROM settings WHERE key = 'qr_token'")
+    cursor.execute("SELECT value FROM settings WHERE key = 'qr_token' AND gym_id = ?", (session["gym_id"],))
     row = cursor.fetchone()
     conn.close()
     return jsonify({"qr_token": row["value"] if row else None})
@@ -2561,28 +2663,29 @@ def member_check_in():
     if not qr_token:
         return jsonify({"error": "Scan is empty. Access details missing."}), 400
         
+    gym_id = session["gym_id"]
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
+
     # 1. Fetch current gymapp settings qr token
-    cursor.execute("SELECT value FROM settings WHERE key = 'qr_token'")
+    cursor.execute("SELECT value FROM settings WHERE key = 'qr_token' AND gym_id = ?", (gym_id,))
     row = cursor.fetchone()
     expected_token = row["value"] if row else None
-    
+
     if qr_token != expected_token:
         conn.close()
         return jsonify({"error": "Invalid Gym QR code scanned."}), 400
-        
+
     # Get user profile status
     cursor.execute("SELECT first_name, last_name, status, user_id FROM members WHERE id = ?", (m_id,))
     mbr = cursor.fetchone()
     if not mbr:
         conn.close()
         return jsonify({"error": "Member records not found."}), 404
-        
+
     # Edge case: suspended account
     if mbr["status"] == "suspended":
-        cursor.execute("INSERT INTO attendance (member_id, status, error_msg) VALUES (?, 'failed', 'Account suspended')", (m_id,))
+        cursor.execute("INSERT INTO attendance (member_id, status, error_msg, gym_id) VALUES (?, 'failed', 'Account suspended', ?)", (m_id, gym_id))
         conn.commit()
         conn.close()
         return jsonify({"error": "Check-in failed. Member is suspended."}), 403
@@ -2592,21 +2695,21 @@ def member_check_in():
     elif mbr["status"] == "rejected":
         conn.close()
         return jsonify({"error": "Check-in failed. Member registration was rejected."}), 403
-        
+
     # Edge case: expired profile
     today_str = now_ist().strftime("%Y-%m-%d")
     cursor.execute("""
-        SELECT * FROM memberships 
+        SELECT * FROM memberships
         WHERE member_id = ? AND status = 'active' AND end_date >= ?
     """, (m_id, today_str))
     active_m = cursor.fetchone()
-    
+
     if not active_m:
         # Mark member expired if it was active
         if mbr["status"] == "active":
             cursor.execute("UPDATE members SET status = 'expired' WHERE id = ?", (m_id,))
-            
-        cursor.execute("INSERT INTO attendance (member_id, status, error_msg) VALUES (?, 'failed', 'Membership expired')", (m_id,))
+
+        cursor.execute("INSERT INTO attendance (member_id, status, error_msg, gym_id) VALUES (?, 'failed', 'Membership expired', ?)", (m_id, gym_id))
         conn.commit()
         conn.close()
         return jsonify({"error": "Check-in failed. Membership has expired."}), 403
@@ -2658,7 +2761,7 @@ def member_check_in():
                 "check_in": latest_att["check_in_time"],
                 "check_out": now_time_str,
                 "duration": duration_str
-            })
+            }, gym_id)
             
             return jsonify({
                 "success": True,
@@ -2669,9 +2772,6 @@ def member_check_in():
                 "message": f"Great job today, {mbr['first_name']}!"
             })
         else:
-            cursor.execute("SELECT id FROM gyms ORDER BY id LIMIT 1")
-            gym = cursor.fetchone()
-            gym_id = gym["id"] if gym else None
             cursor.execute("""
                 INSERT INTO attendance (member_id, check_in_time, attendance_date, gym_id, attendance_state, status)
                 VALUES (?, ?, ?, ?, 'checked_in', 'success')
@@ -2683,7 +2783,7 @@ def member_check_in():
                 "member_id": m_id,
                 "name": fullname,
                 "time": now_time_str
-            })
+            }, gym_id)
             
             return jsonify({
                 "success": True,
@@ -2720,7 +2820,7 @@ def member_update_profile():
         log_action(cursor, "member_profile_updated_self", "member", m_id, {"phone": phone})
         conn.commit()
 
-        broadcast_event("MEMBER_PROFILE_UPDATED", {"id": m_id, "phone": phone})
+        broadcast_event("MEMBER_PROFILE_UPDATED", {"id": m_id, "phone": phone}, session["gym_id"])
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
