@@ -103,11 +103,19 @@ function openModal(modalId) {
     document.getElementById(modalId).classList.add('active');
     if (modalId === 'assignPlanModal') {
         document.getElementById('assignStartDate').value = new Date().toISOString().split('T')[0];
-        fetchRegisterPlans();
+        fetchRegisterPlans('assignPlanSelect');
     } else if (modalId === 'recordPaymentModal') {
         fetchPendingPaymentsDropDown();
     } else if (modalId === 'gymQRModal') {
         drawGymQR();
+    } else if (modalId === 'addMemberModal') {
+        fetchRegisterPlans('mPlanSelect', true);
+        document.getElementById('mPlanOptionsSection').style.display = 'none';
+        document.getElementById('mCustomPlanDates').style.display = 'none';
+        document.getElementById('mCustomPlanToggle').checked = false;
+        document.getElementById('mCustomStartDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('mCustomEndDate').value = '';
+        document.getElementById('mRecordPayment').checked = true;
     }
 }
 
@@ -987,7 +995,7 @@ async function fetchAttendance() {
 
         tbody.innerHTML = '';
         if (logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-tertiary); padding: 40px 0;">No check-in activity matches.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-tertiary); padding: 40px 0;">No check-in activity matches.</td></tr>';
             document.getElementById('attendancePaginationInfo').textContent = 'Showing 0 to 0 of 0 entries';
             document.getElementById('attendancePaginationControls').innerHTML = '';
             return;
@@ -1000,8 +1008,6 @@ async function fetchAttendance() {
                 tr.classList.add('selected');
             }
 
-            const attendanceLabel = log.status === 'failed' ? 'Failed' : (log.attendance_state === 'completed' || log.check_out_time ? 'Completed' : 'Checked in');
-            const stateBadge = log.status === 'failed' ? 'badge-suspended' : (attendanceLabel === 'Completed' ? 'badge-active' : 'badge-expired');
             const checkinDate = new Date(log.check_in_time);
             const displayTime = checkinDate.toLocaleDateString() + ' ' + checkinDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
@@ -1031,8 +1037,9 @@ async function fetchAttendance() {
                 <td class="col-in" data-label="Check-in">${displayTime}</td>
                 <td class="col-out" data-label="Check-out">${displayCheckout}</td>
                 <td class="col-duration" data-label="Duration" style="font-weight:500;">${durationStr}</td>
-                <td class="col-verification" data-label="Status"><span class="badge ${stateBadge}">${attendanceLabel}</span></td>
-                <td class="col-feedback" data-label="Access details" style="color: var(--text-secondary); font-size: 13.5px;">${log.error_msg || 'Access Approved'}</td>
+                <td data-label="Actions">
+                    <button class="btn btn-ghost" style="padding: 6px 12px; font-size:13px;" onclick="openMemberAttendanceModal(${log.member_id}, '${(log.first_name + ' ' + log.last_name).replace(/'/g, "\\'")}')">View Attendance</button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
@@ -1051,6 +1058,97 @@ async function fetchAttendance() {
 
     } catch (err) {
         console.error('Fetch attendance error', err);
+    }
+}
+
+// Per-member attendance history popup
+let currentAttendanceMemberId = null;
+
+function openMemberAttendanceModal(memberId, memberName) {
+    currentAttendanceMemberId = memberId;
+    document.getElementById('memberAttendanceName').textContent = memberName;
+    document.getElementById('memberAttendanceViewMode').value = 'all';
+    document.getElementById('memberAttendanceMonth').style.display = 'none';
+    document.getElementById('memberAttendanceStart').style.display = 'none';
+    document.getElementById('memberAttendanceEnd').style.display = 'none';
+    document.getElementById('memberAttendanceRangeDash').style.display = 'none';
+    document.getElementById('memberAttendanceMonth').value = new Date().toISOString().slice(0, 7);
+    openModal('memberAttendanceModal');
+    fetchMemberAttendanceHistory();
+}
+
+function onMemberAttendanceViewModeChange() {
+    const mode = document.getElementById('memberAttendanceViewMode').value;
+    document.getElementById('memberAttendanceMonth').style.display = mode === 'monthly' ? 'inline-block' : 'none';
+    document.getElementById('memberAttendanceStart').style.display = mode === 'custom' ? 'inline-block' : 'none';
+    document.getElementById('memberAttendanceEnd').style.display = mode === 'custom' ? 'inline-block' : 'none';
+    document.getElementById('memberAttendanceRangeDash').style.display = mode === 'custom' ? 'inline' : 'none';
+    fetchMemberAttendanceHistory();
+}
+
+async function fetchMemberAttendanceHistory() {
+    if (!currentAttendanceMemberId) return;
+    const mode = document.getElementById('memberAttendanceViewMode').value;
+    const tbody = document.getElementById('memberAttendanceHistoryBody');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 24px 0; color: var(--text-tertiary);">Loading...</td></tr>';
+
+    let url = `/api/admin/attendance?member_id=${currentAttendanceMemberId}&limit=all&sort_by=check_in_time&sort_order=desc`;
+    if (mode === 'monthly') {
+        const month = document.getElementById('memberAttendanceMonth').value;
+        if (month) url += `&month=${month}`;
+    } else if (mode === 'custom') {
+        const start = document.getElementById('memberAttendanceStart').value;
+        const end = document.getElementById('memberAttendanceEnd').value;
+        if (start) url += `&start_date=${start}`;
+        if (end) url += `&end_date=${end}`;
+    }
+
+    try {
+        const res = await fetch(url);
+        const result = await res.json();
+        const logs = result.data;
+
+        tbody.innerHTML = '';
+        if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 24px 0; color: var(--text-tertiary);">No attendance records for this period.</td></tr>';
+            document.getElementById('memberAttendanceSummary').textContent = '';
+            return;
+        }
+
+        logs.forEach(log => {
+            const tr = document.createElement('tr');
+            const checkinDate = new Date(log.check_in_time);
+            const displayIn = checkinDate.toLocaleDateString() + ' ' + checkinDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            let displayOut = 'Active';
+            let durationStr = 'Active';
+            if (log.check_out_time) {
+                const checkoutDate = new Date(log.check_out_time);
+                displayOut = checkoutDate.toLocaleDateString() + ' ' + checkoutDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const diff = Math.floor((checkoutDate - checkinDate) / 60000);
+                const hrs = Math.floor(diff / 60);
+                const mins = diff % 60;
+                durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+            } else if (log.status === 'failed') {
+                displayOut = '—';
+                durationStr = '—';
+            }
+
+            const label = log.status === 'failed' ? 'Failed' : (log.attendance_state === 'completed' || log.check_out_time ? 'Completed' : 'Checked in');
+            const badgeClass = log.status === 'failed' ? 'badge-suspended' : (label === 'Completed' ? 'badge-active' : 'badge-expired');
+
+            tr.innerHTML = `
+                <td>${displayIn}</td>
+                <td>${displayOut}</td>
+                <td>${durationStr}</td>
+                <td><span class="badge ${badgeClass}">${label}</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('memberAttendanceSummary').textContent = `${result.total} check-in${result.total === 1 ? '' : 's'} in this period.`;
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 24px 0; color: var(--danger);">Failed to load attendance.</td></tr>';
     }
 }
 
@@ -1189,12 +1287,14 @@ async function fetchPlans() {
 }
 
 // Dropdown injections helpers
-async function fetchRegisterPlans() {
-    const select = document.getElementById('assignPlanSelect');
+async function fetchRegisterPlans(selectId = 'assignPlanSelect', includeNoPlanOption = false) {
+    const select = document.getElementById(selectId);
     try {
         const res = await fetch('/api/admin/plans');
         const plans = await res.json();
-        select.innerHTML = '<option value="" disabled selected>Select Membership Plan Tier</option>';
+        select.innerHTML = includeNoPlanOption
+            ? '<option value="">No plan &mdash; add later</option>'
+            : '<option value="" disabled selected>Select Membership Plan Tier</option>';
         plans.forEach(plan => {
             select.innerHTML += `<option value="${plan.id}">${plan.name} (${formatINRCurrency(plan.price)} - ${plan.duration_months}m)</option>`;
         });
@@ -1571,6 +1671,14 @@ function setupFormHandlers() {
         }
     });
 
+    // Add Member: show/hide plan options based on plan selection
+    document.getElementById('mPlanSelect').addEventListener('change', (e) => {
+        document.getElementById('mPlanOptionsSection').style.display = e.target.value ? 'block' : 'none';
+    });
+    document.getElementById('mCustomPlanToggle').addEventListener('change', (e) => {
+        document.getElementById('mCustomPlanDates').style.display = e.target.checked ? 'grid' : 'none';
+    });
+
     // Add Member
     document.getElementById('addMemberForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1582,6 +1690,8 @@ function setupFormHandlers() {
             emergency_contact: document.getElementById('mEmergency').value,
             password: document.getElementById('mPassword').value || undefined
         };
+        const planId = document.getElementById('mPlanSelect').value;
+        const isCustomPlan = document.getElementById('mCustomPlanToggle').checked;
 
         try {
             const res = await fetch('/api/admin/members', {
@@ -1590,15 +1700,43 @@ function setupFormHandlers() {
                 body: JSON.stringify(data)
             });
             const resData = await res.json();
-            if (resData.success) {
-                closeModal('addMemberModal');
-                document.getElementById('addMemberForm').reset();
-                showToast('Member created successfully.');
-                fetchMembers();
-                fetchDashboardStats();
-            } else {
+            if (!resData.success) {
                 showToast(resData.error, 'error');
+                return;
             }
+
+            if (planId) {
+                const planData = {
+                    plan_id: planId,
+                    record_payment: document.getElementById('mRecordPayment').checked
+                };
+                if (isCustomPlan) {
+                    const customStart = document.getElementById('mCustomStartDate').value;
+                    const customEnd = document.getElementById('mCustomEndDate').value;
+                    if (customStart) planData.start_date = customStart;
+                    if (customEnd) planData.end_date = customEnd;
+                }
+                const planRes = await fetch(`/api/admin/members/${resData.member_id}/assign-plan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(planData)
+                });
+                const planResData = await planRes.json();
+                if (!planResData.success) {
+                    showToast(`Member created, but plan assignment failed: ${planResData.error}`, 'error');
+                    closeModal('addMemberModal');
+                    document.getElementById('addMemberForm').reset();
+                    fetchMembers();
+                    fetchDashboardStats();
+                    return;
+                }
+            }
+
+            closeModal('addMemberModal');
+            document.getElementById('addMemberForm').reset();
+            showToast(planId ? 'Member created and plan assigned successfully.' : 'Member created successfully.');
+            fetchMembers();
+            fetchDashboardStats();
         } catch (err) {
             showToast('Create request failed', 'error');
         }
@@ -2274,7 +2412,7 @@ async function triggerBulkExport() {
             }
         });
     } else if (mode === 'attendance') {
-        csvContent += "Name,Phone,Check-In Time,Check-Out Time,Workout Duration,Verification State,Feedback\n";
+        csvContent += "Name,Phone,Check-In Time,Check-Out Time,Workout Duration\n";
         selectedSet.forEach(id => {
             const row = document.getElementById(`attendance-row-${id}`);
             if (row) {
@@ -2284,9 +2422,7 @@ async function triggerBulkExport() {
                 const checkin = cols[3].innerText;
                 const checkout = cols[4].innerText;
                 const duration = cols[5].innerText;
-                const status = cols[6].innerText;
-                const feedback = cols[7].innerText;
-                csvContent += `"${name}","${phone}","${checkin}","${checkout}","${duration}","${status}","${feedback}"\n`;
+                csvContent += `"${name}","${phone}","${checkin}","${checkout}","${duration}"\n`;
             }
         });
     } else if (mode === 'payments') {
@@ -2424,20 +2560,18 @@ function exportAttendanceCSV() {
     const dateStr = document.getElementById('attendanceDateFilter').value || 'all';
     alert(`CSV Report Generated. Downloading check-in logs for: [${dateStr}]`);
 
-    let csvContent = "data:text/csv;charset=utf-8,Member,Phone,Check-In Time,Check-Out Time,Workout Duration,Verification State,Feedback\n";
+    let csvContent = "data:text/csv;charset=utf-8,Member,Phone,Check-In Time,Check-Out Time,Workout Duration\n";
     const rows = document.querySelectorAll('#attendanceTableBody tr');
 
     rows.forEach(tr => {
         const cols = tr.querySelectorAll('td');
-        if (cols.length >= 8) {
+        if (cols.length >= 6) {
             const name = cols[1].innerText;
             const phone = cols[2].innerText;
             const checkin = cols[3].innerText;
             const checkout = cols[4].innerText;
             const duration = cols[5].innerText;
-            const status = cols[6].innerText;
-            const feedback = cols[7].innerText;
-            csvContent += `"${name}","${phone}","${checkin}","${checkout}","${duration}","${status}","${feedback}"\n`;
+            csvContent += `"${name}","${phone}","${checkin}","${checkout}","${duration}"\n`;
         }
     });
 

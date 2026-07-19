@@ -518,22 +518,15 @@
                                             </svg></div>
                                         <span class="quick-square-label">Scan QR</span>
                                     </div>
-                                    <div class="quick-action-square-btn" onclick="showTab('reminders')">
+                                    <div class="quick-action-square-btn" onclick="showTab('members')">
                                         <div class="quick-square-icon"><svg width="16" height="16" viewBox="0 0 24 24"
                                                 fill="none" stroke="currentColor" stroke-width="2.5">
-                                                <path
-                                                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                                <circle cx="8.5" cy="7" r="4" />
+                                                <line x1="20" y1="8" x2="20" y2="14" />
+                                                <line x1="17" y1="11" x2="23" y2="11" />
                                             </svg></div>
-                                        <span class="quick-square-label">Send Reminds</span>
-                                    </div>
-                                    <div class="quick-action-square-btn"
-                                        onclick="showTab('plans'); openModal('addPlanModal')">
-                                        <div class="quick-square-icon"><svg width="16" height="16" viewBox="0 0 24 24"
-                                                fill="none" stroke="currentColor" stroke-width="2.5">
-                                                <line x1="12" y1="5" x2="12" y2="19" />
-                                                <line x1="5" y1="12" x2="19" y2="12" />
-                                            </svg></div>
-                                        <span class="quick-square-label">Create Plan</span>
+                                        <span class="quick-square-label">Add Member</span>
                                     </div>
                                 </div>
                             </div>
@@ -745,12 +738,6 @@
                                             onchange="toggleTableColumn('attendanceTable', 'col-out')"> Check-Out Time</label>
                                     <label class="vis-dropdown-item"><input type="checkbox" checked
                                             onchange="toggleTableColumn('attendanceTable', 'col-duration')"> Workout Duration</label>
-                                    <label class="vis-dropdown-item"><input type="checkbox" checked
-                                            onchange="toggleTableColumn('attendanceTable', 'col-verification')">
-                                        Verification State</label>
-                                    <label class="vis-dropdown-item"><input type="checkbox" checked
-                                            onchange="toggleTableColumn('attendanceTable', 'col-feedback')"> Feedback
-                                        Message</label>
                                 </div>
                             </div>
                             <button class="btn btn-secondary" onclick="exportAttendanceCSV()"
@@ -784,9 +771,7 @@
                                     <th class="col-in" onclick="toggleSortAttendance('check_in_time')">Check-In Time</th>
                                     <th class="col-out" onclick="toggleSortAttendance('check_out_time')">Check-Out Time</th>
                                     <th class="col-duration">Workout Duration</th>
-                                    <th class="col-verification" onclick="toggleSortAttendance('status')">Verification
-                                        State</th>
-                                    <th class="col-feedback">Feedback Message</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="attendanceTableBody"></tbody>
@@ -1207,6 +1192,38 @@
                     <label for="mPassword">Create Password (Optional)</label>
                     <input type="password" id="mPassword" class="input-control" placeholder="Defaults to password123">
                 </div>
+                <div class="input-group">
+                    <label for="mPlanSelect">Membership Plan (Optional)</label>
+                    <select id="mPlanSelect" class="input-control">
+                        <option value="">No plan &mdash; add later</option>
+                    </select>
+                </div>
+                <div id="mPlanOptionsSection" style="display:none;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                        <input type="checkbox" id="mCustomPlanToggle" style="width: 18px; height: 18px;">
+                        <label for="mCustomPlanToggle"
+                            style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-secondary);">
+                            Custom Plan (temporary period with its own start/end date)
+                        </label>
+                    </div>
+                    <div id="mCustomPlanDates" style="display:none; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div class="input-group">
+                            <label for="mCustomStartDate">Start Date</label>
+                            <input type="date" id="mCustomStartDate" class="input-control">
+                        </div>
+                        <div class="input-group">
+                            <label for="mCustomEndDate">End Date (Optional)</label>
+                            <input type="date" id="mCustomEndDate" class="input-control">
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; margin: 0 0 16px;">
+                        <input type="checkbox" id="mRecordPayment" checked style="width: 18px; height: 18px;">
+                        <label for="mRecordPayment"
+                            style="font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text-secondary);">
+                            Record Payment immediately (Paid)
+                        </label>
+                    </div>
+                </div>
                 <button type="submit" class="btn btn-primary"
                     style="width: 100%; margin-top: 12px; font-weight:600;">Create Account</button>
             </form>
@@ -1307,6 +1324,53 @@
                 <button type="submit" class="btn btn-primary" style="width: 100%; font-weight:600;">Assign & Activate
                     Plan</button>
             </form>
+        </div>
+    </div>
+
+    <!-- MODAL: MEMBER ATTENDANCE HISTORY -->
+    <div id="memberAttendanceModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 720px;">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Attendance History</h3>
+                <button class="modal-close" onclick="closeModal('memberAttendanceModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div style="font-weight: 600; font-size: 16px; margin-bottom: 16px;" id="memberAttendanceName">Member Name
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;">
+                <select id="memberAttendanceViewMode" class="input-control" style="width: auto; margin-bottom:0;"
+                    onchange="onMemberAttendanceViewModeChange()">
+                    <option value="all">All Time</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+                <input type="month" id="memberAttendanceMonth" class="input-control"
+                    style="width: auto; margin-bottom:0; display:none;" onchange="fetchMemberAttendanceHistory()">
+                <input type="date" id="memberAttendanceStart" class="input-control"
+                    style="width: auto; margin-bottom:0; display:none;" onchange="fetchMemberAttendanceHistory()">
+                <span id="memberAttendanceRangeDash" style="display:none; color: var(--text-tertiary);">to</span>
+                <input type="date" id="memberAttendanceEnd" class="input-control"
+                    style="width: auto; margin-bottom:0; display:none;" onchange="fetchMemberAttendanceHistory()">
+            </div>
+            <div class="premium-table-container" style="max-height: 420px; overflow-y: auto;">
+                <table class="premium-table">
+                    <thead>
+                        <tr>
+                            <th>Check-In Time</th>
+                            <th>Check-Out Time</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memberAttendanceHistoryBody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 12px; font-size: 13px; color: var(--text-tertiary);"
+                id="memberAttendanceSummary"></div>
         </div>
     </div>
 

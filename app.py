@@ -940,37 +940,49 @@ def admin_assign_plan(id):
     data = request.get_json() or {}
     plan_id = data.get("plan_id")
     start_date_str = data.get("start_date") or now_ist().strftime("%Y-%m-%d")
+    custom_end_date_str = data.get("end_date")  # optional override for a custom/prorated period
     record_payment = data.get("record_payment", True)
-    
+
     if not plan_id:
         return jsonify({"error": "Membership plan ID is required"}), 400
-        
+
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
+
     # 1. Verify Member exists
     cursor.execute("SELECT user_id, first_name, last_name, status FROM members WHERE id = ?", (id,))
     member = cursor.fetchone()
     if not member:
         conn.close()
         return jsonify({"error": "Member not found"}), 404
-        
+
     # 2. Get Plan duration and price
     cursor.execute("SELECT name, price, duration_months FROM plans WHERE id = ?", (plan_id,))
     plan = cursor.fetchone()
     if not plan:
         conn.close()
         return jsonify({"error": "Selected plan not found"}), 404
-        
+
     # Calculate end date
     try:
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
     except ValueError:
         conn.close()
         return jsonify({"error": "Invalid start_date format, must be YYYY-MM-DD"}), 400
-        
-    end_date = start_date + timedelta(days=plan["duration_months"] * 30)
-    end_date_str = end_date.strftime("%Y-%m-%d")
+
+    if custom_end_date_str:
+        try:
+            custom_end_date = datetime.strptime(custom_end_date_str, "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            return jsonify({"error": "Invalid end_date format, must be YYYY-MM-DD"}), 400
+        if custom_end_date <= start_date:
+            conn.close()
+            return jsonify({"error": "End date must be after the start date"}), 400
+        end_date_str = custom_end_date_str
+    else:
+        end_date = start_date + timedelta(days=plan["duration_months"] * 30)
+        end_date_str = end_date.strftime("%Y-%m-%d")
     
     try:
         # Mark historical active memberships as expired/suspended to avoid double plans
@@ -1005,7 +1017,7 @@ def admin_assign_plan(id):
         log_action(cursor, "plan_assigned", "member", id, {
             "plan_name": plan["name"], "plan_id": plan_id, "membership_id": membership_id,
             "payment_id": payment_id, "price": plan["price"], "record_payment": record_payment,
-            "end_date": end_date_str
+            "start_date": start_date_str, "end_date": end_date_str, "custom_end_date": bool(custom_end_date_str)
         })
         conn.commit()
 
@@ -1104,6 +1116,9 @@ def admin_delete_plan(id):
 def admin_get_attendance():
     date_filter = request.args.get("date", "").strip()
     month_filter = request.args.get("month", "").strip()  # "YYYY-MM"
+    start_date_filter = request.args.get("start_date", "").strip()  # "YYYY-MM-DD"
+    end_date_filter = request.args.get("end_date", "").strip()  # "YYYY-MM-DD"
+    member_id_filter = request.args.get("member_id", "").strip()
     search = request.args.get("search", "").strip()
     page = request.args.get("page", 1, type=int)
     limit_param = request.args.get("limit", "25").strip()
@@ -1151,11 +1166,23 @@ def admin_get_attendance():
         filter_sql += " AND TO_CHAR(a.check_in_time::timestamp, 'YYYY-MM') = ?"
         params.append(month_filter)
 
+    if start_date_filter:
+        filter_sql += " AND a.check_in_time::date >= ?"
+        params.append(start_date_filter)
+
+    if end_date_filter:
+        filter_sql += " AND a.check_in_time::date <= ?"
+        params.append(end_date_filter)
+
+    if member_id_filter:
+        filter_sql += " AND a.member_id = ?"
+        params.append(member_id_filter)
+
     if search:
         filter_sql += " AND (m.first_name ILIKE ? OR m.last_name ILIKE ? OR m.phone ILIKE ?)"
         match = f"%{search}%"
         params.extend([match, match, match])
-        
+
     count_query += filter_sql
     query += filter_sql
     
