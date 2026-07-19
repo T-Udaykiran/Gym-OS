@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "gym-os-flask",
-      "runtimeExecutable": "python",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": ["app.py"],
       "port": 8000,
       "autoPort": true

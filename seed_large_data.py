@@ -1,21 +1,11 @@
-import sqlite3
-import os
 import random
 from datetime import datetime, timedelta
 import database
 
 def main():
     print("Starting large-scale GymOS DB seeding...")
-    
-    # Remove existing db if it exists to start fresh
-    if os.path.exists(database.DB_FILE):
-        try:
-            os.remove(database.DB_FILE)
-            print("Deleted old database file.")
-        except Exception as e:
-            print(f"Could not remove database file: {e}")
 
-    # Re-initialize the &schema
+    # Re-initialize the schema (idempotent; the DELETEs below clear old rows)
     database.init_db()
     
     conn = database.get_db_connection()

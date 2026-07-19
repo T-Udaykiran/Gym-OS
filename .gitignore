@@ -1,0 +1,8 @@
+.env
+__pycache__/
+.pycache/
+*.pyc
+.venv/
+.pip-cache/
+server.stdout.log
+server.stderr.log
