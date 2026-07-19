@@ -1596,12 +1596,20 @@ function setupAuthForms() {
     if (regForm) {
         regForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            const gymId = document.getElementById('regGymIdInput').value;
+            if (!gymId) {
+                showMobileToast('Please search for and select your gym first.', 'error');
+                return;
+            }
+
             const fullName = document.getElementById('regFullNameInput').value.trim();
             const nameParts = fullName.split(' ');
             const first_name = nameParts[0] || '';
             const last_name = nameParts.slice(1).join(' ') || '';
 
             tempRegisterData = {
+                gym_id: parseInt(gymId, 10),
                 first_name: first_name,
                 last_name: last_name,
                 email: document.getElementById('regEmailInput').value.trim(),
@@ -1614,6 +1622,49 @@ function setupAuthForms() {
         });
     }
 
+}
+
+// Gym search/select for registration
+let gymSearchDebounceTimer = null;
+
+function handleGymSearchInput() {
+    document.getElementById('regGymIdInput').value = '';
+    const q = document.getElementById('regGymSearchInput').value.trim();
+    const dropdown = document.getElementById('regGymResultsDropdown');
+
+    clearTimeout(gymSearchDebounceTimer);
+    if (q.length < 2) {
+        dropdown.style.display = 'none';
+        return;
+    }
+
+    gymSearchDebounceTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(`/api/gyms/search?q=${encodeURIComponent(q)}`);
+            const gyms = await res.json();
+
+            if (gyms.length === 0) {
+                dropdown.innerHTML = '<div style="padding: 12px 16px; font-size: 13px; color: rgba(255,255,255,0.5);">No gyms found.</div>';
+            } else {
+                dropdown.innerHTML = gyms.map(g => `
+                    <div class="gym-search-result-item" style="padding: 10px 16px; font-size: 13.5px; color: #fff; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.08);"
+                         onclick="selectGym(${g.id}, '${g.name.replace(/'/g, "\\'")}', '${g.gym_code}')">
+                        <div style="font-weight:600;">${g.name}</div>
+                        <div style="font-size:11.5px; color: rgba(255,255,255,0.5);">${g.gym_code}</div>
+                    </div>
+                `).join('');
+            }
+            dropdown.style.display = 'block';
+        } catch (err) {
+            dropdown.style.display = 'none';
+        }
+    }, 300);
+}
+
+function selectGym(id, name, code) {
+    document.getElementById('regGymIdInput').value = id;
+    document.getElementById('regGymSearchInput').value = `${name} (${code})`;
+    document.getElementById('regGymResultsDropdown').style.display = 'none';
 }
 
 async function logoutMemberApp() {

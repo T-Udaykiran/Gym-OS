@@ -92,6 +92,19 @@
         </div>
     </div>
 
+    <!-- ================= SUBSCRIPTION EXPIRED (BLOCKING, NO CLOSE) ================= -->
+    <div id="subscriptionExpiredOverlay" style="display:none; position: fixed; inset: 0; z-index: 5000; background: rgba(11,15,25,0.85); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 20px;">
+        <div class="card" style="max-width: 480px; width: 100%; text-align: center;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: var(--danger-light); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </div>
+            <h2 style="font-size: 20px; margin-bottom: 8px;">Subscription Inactive</h2>
+            <p style="color: var(--text-secondary); font-size: 13.5px; margin-bottom: 20px;">Your gym's GymOS subscription has expired. Renew to regain access to your owner portal &mdash; your data is safe and nothing has been lost.</p>
+            <div id="subscriptionExpiredPlans" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
+            <p style="font-size: 12.5px; color: var(--text-tertiary);">Payments are handled manually for now &mdash; contact GymOS to renew, and your access will be restored as soon as payment is confirmed.</p>
+        </div>
+    </div>
+
     <!-- ================= FORGOT PASSWORD MODAL ================= -->
     <div id="forgotPasswordModal" class="modal-overlay">
         <div class="modal-container" style="max-width: 400px;">
@@ -1092,6 +1105,16 @@
                     <p style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 24px;">Update details
                         shown to members on receipts and dashboard checkins.</p>
                     <form id="settingsForm">
+                        <div class="input-group">
+                            <label for="settingsGymCode">Gym ID</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="settingsGymCode" class="input-control" style="text-transform: uppercase;" placeholder="e.g. FITZONE-X7K2">
+                                <button type="button" class="btn btn-secondary" style="white-space: nowrap;" onclick="copyGymCode()">Copy</button>
+                            </div>
+                            <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">Share this
+                                with members so they can find your gym when they register. Editing it takes effect
+                                immediately - members already registered are unaffected.</small>
+                        </div>
                         <div class="input-group">
                             <label for="settingsGymName">Gym / Business Name</label>
                             <input type="text" id="settingsGymName" class="input-control" required>

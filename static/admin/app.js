@@ -5,6 +5,48 @@ let sseSource = null;
 let revenueLineChart = null;
 let attendanceDonutChart = null;
 
+// Every owner-portal API call goes through fetch(), so intercepting it here
+// catches a 402 "subscription inactive" response no matter which of the many
+// call sites triggered it, without needing to touch each one individually.
+let subscriptionModalShown = false;
+const _nativeFetch = window.fetch;
+window.fetch = async function (...args) {
+    const res = await _nativeFetch(...args);
+    if (res.status === 402) {
+        let payload = null;
+        try { payload = await res.clone().json(); } catch (e) { /* not JSON */ }
+        if (payload && payload.subscription_expired) {
+            showSubscriptionExpiredModal();
+        }
+    }
+    return res;
+};
+
+async function showSubscriptionExpiredModal() {
+    if (subscriptionModalShown) return;
+    subscriptionModalShown = true;
+
+    const overlay = document.getElementById('subscriptionExpiredOverlay');
+    overlay.style.display = 'flex';
+    if (sseSource) sseSource.close();
+
+    try {
+        const res = await _nativeFetch('/api/owner/subscription-info');
+        const data = await res.json();
+        const plansEl = document.getElementById('subscriptionExpiredPlans');
+        if (data.plans && data.plans.length > 0) {
+            plansEl.innerHTML = data.plans.map(p => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                    <span style="font-weight:600; font-size:13.5px;">${p.name} (${p.duration_months} ${p.duration_months === 1 ? 'month' : 'months'})</span>
+                    <span style="font-weight:700;">${formatINRCurrency(p.price)}</span>
+                </div>
+            `).join('');
+        }
+    } catch (err) {
+        console.error('Failed to load subscription plans', err);
+    }
+}
+
 // Pagination, Sorting & Bulk Selection State
 let memberPage = 1;
 let memberLimit = 25;
@@ -1579,12 +1621,14 @@ async function fetchGymSettings() {
         const res = await fetch('/api/admin/settings');
         gymSettings = await res.json();
 
+        const codeInput = document.getElementById('settingsGymCode');
         const nameInput = document.getElementById('settingsGymName');
         const phoneInput = document.getElementById('settingsGymPhone');
         const addressInput = document.getElementById('settingsGymAddress');
         const tokenInput = document.getElementById('settingsQRToken');
         const imageInput = document.getElementById('settingsGymImageUrl');
 
+        if (codeInput) codeInput.value = gymSettings.gym_code || '';
         if (nameInput) nameInput.value = gymSettings.gym_name || '';
         if (phoneInput) phoneInput.value = gymSettings.gym_phone || '';
         if (addressInput) addressInput.value = gymSettings.gym_address || '';
@@ -1599,6 +1643,19 @@ async function fetchGymSettings() {
     } catch (err) {
         console.error('Gym settings loading error', err);
     }
+}
+
+function copyGymCode() {
+    const codeInput = document.getElementById('settingsGymCode');
+    if (!codeInput.value) {
+        showToast('No Gym ID set yet', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(codeInput.value).then(() => {
+        showToast('Gym ID copied to clipboard.');
+    }).catch(() => {
+        showToast('Could not copy automatically - select and copy manually.', 'error');
+    });
 }
 
 function renderDashboardGymImage(imageUrl) {
@@ -1672,6 +1729,7 @@ function setupFormHandlers() {
     document.getElementById('settingsForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const data = {
+            gym_code: document.getElementById('settingsGymCode').value,
             gym_name: document.getElementById('settingsGymName').value,
             gym_phone: document.getElementById('settingsGymPhone').value,
             gym_address: document.getElementById('settingsGymAddress').value,

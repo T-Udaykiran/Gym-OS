@@ -1,0 +1,86 @@
+/* Company Portal: layout only. Buttons/inputs/tables/modals/badges/cards
+   all come from shared/styles.css and admin/style.css. */
+
+body {
+    background-color: var(--bg-app);
+}
+
+.company-login-overlay {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.company-login-card {
+    width: 100%;
+    max-width: 380px;
+    padding: 32px;
+}
+
+.company-logo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    color: var(--sidebar-dark);
+}
+
+.company-app-layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.company-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 14px 28px;
+    background-color: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.company-tabs {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+    justify-content: center;
+}
+
+.company-tab-btn {
+    border: none;
+    background: transparent;
+    padding: 8px 16px;
+    border-radius: var(--radius-full);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.company-tab-btn:hover {
+    background-color: var(--bg-raised);
+}
+
+.company-tab-btn.active {
+    background-color: var(--sidebar-dark);
+    color: #fff;
+}
+
+.company-main {
+    flex: 1;
+    padding: 24px 28px;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.company-tab-content {
+    display: block;
+}

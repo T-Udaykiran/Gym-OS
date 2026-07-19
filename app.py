@@ -60,26 +60,31 @@ def build_whatsapp_link(phone, message):
         clean_phone = "+1" + clean_phone[1:]  # default fallback for testing
     return f"https://wa.me/{clean_phone}?text={encoded_msg}"
 
-def log_action(cursor, action, entity_type=None, entity_id=None, details=None):
+def log_action(cursor, action, entity_type=None, entity_id=None, details=None, gym_id=None):
     """Write one audit_log row for a state-changing action.
 
     Snapshots the actor's email/role at write time (not just their id) and
     never references entity_type/entity_id via a foreign key, so the log
     entry survives even if the actor's account or the entity itself is
     later deleted - that's the whole point of an audit trail.
+
+    gym_id defaults to the caller's own session gym, but company-portal
+    actions (which have no gym of their own) act ON a specific tenant, so
+    they pass that tenant's id explicitly to keep it visible in that gym's
+    log too.
     """
     cursor.execute(
         "INSERT INTO audit_log (actor_user_id, actor_email, actor_role, action, entity_type, entity_id, details, gym_id) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            session.get("user_id"),
+            session.get("user_id") or session.get("company_user_id"),
             session.get("email"),
             session.get("role"),
             action,
             entity_type,
             entity_id,
             json.dumps(details) if details is not None else None,
-            session.get("gym_id"),
+            gym_id if gym_id is not None else session.get("gym_id"),
         ),
     )
 
@@ -136,6 +141,32 @@ def index():
     return send_file(os.path.join(app.static_folder, "index.html"))
 
 # ================= AUTHENTICATION ENDPOINTS =================
+
+@app.route("/api/gyms/search", methods=["GET"])
+def public_gym_search():
+    """Public lookup for the registration screen's gym picker.
+
+    Deliberately returns only id/name/gym_code - no phone, address, or
+    subscription details - since this endpoint has no auth requirement.
+    Only actively-subscribed gyms are returned, since registering into an
+    inactive one would just be rejected anyway.
+    """
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    match = f"%{q}%"
+    cursor.execute("""
+        SELECT id, name, gym_code FROM gyms
+        WHERE (gym_code ILIKE ? OR name ILIKE ?) AND subscription_status = 'active'
+        ORDER BY name ASC
+        LIMIT 10
+    """, (match, match))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
 
 @app.route("/api/auth/register", methods=["POST"])
 def auth_register():
@@ -352,6 +383,254 @@ def company_auth_me():
     if "company_user_id" not in session:
         return jsonify({"user": None})
     return jsonify({"user": {"id": session["company_user_id"], "email": session.get("email")}})
+
+# ================= COMPANY PORTAL: TENANT MANAGEMENT =================
+
+@app.route("/api/company/gyms", methods=["GET"])
+@company_login_required
+def company_get_gyms():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT g.id, g.name, g.phone, g.address, g.gym_code, g.subscription_status, g.subscription_end_date,
+               u.email as owner_email,
+               (SELECT COUNT(*) FROM members m WHERE m.gym_id = g.id AND m.status NOT IN ('pending', 'rejected')) as member_count
+        FROM gyms g
+        LEFT JOIN users u ON g.owner_user_id = u.id
+        ORDER BY g.id DESC
+    """)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/company/gyms", methods=["POST"])
+@company_login_required
+def company_create_gym():
+    data = request.get_json() or {}
+    gym_name = data.get("gym_name")
+    gym_phone = data.get("gym_phone", "")
+    gym_address = data.get("gym_address", "")
+    owner_first_name = data.get("owner_first_name")
+    owner_email = data.get("owner_email")
+    owner_password = data.get("owner_password")
+
+    if not all([gym_name, owner_first_name, owner_email, owner_password]):
+        return jsonify({"error": "Gym name, owner name, email, and password are required"}), 400
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        qr_token = f"gymos-{database.generate_gym_code(gym_name).lower()}"
+        cursor.execute(
+            "INSERT INTO gyms (name, phone, address, qr_code_token) VALUES (?, ?, ?, ?)",
+            (gym_name, gym_phone, gym_address, qr_token)
+        )
+        gym_id = cursor.lastrowid
+        gym_code = database.unique_gym_code(cursor, gym_name)
+
+        pw_hash = database.hash_password(owner_password)
+        cursor.execute(
+            "INSERT INTO users (email, password_hash, role, gym_id) VALUES (?, ?, 'owner', ?)",
+            (owner_email, pw_hash, gym_id)
+        )
+        owner_user_id = cursor.lastrowid
+
+        # New tenants start unpaid - the company must mark a subscription
+        # paid before the owner portal unlocks (see is_subscription_active).
+        cursor.execute(
+            "UPDATE gyms SET gym_code = ?, owner_user_id = ?, subscription_status = 'expired' WHERE id = ?",
+            (gym_code, owner_user_id, gym_id)
+        )
+
+        # Seed default settings so the owner portal has something to show immediately.
+        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_name', ?, ?)", (gym_name, gym_id))
+        if gym_phone:
+            cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_phone', ?, ?)", (gym_phone, gym_id))
+        if gym_address:
+            cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_address', ?, ?)", (gym_address, gym_id))
+        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('qr_token', ?, ?)", (qr_token, gym_id))
+
+        log_action(cursor, "gym_created", "gym", gym_id, {
+            "gym_name": gym_name, "gym_code": gym_code, "owner_email": owner_email
+        }, gym_id=gym_id)
+        conn.commit()
+
+        return jsonify({"success": True, "gym_id": gym_id, "gym_code": gym_code})
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        return jsonify({"error": "Owner email already exists"}), 400
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/api/company/gyms/<int:id>", methods=["GET"])
+@company_login_required
+def company_get_gym_detail(id):
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT g.*, u.email as owner_email
+        FROM gyms g
+        LEFT JOIN users u ON g.owner_user_id = u.id
+        WHERE g.id = ?
+    """, (id,))
+    gym = cursor.fetchone()
+    if not gym:
+        conn.close()
+        return jsonify({"error": "Gym not found"}), 404
+
+    cursor.execute("""
+        SELECT cs.*, cp.name as plan_name
+        FROM company_subscriptions cs
+        LEFT JOIN company_plans cp ON cs.company_plan_id = cp.id
+        WHERE cs.gym_id = ?
+        ORDER BY cs.created_at DESC
+    """, (id,))
+    history = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute("SELECT COUNT(*) FROM members WHERE gym_id = ? AND status NOT IN ('pending', 'rejected')", (id,))
+    member_count = cursor.fetchone()[0]
+
+    conn.close()
+    return jsonify({"gym": dict(gym), "subscription_history": history, "member_count": member_count})
+
+@app.route("/api/company/gyms/<int:id>/mark-paid", methods=["POST"])
+@company_login_required
+def company_mark_gym_paid(id):
+    data = request.get_json() or {}
+    company_plan_id = data.get("company_plan_id")
+    amount_paid = data.get("amount_paid")
+    start_date_str = data.get("start_date") or now_ist().strftime("%Y-%m-%d")
+    notes = data.get("notes")
+
+    if not company_plan_id:
+        return jsonify({"error": "A subscription plan is required"}), 400
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, name FROM gyms WHERE id = ?", (id,))
+    gym = cursor.fetchone()
+    if not gym:
+        conn.close()
+        return jsonify({"error": "Gym not found"}), 404
+
+    cursor.execute("SELECT name, price, duration_months FROM company_plans WHERE id = ?", (company_plan_id,))
+    plan = cursor.fetchone()
+    if not plan:
+        conn.close()
+        return jsonify({"error": "Subscription plan not found"}), 404
+
+    try:
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+    except ValueError:
+        conn.close()
+        return jsonify({"error": "Invalid start_date format, must be YYYY-MM-DD"}), 400
+
+    end_date = start_date + timedelta(days=plan["duration_months"] * 30)
+    end_date_str = end_date.strftime("%Y-%m-%d")
+    pay_time = now_ist().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        cursor.execute("""
+            INSERT INTO company_subscriptions (gym_id, company_plan_id, status, start_date, end_date, amount_paid, payment_date, notes)
+            VALUES (?, ?, 'active', ?, ?, ?, ?, ?)
+        """, (id, company_plan_id, start_date_str, end_date_str,
+              amount_paid if amount_paid is not None else plan["price"], pay_time, notes))
+
+        cursor.execute(
+            "UPDATE gyms SET subscription_status = 'active', subscription_end_date = ?, subscription_plan_id = ? WHERE id = ?",
+            (end_date_str, company_plan_id, id)
+        )
+
+        log_action(cursor, "gym_subscription_paid", "gym", id, {
+            "plan_name": plan["name"], "amount_paid": amount_paid if amount_paid is not None else plan["price"],
+            "end_date": end_date_str
+        }, gym_id=id)
+        conn.commit()
+
+        return jsonify({"success": True, "subscription_end_date": end_date_str})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+# ================= COMPANY PORTAL: SUBSCRIPTION PLAN TIERS =================
+
+@app.route("/api/company/plans", methods=["GET"])
+@company_login_required
+def company_get_plans():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM company_plans ORDER BY price ASC")
+    p_list = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(p_list)
+
+@app.route("/api/company/plans", methods=["POST"])
+@company_login_required
+def company_create_plan():
+    data = request.get_json() or {}
+    name = data.get("name")
+    price = data.get("price")
+    duration = data.get("duration_months")
+
+    if not all([name, price is not None, duration]):
+        return jsonify({"error": "Missing required plan fields"}), 400
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO company_plans (name, price, duration_months) VALUES (?, ?, ?)",
+        (name, float(price), int(duration))
+    )
+    plan_id = cursor.lastrowid
+    log_action(cursor, "company_plan_created", "company_plan", plan_id, {"name": name, "price": price, "duration_months": duration})
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True, "plan_id": plan_id})
+
+@app.route("/api/company/plans/<int:id>", methods=["PUT"])
+@company_login_required
+def company_update_plan(id):
+    data = request.get_json() or {}
+    name = data.get("name")
+    price = data.get("price")
+    duration = data.get("duration_months")
+
+    if not all([name, price is not None, duration]):
+        return jsonify({"error": "Missing plan edit data"}), 400
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE company_plans SET name = ?, price = ?, duration_months = ? WHERE id = ?",
+        (name, float(price), int(duration), id)
+    )
+    log_action(cursor, "company_plan_updated", "company_plan", id, {"name": name, "price": price, "duration_months": duration})
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+@app.route("/api/company/plans/<int:id>", methods=["DELETE"])
+@company_login_required
+def company_delete_plan(id):
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM company_plans WHERE id = ?", (id,))
+        log_action(cursor, "company_plan_deleted", "company_plan", id, {})
+        conn.commit()
+        return jsonify({"success": True})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Cannot delete plan. It has subscription history assigned."}), 400
+    finally:
+        conn.close()
 
 @app.route("/api/auth/reset-password", methods=["POST"])
 def auth_reset_password():
@@ -1602,12 +1881,20 @@ def admin_settings():
         gym_address = data.get("gym_address")
         qr_token = data.get("qr_token")
         gym_image_url = data.get("gym_image_url")
+        gym_code = (data.get("gym_code") or "").strip().upper() or None
 
         if not gym_name:
             conn.close()
             return jsonify({"error": "Gym name cannot be empty"}), 400
 
         gym_id = session["gym_id"]
+
+        if gym_code:
+            cursor.execute("SELECT id FROM gyms WHERE gym_code = ? AND id != ?", (gym_code, gym_id))
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({"error": "That Gym ID is already taken. Please choose another."}), 400
+
         cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_name', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_name, gym_id))
         if gym_phone:
             cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_phone', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_phone, gym_id))
@@ -1620,9 +1907,12 @@ def admin_settings():
 
         # Update gyms table
         cursor.execute("UPDATE gyms SET name = ?, phone = ?, address = ?, qr_code_token = ? WHERE id = ?", (gym_name, gym_phone, gym_address, qr_token, gym_id))
+        if gym_code:
+            cursor.execute("UPDATE gyms SET gym_code = ? WHERE id = ?", (gym_code, gym_id))
 
         log_action(cursor, "settings_updated", "gym", gym_id, {
-            "gym_name": gym_name, "gym_phone": gym_phone, "gym_address": gym_address, "qr_token_changed": bool(qr_token)
+            "gym_name": gym_name, "gym_phone": gym_phone, "gym_address": gym_address,
+            "qr_token_changed": bool(qr_token), "gym_code": gym_code
         })
         conn.commit()
         conn.close()
@@ -1633,8 +1923,29 @@ def admin_settings():
     # GET method
     cursor.execute("SELECT * FROM settings WHERE gym_id = ?", (session["gym_id"],))
     settings = {row["key"]: row["value"] for row in cursor.fetchall()}
+    cursor.execute("SELECT gym_code FROM gyms WHERE id = ?", (session["gym_id"],))
+    gym_row = cursor.fetchone()
+    settings["gym_code"] = gym_row["gym_code"] if gym_row else None
     conn.close()
     return jsonify(settings)
+
+@app.route("/api/owner/subscription-info", methods=["GET"])
+@login_required("owner", allow_expired=True)
+def owner_subscription_info():
+    gym_id = session["gym_id"]
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT subscription_status, subscription_end_date FROM gyms WHERE id = ?", (gym_id,))
+    gym = cursor.fetchone()
+    cursor.execute("SELECT id, name, price, duration_months FROM company_plans ORDER BY price ASC")
+    plans = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify({
+        "subscription_active": is_subscription_active(gym_id),
+        "subscription_status": gym["subscription_status"] if gym else None,
+        "subscription_end_date": gym["subscription_end_date"] if gym else None,
+        "plans": plans
+    })
 
 @app.route("/api/admin/audit-log", methods=["GET"])
 @login_required("owner")
