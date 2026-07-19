@@ -42,6 +42,21 @@ def broadcast_event(event_type, payload):
         except Exception:
             pass
 
+def build_whatsapp_link(phone, message):
+    """Build a wa.me link with the message pre-filled in the chat compose box.
+
+    WhatsApp's click-to-chat links can only pre-fill a message - actually
+    sending it still requires the recipient's device/WhatsApp Web session to
+    tap Send, since WhatsApp has no API for silently firing messages from a
+    plain web link (that requires the paid WhatsApp Business Platform).
+    """
+    import urllib.parse
+    encoded_msg = urllib.parse.quote(message)
+    clean_phone = "".join([c for c in phone if c.isdigit() or c == "+"])
+    if clean_phone.startswith("0"):
+        clean_phone = "+1" + clean_phone[1:]  # default fallback for testing
+    return f"https://wa.me/{clean_phone}?text={encoded_msg}"
+
 def log_action(cursor, action, entity_type=None, entity_id=None, details=None):
     """Write one audit_log row for a state-changing action.
 
@@ -1427,19 +1442,44 @@ def admin_payment_reminder(id):
     amount = pay["amount"]
     due = pay["due_date"] or now_ist().strftime("%Y-%m-%d")
     plan = pay["plan_name"] or "Gym Membership"
-    
-    # Generate WhatsApp Prefilled web link
-    msg = f"Hello {name}, your membership payment of ${amount:.2f} for '{plan}' is due on {due}. Please renew or pay at counter. Thank you! - GymOS Fitness"
-    import urllib.parse
-    encoded_msg = urllib.parse.quote(msg)
-    
-    # Format phone for international compatibility (WhatsApp requires prefix without spaces/symbols)
-    clean_phone = "".join([c for c in phone if c.isdigit() or c == "+"])
-    if clean_phone.startswith("0"):
-        clean_phone = "+1" + clean_phone[1:] # default fallback for testing
-        
-    whatsapp_url = f"https://wa.me/{clean_phone}?text={encoded_msg}"
-    
+
+    msg = f"Hello {name}, your membership payment of ₹{amount:.2f} for '{plan}' is due on {due}. Please renew or pay at counter. Thank you! - GymOS Fitness"
+    whatsapp_url = build_whatsapp_link(phone, msg)
+
+    return jsonify({
+        "phone": phone,
+        "message": msg,
+        "whatsapp_url": whatsapp_url
+    })
+
+@app.route("/api/admin/members/<int:id>/renewal-reminder", methods=["GET"])
+@login_required("owner")
+def admin_member_renewal_reminder(id):
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT m.first_name, m.last_name, m.phone, ms.end_date, pl.name as plan_name
+        FROM members m
+        JOIN memberships ms ON ms.member_id = m.id
+        LEFT JOIN plans pl ON ms.plan_id = pl.id
+        WHERE m.id = ?
+        ORDER BY ms.end_date DESC LIMIT 1
+    """, (id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"error": "No membership found for this member"}), 404
+
+    name = f"{row['first_name']} {row['last_name']}"
+    phone = row["phone"]
+    end_date = row["end_date"]
+    plan = row["plan_name"] or "Gym Membership"
+
+    msg = f"Hello {name}, your '{plan}' membership is expiring on {end_date}. Please renew soon to continue uninterrupted access. Thank you! - GymOS Fitness"
+    whatsapp_url = build_whatsapp_link(phone, msg)
+
     return jsonify({
         "phone": phone,
         "message": msg,

@@ -151,7 +151,7 @@ async function fetchPendingDuesPage() {
                     <td style="font-weight:700;">${formatINRCurrency(r.amount)}</td>
                     <td>${r.plan_name || 'No Plan'}</td>
                     <td><span class="badge ${badge}">${r.status}</span></td>
-                    <td style="text-align:right;"><button class="btn-comms-circle btn-comms-whatsapp" style="display:inline-flex;" onclick="triggerWhatsAppModal(${r.id})" title="Send WhatsApp reminder"><svg fill="currentColor" viewBox="0 0 24 24" width="14" height="14"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.503-5.722-1.465L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.965C16.59 1.977 14.113.953 11.5.953c-5.44 0-9.866 4.372-9.87 9.802 0 1.814.49 3.518 1.42 5.061l-.995 3.633 3.738-.971z"/></svg></button></td>
+                    <td style="text-align:right;"><button class="btn-comms-circle btn-comms-whatsapp" style="display:inline-flex;" onclick="sendPaymentReminder(${r.id})" title="Send WhatsApp reminder"><svg fill="currentColor" viewBox="0 0 24 24" width="14" height="14"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.503-5.722-1.465L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.965C16.59 1.977 14.113.953 11.5.953c-5.44 0-9.866 4.372-9.87 9.802 0 1.814.49 3.518 1.42 5.061l-.995 3.633 3.738-.971z"/></svg></button></td>
                 </tr>
             `;
         }).join('');
@@ -211,7 +211,7 @@ async function fetchExpiringSoonPage() {
                     <td>${r.end_date || '—'}</td>
                     <td style="font-weight:700;">${amount}</td>
                     <td>${r.plan_name || 'No Plan'}</td>
-                    <td style="text-align:right;">${r.payment_id ? `<button class="btn-send-whatsapp-remind" onclick="triggerWhatsAppModal(${r.payment_id})">Alert</button>` : '—'}</td>
+                    <td style="text-align:right;"><button class="btn-send-whatsapp-remind" onclick="sendRenewalReminder(${r.member_id})">Alert</button></td>
                 </tr>
             `;
         }).join('');
@@ -1392,16 +1392,42 @@ async function triggerWhatsAppModal(paymentId) {
         const res = await fetch(`/api/admin/payments/${paymentId}/reminder`, { method: 'POST' });
         const data = await res.json();
 
-        // Convert the default currency sign in reminder message to Rupees (₹)
-        let customMsg = data.message || '';
-        customMsg = customMsg.replace(/\$/g, '₹');
-
-        let customValUrl = data.whatsapp_url || '';
-        customValUrl = customValUrl.replace(/\$/g, '₹');
-
-        document.getElementById('whatsappPreviewTxt').innerText = customMsg;
-        document.getElementById('whatsappTriggerLink').href = customValUrl;
+        document.getElementById('whatsappPreviewTxt').innerText = data.message || '';
+        document.getElementById('whatsappTriggerLink').href = data.whatsapp_url || '';
         openModal('whatsappModal');
+    } catch (err) {
+        showToast('Failed to generate reminder link', 'error');
+    }
+}
+
+// One-click reminders for the Pending Dues / Expiring Soon dashboard panels:
+// skip the preview modal and open WhatsApp with the message already filled in.
+// (WhatsApp's click-to-chat links can only pre-fill a message - the recipient
+// still has to hit Send in WhatsApp itself, since there's no way to submit a
+// message from a plain web link without the paid WhatsApp Business API.)
+async function sendPaymentReminder(paymentId) {
+    try {
+        const res = await fetch(`/api/admin/payments/${paymentId}/reminder`, { method: 'POST' });
+        const data = await res.json();
+        if (data.whatsapp_url) {
+            window.open(data.whatsapp_url, '_blank');
+        } else {
+            showToast(data.error || 'Failed to generate reminder link', 'error');
+        }
+    } catch (err) {
+        showToast('Failed to generate reminder link', 'error');
+    }
+}
+
+async function sendRenewalReminder(memberId) {
+    try {
+        const res = await fetch(`/api/admin/members/${memberId}/renewal-reminder`);
+        const data = await res.json();
+        if (data.whatsapp_url) {
+            window.open(data.whatsapp_url, '_blank');
+        } else {
+            showToast(data.error || 'Failed to generate reminder link', 'error');
+        }
     } catch (err) {
         showToast('Failed to generate reminder link', 'error');
     }
