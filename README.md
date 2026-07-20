@@ -1,2 +1,2 @@
 # GymOS
-GymOS by Vikartha
+GymOS by Vikartha Digital Solutions
