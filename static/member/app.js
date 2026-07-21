@@ -457,7 +457,15 @@ function setDashboardLoading(loading) {
 async function fetchDashboardData() {
     setDashboardLoading(true);
     try {
-        const res = await fetch('/api/member/dashboard');
+        // These three endpoints are independent of each other - fire them
+        // together instead of chaining awaits, so their latencies overlap
+        // instead of stacking on top of one another during startup.
+        const [res, actRes, meRes] = await Promise.all([
+            fetch('/api/member/dashboard'),
+            fetch('/api/member/activity').catch(err => { console.error('Fetch workout hours failed', err); return null; }),
+            fetch('/api/auth/me')
+        ]);
+
         if (res.status === 403) {
             const errData = await res.json();
             alert(errData.error || 'Your account is suspended.');
@@ -488,13 +496,14 @@ async function fetchDashboardData() {
             document.getElementById('homeMonthlyVisitsCount').innerText = data.monthly_count || '0';
         }
 
-        // Fetch activity total workout hours
+        // Activity total workout hours (already fetched above, in parallel)
         try {
-            const actRes = await fetch('/api/member/activity');
-            const actData = await actRes.json();
-            if (document.getElementById('homeTimeSpentText')) {
-                const hrs = actData.total_workout_hours || 0;
-                document.getElementById('homeTimeSpentText').innerText = `${hrs}hrs`;
+            if (actRes) {
+                const actData = await actRes.json();
+                if (document.getElementById('homeTimeSpentText')) {
+                    const hrs = actData.total_workout_hours || 0;
+                    document.getElementById('homeTimeSpentText').innerText = `${hrs}hrs`;
+                }
             }
         } catch (e) {
             console.error('Fetch workout hours failed', e);
@@ -503,8 +512,7 @@ async function fetchDashboardData() {
         // Render dynamic checkboxes for week checkins
         updateHomeStreakDaysGrid(data.attendance_history || []);
 
-        // Retrieve membership ID and Expiry
-        const meRes = await fetch('/api/auth/me');
+        // Membership ID and expiry (already fetched above, in parallel)
         const meData = await meRes.json();
         if (meData.user) {
             const meObj = Object.assign({ email: meData.user.email }, meData.user.member_details || {});
@@ -3347,7 +3355,7 @@ function showProfileSubScreen(screenId) {
     }
 
     if (screenId === 'profileEditSubScreen') {
-        populateProfileFields();
+        syncMemberProfileState();
     } else if (screenId === 'profileEmergencySubScreen') {
         renderEmergencyContacts();
     } else if (screenId === 'profileStatsSubScreen') {

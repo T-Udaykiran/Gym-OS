@@ -4045,4 +4045,7 @@ if __name__ == "__main__":
         if not os.path.exists(cert_file) or not os.path.exists(key_file):
             raise RuntimeError("HTTPS is enabled but no development certificate was found. Run ./run_https.sh first.")
         ssl_context = (cert_file, key_file)
-    app.run(host="0.0.0.0", port=port, debug=debug, ssl_context=ssl_context)
+    # threaded=True: without it, Flask's dev server handles one request at a
+    # time for the whole process - every static asset and API call during
+    # page load queues behind whatever request is currently in flight.
+    app.run(host="0.0.0.0", port=port, debug=debug, ssl_context=ssl_context, threaded=True)
