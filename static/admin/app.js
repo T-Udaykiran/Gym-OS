@@ -616,11 +616,10 @@ function renderDashboardData() {
         joinersList.innerHTML = '<div style="font-size:13px; text-align:center; color:var(--text-tertiary); padding:16px;">No registrations.</div>';
     } else {
         newList.forEach(m => {
-            const initials = (m.first_name[0] + (m.last_name ? m.last_name[0] : '')).toUpperCase();
             const div = document.createElement('div');
             div.className = 'recent-joiner-item';
             div.innerHTML = `
-                <div class="member-avatar-mini" style="background-color: ${getRandomColorForChar(initials[0])}; color: white; border: none; font-weight: 700;">${initials}</div>
+                ${MemberAvatar.html(m, { size: 36 })}
                 <div class="joiner-details">
                     <span class="joiner-name">${m.first_name} ${m.last_name}</span>
                     <span class="joiner-plan-date">${m.plan_name || 'No Plan'} &bull; ${new Date(m.joined_at).toLocaleDateString()}</span>
@@ -968,9 +967,7 @@ async function fetchMembers() {
             const expiryCell = m.end_date ? m.end_date : 'N/A';
             const isChecked = selectedMembers.has(m.id) ? 'checked' : '';
 
-            const avatarHtml = m.profile_photo
-                ? `<img src="${m.profile_photo}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" />`
-                : `<div class="member-avatar-circle" style="background-color: ${getRandomColorForChar(initial)}">${initial}</div>`;
+            const avatarHtml = MemberAvatar.html(m, { size: 36 });
 
             tr.innerHTML = `
                 <td class="col-checkbox">
@@ -2305,6 +2302,10 @@ function getRandomColorForChar(char) {
     return colors[idx] || '#64748b';
 }
 
+function avatarHtmlWithFallback(photo, initialsHtml, size) {
+    return MemberAvatar.html({ profile_photo: photo }, { size: size || 36 });
+}
+
 function resetMemberPageAndFetch() {
     memberPage = 1;
     selectedMembers.clear();
@@ -2875,14 +2876,13 @@ async function fetchAdminLeaderboard() {
                 item.style.border = '1px solid rgba(234, 179, 8, 0.2)';
             }
             
-            const initials = (user.first_name[0] + (user.last_name ? user.last_name[0] : '')).toUpperCase();
             const medals = ['🥇', '🥈', '🥉'];
             const rankBadge = idx < 3 ? medals[idx] : `<span style="font-weight:700; color:var(--text-tertiary); margin-right: 6px;">#${idx + 1}</span>`;
-            
+
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 14px;">${rankBadge}</span>
-                    <div class="member-avatar-mini">${initials}</div>
+                    ${MemberAvatar.html(user, { size: 36 })}
                     <div class="joiner-details">
                         <span class="joiner-name">${user.first_name} ${user.last_name}</span>
                     </div>
@@ -3086,10 +3086,7 @@ function renderPendingApprovals(list) {
         card.style.backgroundColor = 'var(--bg-card)';
         card.style.boxShadow = 'var(--shadow-premium)';
         
-        const initials = ((m.first_name ? m.first_name[0] : '') + (m.last_name ? m.last_name[0] : '')).toUpperCase() || 'M';
-        const avatarHtml = m.profile_photo 
-            ? `<img src="${m.profile_photo}" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover;" />`
-            : `<div style="width: 52px; height: 52px; border-radius: 50%; background-color: var(--accent-light); color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px;">${initials}</div>`;
+        const avatarHtml = MemberAvatar.html(m, { size: 52 });
             
         const regDate = m.joined_at ? new Date(m.joined_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
         

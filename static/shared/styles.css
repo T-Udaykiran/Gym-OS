@@ -302,3 +302,41 @@ h1, h2, h3, h4, h5, h6 {
 .toast-error { border-left: 4px solid var(--danger); }
 .toast-info { border-left: 4px solid var(--accent); }
 .toast-warning { border-left: 4px solid var(--warning); }
+
+/* Reusable MemberAvatar Component Styles */
+member-avatar {
+    display: inline-block;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+.member-avatar-host {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    overflow: visible;
+    flex-shrink: 0;
+}
+.member-avatar-img {
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    box-sizing: border-box;
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    background-color: #1c1c1e;
+}
+.member-avatar-badge {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    border-radius: 50%;
+    background: #c7ff24;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #000000;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    z-index: 2;
+    pointer-events: none;
+}

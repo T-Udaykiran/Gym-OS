@@ -26,6 +26,52 @@ IST_OFFSET = timedelta(hours=5, minutes=30)
 def now_ist():
     return datetime.utcnow() + IST_OFFSET
 
+# Canonical DOB storage format is ISO "YYYY-MM-DD" everywhere. Also accepts the
+# "12 May 1994" display format so members who saved a DOB before this format was
+# enforced can still edit it without the value looking invalid.
+def parse_and_validate_dob(value):
+    """Returns (iso_string_or_None, error_message_or_None).
+    A None value means "leave unchanged" (field was empty/omitted)."""
+    if value is None:
+        return None, None
+    value = str(value).strip()
+    if value == "":
+        return None, None
+
+    # Strip time component from ISO 8601 strings (e.g. '1994-05-11T00:00:00.000Z' -> '1994-05-11')
+    if "T" in value:
+        value = value.split("T")[0]
+    if " " in value and ":" in value:
+        value = value.split(" ")[0]
+
+    # Remove commas (e.g. 'May 11, 1994' -> 'May 11 1994')
+    clean_val = value.replace(",", "").strip()
+
+    parsed = None
+    formats = (
+        "%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%B %d %Y", "%b %d %Y",
+        "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y", "%m/%d/%Y", "%Y.%m.%d"
+    )
+    for fmt in formats:
+        try:
+            parsed = datetime.strptime(clean_val, fmt).date()
+            break
+        except ValueError:
+            continue
+
+    if parsed is None:
+        return None, "Unrecognized date of birth format."
+
+    today = now_ist().date()
+    if parsed > today:
+        return None, "Date of birth cannot be in the future."
+    age_years = (today - parsed).days / 365.25
+    if age_years < 10:
+        return None, "Member must be at least 10 years old."
+    if age_years > 120:
+        return None, "Please enter a valid date of birth."
+    return parsed.isoformat(), None
+
 def generate_receipt_number(cursor, gym_id):
     today_str = now_ist().strftime("%Y%m%d")
     prefix = f"RC-{today_str}-"
@@ -895,7 +941,7 @@ def admin_stats():
 
     # 13. New Members Recent Joiners List
     cursor.execute("""
-        SELECT m.id, m.first_name, m.last_name, m.joined_at, pl.name as plan_name
+        SELECT m.id, m.first_name, m.last_name, m.profile_photo, m.joined_at, pl.name as plan_name
         FROM members m
         LEFT JOIN memberships ms ON ms.member_id = m.id AND ms.status = 'active'
         LEFT JOIN plans pl ON ms.plan_id = pl.id
@@ -1408,7 +1454,7 @@ def admin_update_member(id):
     email = data.get("email")
     password = data.get("password")
     fee_pending = data.get("fee_pending")  # true/false/None (None = leave unchanged)
-    dob = data.get("dob")
+    dob, dob_error = parse_and_validate_dob(data.get("dob"))
     gender = data.get("gender")
     height = data.get("height")
     weight = data.get("weight")
@@ -1416,6 +1462,8 @@ def admin_update_member(id):
 
     if not all([first_name, phone, status]):
         return jsonify({"error": "Missing required edit fields"}), 400
+    if dob_error:
+        return jsonify({"error": dob_error}), 400
 
     conn = database.get_db_connection()
     cursor = conn.cursor()
@@ -2755,8 +2803,13 @@ def member_dashboard():
     conn = database.get_db_connection()
     cursor = conn.cursor()
     
-    # 1. Fetch Member status information
-    cursor.execute("SELECT status, first_name, last_name FROM members WHERE id = ?", (m_id,))
+    # 1. Fetch Member status & full profile information
+    cursor.execute("""
+        SELECT m.*, u.email
+        FROM members m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.id = ?
+    """, (m_id,))
     mb = cursor.fetchone()
     if not mb:
         conn.close()
@@ -2951,6 +3004,17 @@ def member_dashboard():
     return jsonify({
         "first_name": mb["first_name"],
         "last_name": mb["last_name"],
+        "email": mb["email"],
+        "phone": mb["phone"],
+        "dob": mb["dob"],
+        "gender": mb["gender"],
+        "height": mb["height"],
+        "weight": mb["weight"],
+        "profile_photo": mb["profile_photo"],
+        "emergency_contact": mb["emergency_contact"],
+        "emergency_contact_name": mb["emergency_contact_name"],
+        "emergency_contact_number": mb["emergency_contact_number"],
+        "emergency_contact_relation": mb["emergency_contact_relation"],
         "status": mb["status"],
         "membership": membership_details,
         "days_remaining": days_remaining,
@@ -3727,10 +3791,25 @@ def member_emergency_contact_detail(contact_id):
 @login_required("member")
 def member_update_profile():
     data = request.get_json() or {}
+    m_id = session.get("member_id")
+
+    # Photo update handling
+    photo_provided = "profile_photo" in data
+    photo = data.get("profile_photo")
+    if photo_provided and photo and len(photo) > 3_000_000:
+        return jsonify({"error": "Image is too large. Please choose a photo under 2 MB."}), 400
+
+    # DOB validation only if DOB is explicitly provided
+    dob_provided = "dob" in data
+    dob = None
+    if dob_provided and data.get("dob") is not None and str(data.get("dob")).strip() != "":
+        dob, dob_error = parse_and_validate_dob(data.get("dob"))
+        if dob_error:
+            return jsonify({"error": dob_error}), 400
+
     phone = data.get("phone")
     first_name = (data.get("first_name") or "").strip()
     last_name = (data.get("last_name") or "").strip()
-    dob = data.get("dob")
     emergency_name = data.get("emergency_contact_name")
     emergency_number = data.get("emergency_contact_number")
     emergency_relation = data.get("emergency_contact_relation")
@@ -3753,30 +3832,39 @@ def member_update_profile():
         else:
             legacy_emergency = ""
 
-    photo = data.get("profile_photo")
-    m_id = session.get("member_id")
-    
-    if not phone:
-        return jsonify({"error": "Phone number is required"}), 400
-        
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    
+
+    if not phone:
+        cursor.execute("SELECT phone FROM members WHERE id = ? AND gym_id = ?", (m_id, session["gym_id"]))
+        existing_row = cursor.fetchone()
+        if existing_row:
+            phone = existing_row["phone"] or ""
+
+    if not phone and not photo_provided:
+        conn.close()
+        return jsonify({"error": "Phone number is required"}), 400
+
     try:
         cursor.execute("""
             UPDATE members
             SET first_name = COALESCE(NULLIF(?, ''), first_name),
-                last_name = COALESCE(?, last_name), phone = ?, dob = COALESCE(?, dob), emergency_contact = ?,
-                emergency_contact_name = ?, emergency_contact_number = ?,
-                emergency_contact_relation = COALESCE(?, emergency_contact_relation), profile_photo = ?
+                last_name = COALESCE(?, last_name),
+                phone = COALESCE(NULLIF(?, ''), phone),
+                dob = CASE WHEN ? THEN ? ELSE dob END,
+                emergency_contact = COALESCE(NULLIF(?, ''), emergency_contact),
+                emergency_contact_name = COALESCE(NULLIF(?, ''), emergency_contact_name),
+                emergency_contact_number = COALESCE(NULLIF(?, ''), emergency_contact_number),
+                emergency_contact_relation = COALESCE(?, emergency_contact_relation),
+                profile_photo = CASE WHEN ? THEN ? ELSE profile_photo END
             WHERE id = ? AND gym_id = ?
-        """, (first_name, last_name, phone, dob, legacy_emergency, emergency_name,
-               emergency_number, emergency_relation, photo, m_id, session["gym_id"]))
+        """, (first_name, last_name, phone, dob_provided, dob, legacy_emergency, emergency_name,
+               emergency_number, emergency_relation, photo_provided, photo, m_id, session["gym_id"]))
         log_action(cursor, "member_profile_updated_self", "member", m_id, {"phone": phone})
         conn.commit()
 
         broadcast_event("MEMBER_PROFILE_UPDATED", {"id": m_id, "phone": phone, "profile_photo": photo}, session["gym_id"])
-        return jsonify({"success": True})
+        return jsonify({"success": True, "profile_photo": photo})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
@@ -3790,6 +3878,12 @@ def member_save_preferences():
         return jsonify({"error": "Member session not found"}), 401
         
     data = request.get_json() or {}
+    if not (data.get("dob") or "").strip():
+        return jsonify({"error": "Date of birth is required."}), 400
+    dob, dob_error = parse_and_validate_dob(data.get("dob"))
+    if dob_error:
+        return jsonify({"error": dob_error}), 400
+
     conn = database.get_db_connection()
     cursor = conn.cursor()
     try:
@@ -3797,7 +3891,7 @@ def member_save_preferences():
             UPDATE members
             SET preferences_completed = TRUE, dob = ?, gender = ?, height = ?, weight = ?
             WHERE id = ? AND gym_id = ?
-        """, (data.get("dob"), data.get("gender"), data.get("height"), data.get("weight"), m_id, session["gym_id"]))
+        """, (dob, data.get("gender"), data.get("height"), data.get("weight"), m_id, session["gym_id"]))
         log_action(cursor, "member_preferences_completed", "member", m_id, data)
 
         # Create initial body_stats record if height/weight provided

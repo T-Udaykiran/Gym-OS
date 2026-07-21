@@ -172,6 +172,50 @@ function updateSimulatorClock() {
 }
 
 // Screen navigation
+function updateAppHeader(tabName) {
+    const mainHeader = document.getElementById('memberAppHeader');
+    const isRootTab = ROOT_MOBILE_TABS.has(tabName);
+    
+    if (mainHeader) {
+        mainHeader.style.display = isRootTab ? 'flex' : 'none';
+    }
+
+    if (!isRootTab) return;
+
+    const headerLeft = document.getElementById('headerLeftArea');
+    const headerRight = document.getElementById('headerRightArea');
+    if (!headerLeft || !headerRight) return;
+
+    const firstName = (activeMemberData && activeMemberData.first_name) ? activeMemberData.first_name : 'User';
+
+    const bellDot = document.getElementById('notifBadgeCount');
+    const isBadgeVisible = bellDot ? (bellDot.style.display !== 'none') : false;
+
+    const renderNotifBell = () => `
+        <div class="notif-bell" style="background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;" onclick="openNotificationsScreen()" aria-label="Open notifications" role="button" tabindex="0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--text-primary)" stroke-width="2.5">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <div id="notifBadgeCount" class="notif-badge-dot" style="background-color: #ef4444; width: 8px; height: 8px; border-radius: 50%; position: absolute; top: 0; right: 0; display: ${isBadgeVisible ? 'block' : 'none'};"></div>
+        </div>
+    `;
+
+    if (tabName === 'home') {
+        headerLeft.innerHTML = `<p style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.85); margin: 0; display: flex; align-items: center;">Hi, <span id="homeMemberFirstName">${firstName}</span>! 👋</p>`;
+        headerRight.innerHTML = renderNotifBell();
+    } else if (tabName === 'activity') {
+        headerLeft.innerHTML = `<h2 style="font-size: 18px; font-weight: 800; color: #fff; margin: 0;">Activity</h2>`;
+        headerRight.innerHTML = renderNotifBell();
+    } else if (tabName === 'leaders') {
+        headerLeft.innerHTML = `<h2 style="font-size: 18px; font-weight: 800; color: #fff; margin: 0;">Leaderboard</h2>`;
+        headerRight.innerHTML = renderNotifBell();
+    } else if (tabName === 'profile') {
+        headerLeft.innerHTML = `<h2 style="font-size: 18px; font-weight: 800; color: #fff; margin: 0;">Account</h2>`;
+        headerRight.innerHTML = renderNotifBell();
+    }
+}
+
 function switchMobileNav(tabName) {
     if (tabName === 'scan') {
         const hasActivePlan = activeMemberData && !!activeMemberData.membership;
@@ -197,6 +241,7 @@ function switchMobileNav(tabName) {
     
     currentMobileTab = targetTab;
     setBottomNavigationVisible(ROOT_MOBILE_TABS.has(targetTab));
+    updateAppHeader(targetTab);
 
     const btns = document.querySelectorAll('.tab-btn');
     if (btns[btnIdx[activeBtnTab]]) {
@@ -400,7 +445,7 @@ async function fetchDashboardData() {
         }
 
         const data = await res.json();
-        activeMemberData = data;
+        activeMemberData = Object.assign({}, activeMemberData, data);
         syncAttendanceState();
 
         // Fill home fields
@@ -502,6 +547,9 @@ async function fetchDashboardData() {
         
         // Fetch Leaderboard
         fetchLeaderboard();
+
+        // Reactively populate edit profile form with loaded member state
+        populateProfileFields();
 
     } catch (err) {
         console.error('Fetch dashboard stats failed', err);
@@ -678,6 +726,39 @@ function downloadMemberReceipt(invoice) {
     showMobileToast('Receipt downloaded. Open it to print or save as PDF.', 'success');
 }
 
+// Master UI Orchestrator for Member Profile State
+function syncMemberProfileState() {
+    if (!activeMemberData) activeMemberData = {};
+    const fullName = `${activeMemberData.first_name || ''} ${activeMemberData.last_name || ''}`.trim() || 'Member';
+
+    // 1. Header & Home Labels
+    if (document.getElementById('homeMemberFirstName')) {
+        document.getElementById('homeMemberFirstName').innerText = activeMemberData.first_name || 'User';
+    }
+    if (document.getElementById('profileHomeName')) {
+        document.getElementById('profileHomeName').innerText = fullName;
+    }
+
+    // 2. Avatar System Sync
+    syncAllProfilePhotoElements();
+
+    // 3. Edit Profile Inputs Sync
+    if (document.getElementById('profFirst')) {
+        document.getElementById('profFirst').value = fullName;
+    }
+    if (document.getElementById('profPhone')) {
+        document.getElementById('profPhone').value = activeMemberData.phone || '';
+    }
+    if (document.getElementById('profEmail')) {
+        document.getElementById('profEmail').value = activeMemberData.email || '';
+    }
+    const profDobInput = document.getElementById('profDob');
+    if (profDobInput) {
+        MemberDatePicker.setupDateInput(profDobInput);
+        profDobInput.value = MemberDatePicker.formatIso(activeMemberData.dob);
+    }
+}
+
 // Profile Fields Redesigned
 function populateProfileFields() {
     // Hide all sub-screens and show home profile menu on tab change
@@ -685,32 +766,17 @@ function populateProfileFields() {
     const homeView = document.getElementById('profileHomeView');
     if (homeView) homeView.style.display = 'block';
 
-    const fullName = `${activeMemberData.first_name || ''} ${activeMemberData.last_name || ''}`.trim() || 'Member';
-    
-    // Set Profile Home Fields
-    document.getElementById('profileHomeName').innerText = fullName;
-    const avatarSrc = getMemberAvatarSrc(activeMemberData.profile_photo, activeMemberData.first_name, activeMemberData.last_name);
-    
-    const avatar = document.getElementById('profileHomeAvatar');
-    if (avatar) {
-        avatar.src = avatarSrc;
-        avatar.style.display = 'block';
-    }
-    const accountAvatar = document.getElementById('profileAvatarImg');
-    if (accountAvatar) {
-        accountAvatar.src = avatarSrc;
-        accountAvatar.style.display = 'block';
-    }
-    const base64Input = document.getElementById('profileAvatarBase64');
-    if (base64Input) {
-        base64Input.value = activeMemberData.profile_photo || '';
-    }
+    syncMemberProfileState();
 
     // Set Streak, Time Spent, Rank stats dynamically
     const streak = activityDataGlobal ? (activityDataGlobal.streak || 0) : 0;
     const hoursFormatted = activityDataGlobal ? (activityDataGlobal.total_workout_formatted || (activityDataGlobal.total_workout_hours ? `${activityDataGlobal.total_workout_hours}h` : '0m')) : '0m';
-    document.getElementById('profileHomeStreak').innerText = `${streak}d`;
-    document.getElementById('profileHomeTimeSpent').innerText = hoursFormatted;
+    if (document.getElementById('profileHomeStreak')) {
+        document.getElementById('profileHomeStreak').innerText = `${streak}d`;
+    }
+    if (document.getElementById('profileHomeTimeSpent')) {
+        document.getElementById('profileHomeTimeSpent').innerText = hoursFormatted;
+    }
     
     // Rank logic: use all_time_rank from backend activityDataGlobal to match Leaderboard screen 100%
     let rankText = '--';
@@ -718,14 +784,9 @@ function populateProfileFields() {
         const rnk = activityDataGlobal.all_time_rank || activityDataGlobal.weekly_rank || 0;
         if (rnk > 0) rankText = `#${rnk}`;
     }
-    document.getElementById('profileHomeRank').innerText = rankText;
-
-    // Set Edit Profile fields
-    document.getElementById('profFirst').value = fullName;
-    document.getElementById('profPhone').value = activeMemberData.phone || '';
-    document.getElementById('profEmail').value = activeMemberData.email || '';
-    
-    document.getElementById('profDob').value = activeMemberData.dob || '';
+    if (document.getElementById('profileHomeRank')) {
+        document.getElementById('profileHomeRank').innerText = rankText;
+    }
 }
 
 // Notifications are a secondary screen, so the bottom tab bar is hidden while open.
@@ -1153,88 +1214,38 @@ function hideLeaderboardGuide() {
     document.getElementById('subScreenLeaderboardGuide').style.display = 'none';
 }
 
+// Thin aliases onto the canonical shared avatar module (static/shared/member-avatar.js),
+// kept so the ~15 existing call sites in this file don't need to change.
 function getMemberInitials(firstName, lastName) {
-    const fn = (firstName || '').trim();
-    const ln = (lastName || '').trim();
-    
-    if (fn && ln) {
-        return (fn.charAt(0) + ln.charAt(0)).toUpperCase();
-    }
-    if (fn) {
-        const parts = fn.split(/\s+/).filter(Boolean);
-        if (parts.length >= 3) {
-            return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-        } else if (parts.length === 2) {
-            return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
-        }
-        return fn.charAt(0).toUpperCase();
-    }
-    if (ln) {
-        return ln.charAt(0).toUpperCase();
-    }
-    return 'M';
+    return MemberAvatar.getInitials(firstName, lastName);
 }
 
 function generateInitialsAvatarDataUrl(firstName, lastName, size = 100) {
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-
-    const grad = ctx.createLinearGradient(0, 0, size, size);
-    grad.addColorStop(0, '#1c1c1e');
-    grad.addColorStop(1, '#2c2c2e');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(199, 255, 36, 0.4)';
-    ctx.lineWidth = Math.max(2, size * 0.04);
-    ctx.stroke();
-
-    const initials = getMemberInitials(firstName, lastName);
-    ctx.fillStyle = '#c7ff24';
-    ctx.font = `900 ${Math.floor(size * 0.4)}px Inter, system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(initials, size / 2, size / 2 + size * 0.03);
-
-    return canvas.toDataURL('image/png');
+    return MemberAvatar.generateInitialsDataUrl(firstName, lastName, size);
 }
 
 function getMemberAvatarSrc(userOrPhoto, firstName = '', lastName = '') {
-    if (typeof userOrPhoto === 'object' && userOrPhoto !== null) {
-        if (userOrPhoto.profile_photo) return userOrPhoto.profile_photo;
-        return generateInitialsAvatarDataUrl(userOrPhoto.first_name, userOrPhoto.last_name);
-    }
-    if (userOrPhoto && typeof userOrPhoto === 'string' && userOrPhoto.trim() !== '') {
-        return userOrPhoto;
-    }
-    return generateInitialsAvatarDataUrl(firstName, lastName);
+    return MemberAvatar.resolveSrc(userOrPhoto, firstName, lastName);
 }
 
 function syncAllProfilePhotoElements() {
     const photo = activeMemberData.profile_photo || '';
     const fn = activeMemberData.first_name || '';
     const ln = activeMemberData.last_name || '';
-    const avatarSrc = getMemberAvatarSrc(photo, fn, ln);
 
     const homeAvatar = document.getElementById('profileHomeAvatar');
-    if (homeAvatar) {
-        homeAvatar.src = avatarSrc;
-        homeAvatar.style.display = 'block';
+    if (homeAvatar && typeof homeAvatar.update === 'function') {
+        homeAvatar.update({ src: photo, firstName: fn, lastName: ln });
     }
 
-    const accountAvatar = document.getElementById('profileAvatarImg');
-    if (accountAvatar) {
-        accountAvatar.src = avatarSrc;
-        accountAvatar.style.display = 'block';
+    const editAvatar = document.getElementById('profileEditAvatar');
+    if (editAvatar && typeof editAvatar.update === 'function') {
+        editAvatar.update({ src: photo, firstName: fn, lastName: ln });
     }
 
-    const base64Input = document.getElementById('profileAvatarBase64');
-    if (base64Input) {
-        base64Input.value = photo;
+    const viewPhotoBtn = document.getElementById('viewPhotoOption');
+    if (viewPhotoBtn) {
+        viewPhotoBtn.style.display = MemberAvatar.hasRealPhoto(photo) ? 'block' : 'none';
     }
 
     if (typeof fetchLeaderboard === 'function') {
@@ -1258,43 +1269,34 @@ function handleProfilePhotoUpload(event) {
     const reader = new FileReader();
     reader.onload = async () => {
         const base64 = reader.result;
-        const phone = document.getElementById('profPhone').value || activeMemberData.phone || '';
-        const emergency = document.getElementById('profEmergency').value || activeMemberData.emergency_contact || '';
-        
         try {
             const res = await fetch('/api/member/profile', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    phone: phone,
-                    first_name: activeMemberData.first_name,
-                    last_name: activeMemberData.last_name,
-                    dob: activeMemberData.dob || '',
-                    emergency_contact: emergency,
-                    emergency_contact_name: activeMemberData.emergency_contact_name || '',
-                    emergency_contact_number: activeMemberData.emergency_contact_number || '',
-                    emergency_contact_relation: activeMemberData.emergency_contact_relation || '',
                     profile_photo: base64
                 })
             });
             const resData = await res.json();
-            if (resData.success) {
+            if (res.ok && resData.success) {
                 activeMemberData.profile_photo = base64;
-                syncAllProfilePhotoElements();
+                syncMemberProfileState();
                 showMobileToast('Profile photo updated successfully', 'success');
+            } else if (res.status === 401 || res.status === 403) {
+                showMobileToast('Authentication expired. Please log in again.', 'error');
             } else {
-                showMobileToast('Unable to upload profile picture. Please try again.', 'error');
+                showMobileToast(resData.error || 'Upload failed. Please try again.', 'error');
             }
         } catch (err) {
             console.error(err);
-            showMobileToast('Unable to upload profile picture. Please try again.', 'error');
+            showMobileToast('Network unavailable. Check your connection and try again.', 'error');
         } finally {
             if (spinner) spinner.style.display = 'none';
-            event.target.value = ''; // Reset file input
+            event.target.value = '';
         }
     };
     reader.onerror = () => {
-        showMobileToast('Unable to upload profile picture. Please try again.', 'error');
+        showMobileToast('Unsupported image type. Please choose a different photo.', 'error');
         if (spinner) spinner.style.display = 'none';
         event.target.value = '';
     };
@@ -1303,9 +1305,6 @@ function handleProfilePhotoUpload(event) {
 
 async function removeProfilePhoto() {
     closePhotoOptionsSheet();
-    const phone = document.getElementById('profPhone').value || activeMemberData.phone || '';
-    const emergency = document.getElementById('profEmergency').value || activeMemberData.emergency_contact || '';
-    
     const spinner = document.getElementById('profilePhotoLoading');
     if (spinner) spinner.style.display = 'flex';
 
@@ -1314,37 +1313,76 @@ async function removeProfilePhoto() {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                phone: phone,
-                first_name: activeMemberData.first_name,
-                last_name: activeMemberData.last_name,
-                dob: activeMemberData.dob || '',
-                emergency_contact: emergency,
-                emergency_contact_name: activeMemberData.emergency_contact_name || '',
-                emergency_contact_number: activeMemberData.emergency_contact_number || '',
-                emergency_contact_relation: activeMemberData.emergency_contact_relation || '',
                 profile_photo: ''
             })
         });
         const resData = await res.json();
-        if (resData.success) {
+        if (res.ok && resData.success) {
             activeMemberData.profile_photo = '';
-            syncAllProfilePhotoElements();
+            syncMemberProfileState();
             showMobileToast('Profile photo removed.', 'success');
+        } else if (res.status === 401 || res.status === 403) {
+            showMobileToast('Authentication expired. Please log in again.', 'error');
         } else {
-            showMobileToast('Unable to remove profile picture. Please try again.', 'error');
+            showMobileToast(resData.error || 'Unable to remove profile photo. Please try again.', 'error');
         }
     } catch (err) {
         console.error(err);
-        showMobileToast('Unable to remove profile picture. Please try again.', 'error');
+        showMobileToast('Network unavailable. Check your connection and try again.', 'error');
     } finally {
         if (spinner) spinner.style.display = 'none';
     }
+}
+
+// Canonical DOB helpers - one date picker (modalDobPicker) is reused by both the
+// onboarding "Personalize" step and Edit Profile. Storage format is always ISO
+// "YYYY-MM-DD"; "12 May 1994" is display-only.
+function formatDobIso(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function formatDobDisplay(date) {
+    return `${date.getDate()} ${DOB_MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+// Accepts canonical ISO ("1994-05-12") or legacy display text ("12 May 1994")
+// so DOBs saved before this format was enforced still parse correctly.
+function parseStoredDob(value) {
+    if (!value) return null;
+    const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+    if (isoMatch) {
+        const d = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+        return isNaN(d) ? null : d;
+    }
+    const parsed = new Date(value);
+    return isNaN(parsed) ? null : parsed;
+}
+
+function validateDobDate(date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date > today) {
+        return { valid: false, message: 'Date of birth cannot be in the future.' };
+    }
+    const ageYears = (today - date) / (365.25 * 24 * 60 * 60 * 1000);
+    if (ageYears < 10) {
+        return { valid: false, message: 'Member must be at least 10 years old.' };
+    }
+    if (ageYears > 120) {
+        return { valid: false, message: 'Please enter a valid date of birth.' };
+    }
+    return { valid: true, message: '' };
 }
 
 // Auth screen control
 let tempRegisterData = null;
 let verifyTimerInterval = null;
 let selectedDobDate = new Date(2000, 8, 15);
+let dobPickerContext = 'onboarding'; // 'onboarding' | 'editProfile'
+let onboardingDobIso = null;
 let currentHeightFt = 5;
 let currentHeightIn = 6;
 let currentWeightVal = 70;
@@ -1506,15 +1544,7 @@ function connectMemberSse(memberId) {
     };
 }
 
-function updateMemberAppGymLogo(logoUrl) {
-    const el = document.getElementById('memberAppHeaderLogo');
-    if (!el) return;
-    if (logoUrl) {
-        el.innerHTML = `<img src="${logoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" alt="Gym Logo">`;
-    } else {
-        el.innerHTML = `⚡`;
-    }
-}
+function updateMemberAppGymLogo(logoUrl) {}
 
 function proceedToMemberApp() {
     if (sseSource) {
@@ -1586,7 +1616,12 @@ function simulateOwnerVerificationGlow() {
 // Modal Date Pickers
 const DOB_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function openDobDatePicker() {
+function openDobDatePicker(context = 'onboarding') {
+    dobPickerContext = context;
+    if (context === 'editProfile') {
+        const existing = parseStoredDob(document.getElementById('profDobIso').value || activeMemberData.dob);
+        selectedDobDate = existing || new Date(2000, 8, 15);
+    }
     document.getElementById('modalDobPicker').style.display = 'flex';
     showDobDayView();
     renderDobCalendar();
@@ -1725,16 +1760,30 @@ function renderDobYearGrid() {
 }
 
 function confirmDobPicker() {
-    const today = new Date();
-    if (selectedDobDate > today) {
-        showMobileToast('Date of Birth cannot be in the future.', 'error');
+    const check = validateDobDate(selectedDobDate);
+    if (!check.valid) {
+        showMobileToast(check.message, 'error');
         return;
     }
-    const formatted = `${selectedDobDate.getDate()} ${DOB_MONTH_NAMES[selectedDobDate.getMonth()]} ${selectedDobDate.getFullYear()}`;
-    document.getElementById('personalDobVal').innerText = formatted;
-    isDobSelected = true;
-    validatePersonalForm();
+
+    const iso = formatDobIso(selectedDobDate);
+    const display = formatDobDisplay(selectedDobDate);
+
+    if (dobPickerContext === 'editProfile') {
+        document.getElementById('profDob').value = display;
+        document.getElementById('profDobIso').value = iso;
+        enableProfileSave();
+    } else {
+        document.getElementById('personalDobVal').innerText = display;
+        onboardingDobIso = iso;
+        isDobSelected = true;
+        validatePersonalForm();
+    }
     closeDobDatePicker();
+}
+
+function openEditProfileDobPicker() {
+    openDobDatePicker('editProfile');
 }
 
 function closeDobPicker() {
@@ -1764,6 +1813,11 @@ function selectGenderVal(val) {
 
 // Profile Photo View/Update Sheet
 function openPhotoOptionsSheet() {
+    const photo = activeMemberData.profile_photo || '';
+    const viewOption = document.getElementById('viewPhotoOption');
+    if (viewOption) {
+        viewOption.style.display = MemberAvatar.hasRealPhoto(photo) ? 'block' : 'none';
+    }
     document.getElementById('photoOptionsSheet').style.display = 'flex';
 }
 
@@ -1773,8 +1827,12 @@ function closePhotoOptionsSheet() {
 
 function viewProfilePhotoFull() {
     closePhotoOptionsSheet();
-    const src = document.getElementById('profileHomeAvatar').src;
-    document.getElementById('photoViewerImg').src = src;
+    const photo = activeMemberData.profile_photo || '';
+    if (!MemberAvatar.hasRealPhoto(photo)) {
+        showMobileToast('No profile photo to view.', 'info');
+        return;
+    }
+    document.getElementById('photoViewerImg').src = photo;
     document.getElementById('photoViewerModal').style.display = 'flex';
 }
 
@@ -1847,7 +1905,7 @@ function confirmWeightPicker() {
 }
 
 async function submitPersonalizedDataAndComplete() {
-    const dob = document.getElementById('personalDobVal').innerText;
+    const dob = onboardingDobIso;
     const gender = document.getElementById('personalGenderVal').innerText;
     
     const weightValStr = document.getElementById('personalWeightVal').innerText;
@@ -2185,12 +2243,10 @@ async function fetchLeaderboard() {
             const medals = ['🥇', '🥈', '🥉'];
             const rankBadge = idx < 3 ? medals[idx] : `<span style="font-weight:700; color:var(--text-tertiary); width:18px; display:inline-block; text-align:center;">${idx + 1}</span>`;
             
-            const avatarUrl = getMemberAvatarSrc(user);
-            
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px;">
                     ${rankBadge}
-                    <img src="${avatarUrl}" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">
+                    ${MemberAvatar.html(user, { size: 32 })}
                     <div style="display: flex; flex-direction: column;">
                         <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">${user.first_name} ${user.last_name}</span>
                     </div>
@@ -2420,7 +2476,6 @@ async function submitPaymentRequest(event) {
 // ================= PREMIUM ACTIVITY MODULE CONTROLLER LOGIC =================
 
 let activityDataGlobal = null;
-let currentHistoryFilter = 'all';
 let currentLeaderboardPeriod = 'weekly';
 let calendarCurrentDate = new Date();
 let selectedTimelineLog = null;
@@ -2696,6 +2751,26 @@ function hideActivitySubScreen() {
     setBottomNavigationVisible(true);
 }
 
+// Full "Monday, 21 July 2026" date label used only on the Attendance History cards.
+function formatAttendanceDateFull(dateTimeStr) {
+    const d = new Date(dateTimeStr.replace(' ', 'T'));
+    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${daysOfWeek[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// "1 hr 13 min" duration label used only on the Attendance History cards.
+function formatAttendanceDuration(checkInStr, checkOutStr) {
+    const start = new Date(checkInStr.replace(' ', 'T'));
+    const end = new Date(checkOutStr.replace(' ', 'T'));
+    const totalMinutes = Math.max(0, Math.floor((end - start) / 60000));
+    const hrs = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
+    if (hrs > 0) return `${hrs} hr`;
+    return `${mins} min`;
+}
+
 function renderHistorySubScreen() {
     const container = document.getElementById('subHistoryListContainer');
     const loadingState = document.getElementById('subHistoryLoadingState');
@@ -2718,31 +2793,8 @@ function renderHistorySubScreen() {
         return;
     }
 
-    const searchVal = document.getElementById('historySearchField')?.value.toLowerCase().trim() || '';
-    let logs = Array.isArray(activityDataGlobal.logs) ? [...activityDataGlobal.logs] : [];
-
-    if (searchVal) {
-        logs = logs.filter(log => {
-            const dateStr = formatDateShort(log.check_in_time).toLowerCase();
-            const branchStr = (log.gym_name || 'GymOS Branch').toLowerCase();
-            return dateStr.includes(searchVal) || branchStr.includes(searchVal);
-        });
-    }
-
-    if (currentHistoryFilter === 'weekly') {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        logs = logs.filter(log => {
-            const logDate = new Date(log.check_in_time.replace(' ', 'T'));
-            return logDate >= sevenDaysAgo;
-        });
-    } else if (currentHistoryFilter === 'monthly') {
-        const now = new Date();
-        logs = logs.filter(log => {
-            const logDate = new Date(log.check_in_time.replace(' ', 'T'));
-            return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
-        });
-    }
+    const logs = Array.isArray(activityDataGlobal.logs) ? [...activityDataGlobal.logs] : [];
+    logs.sort((a, b) => new Date(b.check_in_time.replace(' ', 'T')) - new Date(a.check_in_time.replace(' ', 'T')));
 
     if (logs.length === 0) {
         if (emptyState) emptyState.style.display = 'flex';
@@ -2750,22 +2802,10 @@ function renderHistorySubScreen() {
     }
 
     logs.forEach(log => {
-        const dateLabel = formatLogDateHeader(log.check_in_time);
+        const dateLabel = formatAttendanceDateFull(log.check_in_time);
         const inStr = formatTime12hr(log.check_in_time);
         const outStr = log.check_out_time ? formatTime12hr(log.check_out_time) : '--:--';
-        
-        let durationStr = 'Active';
-        let statusBadge = '<span style="font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 12px; background: rgba(199,255,36,0.15); color: var(--accent);">⚡ Active</span>';
-        
-        if (log.check_out_time) {
-            const checkinDate = new Date(log.check_in_time.replace(' ', 'T'));
-            const checkoutDate = new Date(log.check_out_time.replace(' ', 'T'));
-            const diff = Math.floor((checkoutDate - checkinDate) / 60000);
-            const hrs = Math.floor(diff / 60);
-            const mins = diff % 60;
-            durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-            statusBadge = '<span style="font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 12px; background: rgba(34,197,94,0.15); color: #22c55e;">✓ Completed</span>';
-        }
+        const durationStr = log.check_out_time ? formatAttendanceDuration(log.check_in_time, log.check_out_time) : '--';
 
         const card = document.createElement('div');
         card.style.background = '#1c1c1e';
@@ -2775,10 +2815,7 @@ function renderHistorySubScreen() {
         card.style.textAlign = 'left';
 
         card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h4 style="font-size: 13.5px; font-weight: 800; color: #fff; margin: 0;">${dateLabel}</h4>
-                ${statusBadge}
-            </div>
+            <h4 style="font-size: 13.5px; font-weight: 800; color: #fff; margin: 0 0 12px 0;">${dateLabel}</h4>
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                 <div style="flex: 1;">
                     <span style="font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 600;">Check In</span>
@@ -2796,23 +2833,6 @@ function renderHistorySubScreen() {
         `;
         container.appendChild(card);
     });
-}
-
-function setHistoryFilter(filter) {
-    currentHistoryFilter = filter;
-    document.getElementById('tabFilterAll').classList.remove('active');
-    document.getElementById('tabFilterWeekly').classList.remove('active');
-    document.getElementById('tabFilterMonthly').classList.remove('active');
-    
-    if (filter === 'all') document.getElementById('tabFilterAll').classList.add('active');
-    if (filter === 'weekly') document.getElementById('tabFilterWeekly').classList.add('active');
-    if (filter === 'monthly') document.getElementById('tabFilterMonthly').classList.add('active');
-    
-    renderHistorySubScreen();
-}
-
-function filterHistoryList() {
-    renderHistorySubScreen();
 }
 
 function renderTimelineSubScreen() {
@@ -3106,7 +3126,9 @@ async function renderLeaderboardSubScreen() {
         if (p1) p1.style.visibility = 'visible';
         document.getElementById('podiumRank1Name').innerText = `${r1.first_name} ${r1.last_name}`;
         document.getElementById('podiumRank1Count').innerText = `${r1.checkin_count || r1.points || 0} CHECK-INS`;
-        document.getElementById('podiumRank1Img').src = getMemberAvatarSrc(r1);
+        const p1Img = document.getElementById('podiumRank1Img');
+        MemberAvatar.applyFallback(p1Img, r1);
+        p1Img.src = getMemberAvatarSrc(r1);
     } else {
         if (p1) p1.style.visibility = 'hidden';
     }
@@ -3118,7 +3140,9 @@ async function renderLeaderboardSubScreen() {
         if (p2) p2.style.visibility = 'visible';
         document.getElementById('podiumRank2Name').innerText = `${r2.first_name} ${r2.last_name}`;
         document.getElementById('podiumRank2Count').innerText = `${r2.checkin_count || r2.points || 0} CHECK-INS`;
-        document.getElementById('podiumRank2Img').src = getMemberAvatarSrc(r2);
+        const p2Img = document.getElementById('podiumRank2Img');
+        MemberAvatar.applyFallback(p2Img, r2);
+        p2Img.src = getMemberAvatarSrc(r2);
     } else {
         if (p2) p2.style.visibility = 'hidden';
     }
@@ -3130,7 +3154,9 @@ async function renderLeaderboardSubScreen() {
         if (p3) p3.style.visibility = 'visible';
         document.getElementById('podiumRank3Name').innerText = `${r3.first_name} ${r3.last_name}`;
         document.getElementById('podiumRank3Count').innerText = `${r3.checkin_count || r3.points || 0} CHECK-INS`;
-        document.getElementById('podiumRank3Img').src = getMemberAvatarSrc(r3);
+        const p3Img = document.getElementById('podiumRank3Img');
+        MemberAvatar.applyFallback(p3Img, r3);
+        p3Img.src = getMemberAvatarSrc(r3);
     } else {
         if (p3) p3.style.visibility = 'hidden';
     }
@@ -3151,7 +3177,6 @@ async function renderLeaderboardSubScreen() {
     // Filter and display Ranks >= 4
     const listRankings = leaderboard.filter(u => u.rank >= 4);
     listRankings.forEach(user => {
-        const avatarUrl = getMemberAvatarSrc(user);
         const isSelf = user.id === activeMemberData.member_id || (user.first_name === activityDataGlobal.first_name && user.last_name === activityDataGlobal.last_name);
         
         const row = document.createElement('div');
@@ -3168,7 +3193,7 @@ async function renderLeaderboardSubScreen() {
         row.innerHTML = `
             <div style="display: flex; align-items: center; gap: 16px;">
                 <span style="font-size: 14.5px; font-weight: 700; color: rgba(255,255,255,0.4); width: 20px; text-align: center;">${user.rank}</span>
-                <img src="${avatarUrl}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover;">
+                ${MemberAvatar.html(user, { size: 38 })}
                 <span style="font-size: 14.5px; font-weight: 700; color: #fff;">${nameLabel}</span>
             </div>
             <span style="font-size: 14.5px; font-weight: 800; color: #dfff00;">${pts} PTS</span>
@@ -3324,7 +3349,9 @@ function showProfileSubScreen(screenId) {
         subScreen.classList.add('active');
     }
 
-    if (screenId === 'profileEmergencySubScreen') {
+    if (screenId === 'profileEditSubScreen') {
+        populateProfileFields();
+    } else if (screenId === 'profileEmergencySubScreen') {
         renderEmergencyContacts();
     } else if (screenId === 'profileStatsSubScreen') {
         renderStatsSubScreen();
@@ -3352,24 +3379,45 @@ function enableProfileSave() {
 }
 
 async function saveProfileChangesRedesigned(e) {
-    e.preventDefault();
-    const fullName = document.getElementById('profFirst').value.trim();
-    const phone = document.getElementById('profPhone').value.trim();
-    const dob = document.getElementById('profDob').value.trim();
-    const photo = document.getElementById('profileAvatarBase64').value;
+    if (e && e.preventDefault) e.preventDefault();
+    
+    const rawName = (document.getElementById('profFirst') && document.getElementById('profFirst').value.trim());
+    const fullName = rawName || `${activeMemberData.first_name || ''} ${activeMemberData.last_name || ''}`.trim();
+    
+    const phoneInput = document.getElementById('profPhone');
+    const phone = (phoneInput && phoneInput.value.trim()) || activeMemberData.phone || '';
+
+    const profDobInput = document.getElementById('profDob');
+    const dobRaw = (profDobInput && profDobInput.value.trim());
+    const dobIso = (dobRaw ? MemberDatePicker.formatIso(dobRaw) : '') || activeMemberData.dob || '';
+
+    const submitButton = document.getElementById('profileSaveButton');
+
+    // DOB Validation
+    const dobCheck = MemberDatePicker.validateDob(dobIso, true);
+    if (!dobCheck.valid) {
+        showMobileToast(dobCheck.message, 'error');
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Save Changes';
+        }
+        return;
+    }
 
     // Split name
     const parts = fullName.split(' ');
-    const first = parts[0] || '';
-    const last = parts.slice(1).join(' ') || '';
+    const first = parts[0] || activeMemberData.first_name || '';
+    const last = parts.slice(1).join(' ') || activeMemberData.last_name || '';
 
     activeMemberData.first_name = first;
     activeMemberData.last_name = last;
     activeMemberData.phone = phone;
-    activeMemberData.dob = dob;
-    const submitButton = document.getElementById('profileSaveButton');
-    submitButton.disabled = true;
-    submitButton.textContent = 'Saving...';
+    activeMemberData.dob = dobIso;
+
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Saving...';
+    }
 
     // Call API
     try {
@@ -3380,26 +3428,26 @@ async function saveProfileChangesRedesigned(e) {
                 phone: phone,
                 first_name: first,
                 last_name: last,
-                dob: dob,
-                emergency_contact: activeMemberData.emergency_contact || '',
-                emergency_contact_name: activeMemberData.emergency_contact_name || '',
-                emergency_contact_number: activeMemberData.emergency_contact_number || '',
-                emergency_contact_relation: activeMemberData.emergency_contact_relation || '',
-                profile_photo: photo
+                dob: dobIso
             })
         });
         const resData = await res.json();
-        if (resData.success) {
+        if (res.ok && resData.success) {
+            syncMemberProfileState();
             showMobileToast('Profile updated successfully!', 'success');
             hideProfileSubScreen('profileEditSubScreen');
+        } else if (res.status === 401 || res.status === 403) {
+            showMobileToast('Your session has expired. Please log in again.', 'error');
         } else {
-            showMobileToast(resData.error, 'error');
+            showMobileToast(resData.error || 'Unable to save changes. Please try again.', 'error');
         }
     } catch (err) {
-        showMobileToast('Error saving profile changes', 'error');
+        showMobileToast('Network unavailable. Check your connection and try again.', 'error');
     } finally {
-        submitButton.disabled = false;
-        submitButton.textContent = 'Save Changes';
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = 'Save Changes';
+        }
     }
 }
 

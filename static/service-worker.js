@@ -1,8 +1,9 @@
-const CACHE_NAME = 'gymos-cache-v22';
+const CACHE_NAME = 'gymos-cache-v24';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/shared/styles.css',
+  '/shared/member-avatar.js',
   '/member/index.html',
   '/member/style.css',
   '/member/app.js',

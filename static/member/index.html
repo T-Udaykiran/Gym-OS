@@ -13,6 +13,7 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="stylesheet" href="/shared/styles.css">
     <link rel="stylesheet" href="/member/style.css">
+    <script src="/member/components/AppInnerHeader.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics-compat.js"></script>
     <script src="/shared/firebase-init.js"></script>
@@ -395,18 +396,19 @@
 
             <!-- ================= PORTAL SHELL APP ================= -->
             <div id="memberAppWrapper" style="display: none; flex-direction: column; height: 100%; overflow: hidden;">
-                <header class="app-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: #0b0b0b; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display: flex; align-items: center;">
-                        <p style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.7); margin: 0;">Hi, <span id="homeMemberFirstName">User</span>! 👋</p>
+                <header class="app-header" id="memberAppHeader" style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: #0b0b0b; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; min-height: 54px; box-sizing: border-box; flex-shrink: 0;">
+                    <div id="headerLeftArea" style="display: flex; align-items: center; gap: 10px;">
+                        <p style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.85); margin: 0; display: flex; align-items: center;">Hi, <span id="homeMemberFirstName">User</span>! 👋</p>
                     </div>
 
-                    <div class="notif-bell" style="background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;" onclick="openNotificationsScreen()" aria-label="Open notifications" role="button" tabindex="0">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24"
-                            stroke="var(--text-primary)" stroke-width="2.5">
-                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                        </svg>
-                        <div id="notifBadgeCount" class="notif-badge-dot" style="background-color: #ef4444; width: 8px; height: 8px; border-radius: 50%; position: absolute; top: 0; right: 0; display: none;"></div>
+                    <div id="headerRightArea" style="display: flex; align-items: center; gap: 10px;">
+                        <div class="notif-bell" style="background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;" onclick="openNotificationsScreen()" aria-label="Open notifications" role="button" tabindex="0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--text-primary)" stroke-width="2.5">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                            </svg>
+                            <div id="notifBadgeCount" class="notif-badge-dot" style="background-color: #ef4444; width: 8px; height: 8px; border-radius: 50%; position: absolute; top: 0; right: 0; display: none;"></div>
+                        </div>
                     </div>
                 </header>
 
@@ -415,13 +417,7 @@
 
                     <!-- SCREEN: NOTIFICATIONS (secondary navigation destination) -->
                     <div id="notificationsScreen" class="mobile-screen secondary-screen" style="gap: 18px;">
-                        <div class="secondary-screen-header">
-                            <button class="profile-back-btn" onclick="closeNotificationsScreen()" aria-label="Back to previous screen">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                            </button>
-                            <h2>Notifications</h2>
-                            <button class="notifications-mark-read" onclick="markMemberNotificationsRead()">Mark all read</button>
-                        </div>
+                        <app-inner-header title="Notifications" onback="closeNotificationsScreen()" right-action='<button class="notifications-mark-read" onclick="markMemberNotificationsRead()">Mark all read</button>'></app-inner-header>
                         <div id="notificationsList" class="notifications-list" aria-live="polite"></div>
                     </div>
 
@@ -549,12 +545,7 @@
 
                     <!-- SCREEN 2: SCAN QR -->
                     <div id="scanScreen" class="mobile-screen secondary-screen" style="gap: 16px; background: #000;">
-                        <div class="secondary-screen-header">
-                            <button class="profile-back-btn" onclick="switchMobileNav('home')" aria-label="Back to home">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                            </button>
-                            <h2>Scan QR</h2>
-                        </div>
+                        <app-inner-header title="Scan QR" onback="switchMobileNav(previousMobileTab || 'home')"></app-inner-header>
                         <div>
                             <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Entrance Scanner</h3>
                             <p style="font-size: 13px; color: rgba(255,255,255,0.4); margin: 0;">Point your camera at the gym entrance QR code.</p>
@@ -693,10 +684,7 @@
                         <!-- MAIN DASHBOARD CONTENT (CALENDAR & RECENT ACTIVITY) -->
                         <div id="activityDashboardContent" style="display: flex; flex-direction: column; gap: 20px; height: 100%; overflow-y: auto; padding: 20px 16px 40px; box-sizing: border-box;">
                             
-                            <!-- Header -->
-                            <div style="margin-top: 4px;">
-                                <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 16px 0;">Activity Calendar</h3>
-                            </div>
+                            
 
                             <!-- Month Switcher Selector -->
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px; margin-bottom: 8px;">
@@ -774,12 +762,7 @@
 
                         <!-- SCREEN 3: WORKOUT TIMELINE -->
                         <div id="subScreenTimeline" class="activity-screen-sub">
-                            <div class="activity-sub-header">
-                                <button class="activity-sub-back-btn" onclick="showActivitySubScreen('subScreenHistory')">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                                </button>
-                                <span class="activity-sub-title">Workout Timeline</span>
-                            </div>
+                            <app-inner-header title="Activity History" onback="hideActivitySubScreen()"></app-inner-header>
                             <div class="activity-sub-content">
                                 <div class="card" style="padding: 16px; margin-bottom: 20px;">
                                     <h4 id="timelineDateVal" style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">-- --</h4>
@@ -821,12 +804,7 @@
 
                         <!-- SCREEN 4: WORKOUT DETAILS -->
                         <div id="subScreenDetails" class="activity-screen-sub">
-                            <div class="activity-sub-header">
-                                <button class="activity-sub-back-btn" onclick="showActivitySubScreen('subScreenTimeline')">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                                </button>
-                                <span class="activity-sub-title">Workout Details</span>
-                            </div>
+                            <app-inner-header title="Log Workout Details" onback="showActivitySubScreen('subScreenTimeline')"></app-inner-header>
                             <div class="activity-sub-content">
                                 <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
@@ -882,12 +860,7 @@
 
                         <!-- SCREEN 5: STATISTICS -->
                         <div id="subScreenStats" class="activity-screen-sub">
-                            <div class="activity-sub-header">
-                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                                </button>
-                                <span class="activity-sub-title">Statistics</span>
-                            </div>
+                            <app-inner-header title="Activity Stats" onback="hideActivitySubScreen()"></app-inner-header>
                             <div class="activity-sub-content">
                                 
                                 <!-- Weekly Visits (Bar Chart Container) -->
@@ -950,12 +923,7 @@
 
                         <!-- SCREEN 6: ACHIEVEMENTS -->
                         <div id="subScreenAchievements" class="activity-screen-sub">
-                            <div class="activity-sub-header">
-                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                                </button>
-                                <span class="activity-sub-title">Achievements</span>
-                            </div>
+                            <app-inner-header title="Achievements" onback="hideActivitySubScreen()"></app-inner-header>
                             <div class="activity-sub-content">
                                 <div style="text-align: center; margin-bottom: 16px;">
                                     <span style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Unlocked Badges</span>
@@ -971,12 +939,7 @@
 
                         <!-- SCREEN 8: ACTIVITY CALENDAR -->
                         <div id="subScreenCalendar" class="activity-screen-sub">
-                            <div class="activity-sub-header">
-                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                                </button>
-                                <span class="activity-sub-title">Calendar</span>
-                            </div>
+                            <app-inner-header title="Attendance Calendar" onback="hideActivitySubScreen()"></app-inner-header>
                             <div class="activity-sub-content">
                                 <div class="calendar-widget-box">
                                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
@@ -1006,12 +969,7 @@
 
                         <!-- SCREEN 9: INSIGHTS -->
                         <div id="subScreenInsights" class="activity-screen-sub">
-                            <div class="activity-sub-header">
-                                <button class="activity-sub-back-btn" onclick="hideActivitySubScreen()">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                                </button>
-                                <span class="activity-sub-title">Personal Insights</span>
-                            </div>
+                            <app-inner-header title="AI Workout Insights" onback="hideActivitySubScreen()"></app-inner-header>
                             <div class="activity-sub-content">
                                 <div id="insightsListContainer" style="display: flex; flex-direction: column; gap: 12px;">
                                     <!-- Dynamic insights cards -->
@@ -1022,25 +980,8 @@
 
                     <!-- SCREEN 2: ATTENDANCE HISTORY (TOP-LEVEL MOBILE SCREEN) -->
                     <div id="attendanceHistoryScreen" class="mobile-screen" style="flex-direction: column; background: #000; box-sizing: border-box; height: 100%; width: 100%;">
-                        <div class="activity-sub-header" style="padding: 16px 20px; display: flex; align-items: center; gap: 12px; background: #0b0b0b; border-bottom: 1px solid rgba(255,255,255,0.05); z-index: 10;">
-                            <button class="round-back-btn" type="button" onclick="switchMobileNav('activity')" aria-label="Back to Activity">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-                            </button>
-                            <span style="font-size: 17px; font-weight: 800; color: #fff;">Attendance History</span>
-                        </div>
+                        <app-inner-header title="Attendance History" onback="switchMobileNav('activity')"></app-inner-header>
                         <div class="activity-sub-content" style="flex: 1; overflow-y: auto; padding: 16px 20px 98px; box-sizing: border-box;">
-                            <div class="search-filter-row" style="margin-bottom: 12px;">
-                                <div class="search-control-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" style="position: absolute; left: 14px; width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                    <input type="text" id="historySearchField" class="custom-input" placeholder="Search date or branch..." oninput="filterHistoryList()" style="padding-left: 40px; margin-bottom: 0; width: 100%; border-radius: 20px;">
-                                </div>
-                            </div>
-                            <div class="filter-tabs-wrapper" style="display: flex; background: #1c1c1e; border-radius: 20px; padding: 3px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 16px;">
-                                <button id="tabFilterAll" class="filter-tab-btn active" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s;" onclick="setHistoryFilter('all')">All</button>
-                                <button id="tabFilterWeekly" class="filter-tab-btn" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setHistoryFilter('weekly')">Weekly</button>
-                                <button id="tabFilterMonthly" class="filter-tab-btn" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setHistoryFilter('monthly')">Monthly</button>
-                            </div>
-
                             <!-- Loading State -->
                             <div id="subHistoryLoadingState" style="display: none; text-align: center; padding: 40px 0; color: rgba(255,255,255,0.5);">
                                 <div class="spinner" style="margin: 0 auto 12px auto; width: 24px; height: 24px; border: 2.5px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
@@ -1048,15 +989,10 @@
                             </div>
 
                             <!-- Empty State -->
-                            <div id="subHistoryEmptyState" class="empty-state-container" style="display: none; text-align: center; padding: 40px 20px;">
-                                <div class="empty-state-illustration" style="margin-bottom: 12px;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="80" height="80" fill="none">
-                                        <circle cx="60" cy="60" r="50" fill="rgba(199, 255, 36, 0.03)" stroke="var(--border-color)" stroke-width="2"/>
-                                        <path d="M60 40v30m0 10h.01" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
-                                    </svg>
-                                </div>
-                                <h4 style="font-size: 17px; font-weight: 800; color: var(--text-primary); margin: 0 0 6px 0;">No Activity Yet</h4>
-                                <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.4;">Your attendance history will appear here after your first check-in.</p>
+                            <div id="subHistoryEmptyState" class="empty-state-container" style="display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 80px 20px;">
+                                <div style="font-size: 40px; margin-bottom: 16px;">🏋️</div>
+                                <h4 style="font-size: 17px; font-weight: 800; color: var(--text-primary); margin: 0 0 6px 0;">No Attendance History Yet</h4>
+                                <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.4; max-width: 260px;">Your completed gym sessions will appear here after your first check-in.</p>
                             </div>
 
                             <!-- Error State -->
@@ -1074,14 +1010,7 @@
 
                     <!-- SCREEN 7: LEADERBOARD -->
                     <div id="leadersScreen" class="mobile-screen" style="background: #0b0b0c; padding: 24px 20px 100px;">
-                        <!-- Header -->
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; margin-top: 4px;">
-                            <div>
-                                <h1 style="font-size: 26px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin: 0;">LeaderBoard</h1>
-                                <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 4px; margin-bottom: 0;">Stay active. Earn points.</p>
-                            </div>
-                            <button class="auth-capsule-btn secondary-btn" style="display: none; min-height: 32px; font-size: 12px; padding: 0 16px; border-radius: 20px; border-color: rgba(255,255,255,0.15); width: auto; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.25);" onclick="showLeaderboardGuide()">How it Works?</button>
-                        </div>
+                        
 
                         <!-- Tabs toggle period selector -->
                         <div style="margin-bottom: 24px;">
@@ -1207,13 +1136,8 @@
 
                     <!-- SCREEN 4: PAYMENTS -->
                     <div id="paymentsScreen" class="mobile-screen">
-                        <div class="profile-back-header">
-                            <button class="profile-back-btn" onclick="switchMobileNav('profile')">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                            </button>
-                            <h3>Payments</h3>
-                        </div>
-                        <p class="payments-subtitle" style="margin-top: -16px; margin-bottom: 24px;">Track your membership payments</p>
+                        <app-inner-header title="Payment Details" onback="switchMobileNav('profile')"></app-inner-header>
+                        <p class="payments-subtitle" style="margin-top: 12px; margin-bottom: 24px;">Track your membership payments</p>
 
                         <div class="payments-section-lbl">History</div>
                         <div id="memberPaymentsList" style="display: flex; flex-direction: column;">
@@ -1228,148 +1152,13 @@
                         </div>
                     </div>
 
-                    <!-- SCREEN: LEADERBOARD -->
-                    <div id="leadersScreen" class="mobile-screen" style="flex-direction: column; background: #000;">
-                        <!-- Header -->
-                        <div style="padding: 4px 4px 0; display: flex; justify-content: space-between; align-items: flex-start; background: #000; z-index: 10;">
-                            <div>
-                                <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Leaderboard</h3>
-                                <p style="font-size: 12.5px; color: rgba(255,255,255,0.4); margin: 0;">Stay active. Earn points.</p>
-                            </div>
-                            <button class="auth-capsule-btn secondary-btn" style="min-height: 30px; font-size: 11px; padding: 0 12px; border-radius: 20px; border-color: rgba(255,255,255,0.15); width: auto;" onclick="showLeaderboardGuide()">How it Works?</button>
-                        </div>
-
-                        <!-- Tabs toggle period selector -->
-                        <div style="margin-top: 16px; margin-bottom: 16px;">
-                            <div style="display: flex; background: #1c1c1e; border-radius: 20px; padding: 3px; border: 1px solid rgba(255,255,255,0.05);">
-                                <button id="btnLeadWeekly" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: var(--accent); color: #000;" onclick="setLeaderboardPeriod('weekly')">Weekly</button>
-                                <button id="btnLeadMonthly" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setLeaderboardPeriod('monthly')">Monthly</button>
-                                <button id="btnLeadAll" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 12px; font-weight: 700; padding: 8px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setLeaderboardPeriod('all')">All Time</button>
-                            </div>
-                        </div>
-
-                        <!-- PODIUM CONTAINER -->
-                        <div id="leaderboardPodiumBox" style="display: flex; justify-content: center; align-items: flex-end; gap: 14px; margin: 12px 0 16px; height: auto; min-height: 220px; padding-bottom: 8px; position: relative; flex-shrink: 0;">
-                            <!-- Rank 2 (Left) -->
-                            <div id="podiumRank2" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
-                                <div style="position: relative; margin-bottom: 8px;">
-                                    <img id="podiumRank2Img" src="" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #8e8e93; object-fit: cover;">
-                                    <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #8e8e93; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">2</div>
-                                </div>
-                                <span id="podiumRank2Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
-                                <span id="podiumRank2Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;"></span>
-                                <div style="width: 58px; height: 48px; background: #1c1c1e; border: 1.5px solid #8e8e93; border-radius: 8px; margin-top: 8px;"></div>
-                            </div>
-
-                            <!-- Rank 1 (Center - Raised) -->
-                            <div id="podiumRank1" style="display: flex; flex-direction: column; align-items: center; width: 95px; transform: translateY(-12px);">
-                                <div style="position: relative; margin-bottom: 8px;">
-                                    <img id="podiumRank1Img" src="" style="width: 66px; height: 66px; border-radius: 50%; border: 4px solid var(--accent); object-fit: cover;">
-                                    <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; background: var(--accent); border-radius: 50%; color: #000; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
-                                </div>
-                                <span id="podiumRank1Name" style="font-size: 12.5px; font-weight: 800; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
-                                <span id="podiumRank1Count" style="font-size: 9.5px; color: var(--accent); text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px;"></span>
-                                <div style="width: 66px; height: 72px; background: #1c1c1e; border: 1.5px solid var(--accent); border-radius: 8px; margin-top: 8px;"></div>
-                            </div>
-
-                            <!-- Rank 3 (Right) -->
-                            <div id="podiumRank3" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
-                                <div style="position: relative; margin-bottom: 8px;">
-                                    <img id="podiumRank3Img" src="" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #cd7f32; object-fit: cover;">
-                                    <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #cd7f32; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">3</div>
-                                </div>
-                                <span id="podiumRank3Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
-                                <span id="podiumRank3Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;"></span>
-                                <div style="width: 58px; height: 48px; background: #1c1c1e; border: 1.5px solid #cd7f32; border-radius: 8px; margin-top: 8px;"></div>
-                            </div>
-                        </div>
-
-                        <!-- Keep it up card -->
-                        <div style="margin-bottom: 18px; flex-shrink: 0;">
-                            <div style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px 16px; text-align: left;">
-                                <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 6px 0; letter-spacing: 0.03em;">KEEP IT UP!</h4>
-                                <p id="leaderboardMotivateText" style="font-size: 12px; color: rgba(255,255,255,0.4); margin: 0; line-height: 1.45;">You're just 5 more check-ins away from reaching rank #11</p>
-                            </div>
-                        </div>
-
-                        <!-- Dynamic List Rows rank 4+ -->
-                        <div style="display: flex; flex-direction: column; gap: 10px; padding-bottom: 32px;" id="leaderboardListContainer">
-                            <!-- Dynamic rows -->
-                        </div>
-                    </div>
-
-                    <!-- SCREEN: HOW IT WORKS GUIDE MODAL -->
-                    <div id="subScreenLeaderboardGuide" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
-                        <div class="member-modal-card" style="text-align: left; max-width: 340px; background: #1c1c1e;">
-                            <!-- Header -->
-                            <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 20px;">
-                                <span style="font-size: 18px; font-weight: 800; color: #fff;">How it Works?</span>
-                            </div>
-
-                            <!-- Guide Items List -->
-                            <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
-                                <!-- Item 1 -->
-                                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                                    </div>
-                                    <div>
-                                        <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Point System</h4>
-                                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.4; margin: 0;">Every unique check-in earns you 1 point. Consecutive days boost your score.</p>
-                                    </div>
-                                </div>
-
-                                <!-- Item 2 -->
-                                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                                    </div>
-                                    <div>
-                                        <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Streak Bonuses</h4>
-                                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.4; margin: 0;">Maintain a 7-day streak for a +10 point multiplier.</p>
-                                    </div>
-                                </div>
-
-                                <!-- Item 3 -->
-                                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                                    </div>
-                                    <div>
-                                        <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Rank Reset</h4>
-                                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.4; margin: 0;">Weekly leaderboards reset every Sunday at midnight IST.</p>
-                                    </div>
-                                </div>
-
-                                <!-- Item 4 -->
-                                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.03); flex-shrink: 0;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
-                                    </div>
-                                    <div>
-                                        <h4 style="font-size: 13px; font-weight: 800; color: #fff; margin: 0 0 2px 0;">Elite Badges</h4>
-                                        <p style="font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.4; margin: 0;">Top 3 positions earn permanent badges on their profiles.</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <button class="btn btn-primary" style="width: 100%; font-weight: 600;" onclick="hideLeaderboardGuide()">Got it</button>
-                        </div>
-                    </div>
-
                     <!-- SCREEN 5: PROFILE -->
                     <div id="profileScreen" class="mobile-screen">
-                        <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Profile</h3>
-                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px;">Manage emergency
-                            contact details and photo.</p>
+                        
 
                             <!-- Avatar -->
-                            <div class="profile-avatar-container" onclick="openPhotoOptionsSheet()" style="cursor: pointer;">
-                                <div class="profile-avatar-ring">
-                                    <img id="profileHomeAvatar" src="" alt="Profile photo" style="display: none;">
-                                    <span id="profileHomeInitials" class="profile-avatar-initials">--</span>
-                                </div>
-                                <div class="profile-active-dot"></div>
+                            <div style="display: flex; justify-content: center; margin: 16px auto 12px; cursor: pointer;" onclick="openPhotoOptionsSheet()">
+                                <member-avatar id="profileHomeAvatar" size="84"></member-avatar>
                             </div>
 
                             <!-- User Details -->
@@ -1481,22 +1270,15 @@
 
                         <!-- SUB-SCREEN: EDIT PROFILE -->
                         <div id="profileEditSubScreen" class="profile-subscreen">
-                            <div class="profile-back-header">
-                                <button class="profile-back-btn" onclick="hideProfileSubScreen('profileEditSubScreen')">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                                </button>
-                                <h3>Edit Profile</h3>
-                            </div>
+                            <app-inner-header title="Edit Profile" onback="hideProfileSubScreen('profileEditSubScreen')"></app-inner-header>
 
-                            <form id="memberProfileForm" onsubmit="saveProfileChangesRedesigned(event)" oninput="enableProfileSave()">
-                                <label class="profile-avatar-edit" for="profilePhotoInput">
-                                    <img id="profileAvatarImg" src="" alt="Profile photo">
-                                    <input type="hidden" id="profileAvatarBase64">
-                                    <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" hidden>
-                                    <div class="profile-avatar-edit-overlay">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                                    </div>
-                                </label>
+                            <div style="display: flex; justify-content: center; margin: 16px auto 20px; cursor: pointer; position: relative; width: 96px;" onclick="openPhotoOptionsSheet()">
+                                <member-avatar id="profileEditAvatar" size="96" editable="true"></member-avatar>
+                                <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" style="display: none;" onchange="handleProfilePhotoUpload(event)">
+                                <div id="profilePhotoLoading" class="profile-avatar-edit-spinner" style="display: none;">
+                                    <span class="profile-avatar-spinner-icon"></span>
+                                </div>
+                            </div>
 
                                 <div class="profile-input-group">
                                     <label>Full name</label>
@@ -1512,7 +1294,7 @@
                                 </div>
                                 <div class="profile-input-group">
                                     <label>Date of birth</label>
-                                    <input type="text" id="profDob" class="profile-input-control" placeholder="e.g. 12 May 1994">
+                                    <input type="date" id="profDob" class="profile-input-control" required>
                                 </div>
 
                                 <button id="profileSaveButton" type="submit" class="profile-btn-primary" disabled>Save Changes</button>
@@ -1521,12 +1303,7 @@
 
                         <!-- SUB-SCREEN: EMERGENCY CONTACT -->
                         <div id="profileEmergencySubScreen" class="profile-subscreen">
-                            <div class="profile-back-header">
-                                <button class="profile-back-btn" onclick="hideProfileSubScreen('profileEmergencySubScreen')">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                                </button>
-                                <h3>Emergency Contact</h3>
-                            </div>
+                            <app-inner-header title="Emergency Contacts" onback="hideProfileSubScreen('profileEmergencySubScreen')"></app-inner-header>
 
                             <div id="emergencyContactsList" class="emergency-contacts-list">
                                 <!-- Contact cards dynamically rendered -->
@@ -1539,12 +1316,7 @@
 
                         <!-- SUB-SCREEN: BODY STATS -->
                         <div id="profileStatsSubScreen" class="profile-subscreen">
-                            <div class="profile-back-header">
-                                <button class="profile-back-btn" onclick="hideProfileSubScreen('profileStatsSubScreen')">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                                </button>
-                                <h3>Body Stats</h3>
-                            </div>
+                            <app-inner-header title="Body Stats" onback="hideProfileSubScreen('profileStatsSubScreen')"></app-inner-header>
 
                             <div class="body-stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
                                 <div class="body-stat-card" style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px; text-align: left;">
@@ -1604,12 +1376,7 @@
 
                         <!-- SUB-SCREEN: CHANGE PASSWORD -->
                         <div id="profilePasswordSubScreen" class="profile-subscreen">
-                            <div class="profile-back-header">
-                                <button class="profile-back-btn" onclick="hideProfileSubScreen('profilePasswordSubScreen')">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                                </button>
-                                <h3>Change Password</h3>
-                            </div>
+                            <app-inner-header title="Change Password" onback="hideProfileSubScreen('profilePasswordSubScreen')"></app-inner-header>
 
                             <form id="profileChangePasswordForm" onsubmit="submitChangePasswordRedesigned(event)">
                                 <div class="profile-input-group">
@@ -1803,7 +1570,7 @@
                 <div id="photoOptionsSheet" class="personal-modal-overlay" style="display: none; align-items: flex-end; z-index: 2600;" onclick="closePhotoOptionsSheet()">
                     <div class="personal-bottom-sheet" onclick="event.stopPropagation();">
                         <div style="width: 36px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin: 0 auto 16px;"></div>
-                        <button type="button" class="sheet-option-btn" onclick="viewProfilePhotoFull()">View Photo</button>
+                        <button type="button" id="viewPhotoOption" class="sheet-option-btn" onclick="viewProfilePhotoFull()">View Photo</button>
                         <button type="button" class="sheet-option-btn" onclick="triggerProfilePhotoUpdate()">Upload New Photo</button>
                         <button type="button" class="sheet-option-btn" style="color: #ef4444;" onclick="removeProfilePhoto()">Remove Photo</button>
                         <button type="button" class="sheet-option-btn" style="color: rgba(255,255,255,0.5);" onclick="closePhotoOptionsSheet()">Cancel</button>
@@ -1866,7 +1633,9 @@
         style="z-index: 2000; bottom: 40px; right: auto; left: 50%; transform: translateX(-50%);"></div>
 
     <script src="/vendor/jsQR.js"></script>
-    <script src="/member/app.js"></script>
+    <script src="/shared/member-avatar.js?v=20260721_v1"></script>
+    <script src="/shared/date-picker.js?v=20260721_v1"></script>
+    <script src="/member/app.js?v=20260721_v1"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
