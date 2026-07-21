@@ -222,10 +222,8 @@ function switchMobileNav(tabName) {
         hideActivitySubScreen();
     }
     if (targetTab === 'attendanceHistory') {
+        renderHistorySubScreen();
         fetchActivityData();
-        setTimeout(() => {
-            renderHistorySubScreen();
-        }, 100);
     }
     if (targetTab === 'leaders') {
         fetchActivityData();
@@ -415,15 +413,7 @@ async function fetchDashboardData() {
         if (document.getElementById('homeStreakDaysLabel')) {
             document.getElementById('homeStreakDaysLabel').innerText = data.streak === 1 ? 'Day' : 'Days';
         }
-        const gymImageEl = document.getElementById('homeGymImage');
-        if (gymImageEl) {
-            if (data.gym_image_url) {
-                gymImageEl.src = data.gym_image_url;
-                gymImageEl.style.display = 'block';
-            } else {
-                gymImageEl.style.display = 'none';
-            }
-        }
+
 
         // Attendance stats
         if (document.getElementById('homeWeeklyVisitsCount')) {
@@ -2436,6 +2426,10 @@ let calendarCurrentDate = new Date();
 let selectedTimelineLog = null;
 
 async function fetchActivityData() {
+    // Set loading state if no data exists yet
+    if (!activityDataGlobal) {
+        renderHistorySubScreen();
+    }
     try {
         leaderboardRepo.clearCache();
         const res = await fetch('/api/member/activity');
@@ -2448,19 +2442,22 @@ async function fetchActivityData() {
 
         const data = await res.json();
         if (!res.ok || !data || !Array.isArray(data.logs)) {
-            // Backend/offline error payload (e.g. {error: "..."}) — keep whatever
-            // was already on screen instead of wiping it, and surface the failure.
+            activityDataGlobal = { error: true };
+            renderHistorySubScreen();
             showMobileToast((data && data.error) || 'Failed to load activity logs.', 'error');
             return;
         }
 
         activityDataGlobal = data;
         populateActivityDashboard(data);
+        renderHistorySubScreen();
         if (currentMobileTab === 'leaders') {
             renderLeaderboardSubScreen();
         }
     } catch (err) {
         console.error('Fetch activity data failed', err);
+        activityDataGlobal = { error: true };
+        renderHistorySubScreen();
         showMobileToast('Failed to load activity logs.', 'error');
     }
 }

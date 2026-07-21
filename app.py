@@ -167,6 +167,26 @@ def company_login_required(f):
 def index():
     return send_file(os.path.join(app.static_folder, "index.html"))
 
+@app.route("/member/")
+@app.route("/member")
+def member_index():
+    return send_file(os.path.join(app.static_folder, "member", "index.html"))
+
+@app.route("/admin/")
+@app.route("/admin")
+def admin_index():
+    return send_file(os.path.join(app.static_folder, "admin", "index.html"))
+
+@app.route("/owner/")
+@app.route("/owner")
+def owner_index():
+    return send_file(os.path.join(app.static_folder, "owner", "index.html"))
+
+@app.route("/company/")
+@app.route("/company")
+def company_index():
+    return send_file(os.path.join(app.static_folder, "company", "index.html"))
+
 # ================= AUTHENTICATION ENDPOINTS =================
 
 @app.route("/api/gyms/search", methods=["GET"])
@@ -2133,7 +2153,6 @@ def admin_settings():
             cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('qr_token', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (qr_token, gym_id))
         
         cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_logo', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_logo, gym_id))
-        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_image_url', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_logo, gym_id))
 
         # Update gyms table
         try:
@@ -2166,17 +2185,11 @@ def admin_settings():
             settings["gym_code"] = gym_row["gym_code"]
             if gym_row["logo_url"]:
                 settings["gym_logo"] = gym_row["logo_url"]
-                settings["gym_image_url"] = gym_row["logo_url"]
     except Exception:
         cursor.execute("SELECT gym_code FROM gyms WHERE id = ?", (session["gym_id"],))
         gym_row = cursor.fetchone()
         if gym_row:
             settings["gym_code"] = gym_row["gym_code"]
-
-    if "gym_logo" not in settings and "gym_image_url" in settings:
-        settings["gym_logo"] = settings["gym_image_url"]
-    elif "gym_image_url" not in settings and "gym_logo" in settings:
-        settings["gym_image_url"] = settings["gym_logo"]
 
     conn.close()
     return jsonify(settings)
@@ -2933,9 +2946,6 @@ def member_dashboard():
     m_rnk_row = cursor.fetchone()
     monthly_rank = m_rnk_row[0] if m_rnk_row else 0
 
-    cursor.execute("SELECT value FROM settings WHERE key = 'gym_image_url' AND gym_id = ?", (session["gym_id"],))
-    gym_image_row = cursor.fetchone()
-
     conn.close()
 
     return jsonify({
@@ -2955,8 +2965,7 @@ def member_dashboard():
         "monthly_rank": monthly_rank,
         "attendance_history": attendance_history,
         "notifications": notifs,
-        "billing_history": billing_history,
-        "gym_image_url": gym_image_row["value"] if gym_image_row else None
+        "billing_history": billing_history
     })
 
 @app.route("/api/member/activity", methods=["GET"])
