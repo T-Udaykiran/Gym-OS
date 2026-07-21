@@ -1,5 +1,26 @@
-// GymOS Member App Controller
 let activeMemberData = {};
+let memberDataReady = false;
+
+// Single source of truth for the logged-in member. This is the ONLY function
+// allowed to assign to activeMemberData. It merges additively (patch fields
+// win, everything else is preserved) so no caller can accidentally erase
+// fields it doesn't know about - unlike a whitelist rebuild, which silently
+// drops any key it doesn't enumerate.
+function setMemberData(patch) {
+    if (!patch || typeof patch !== 'object') return activeMemberData;
+    const merged = Object.assign({}, activeMemberData, patch);
+    if ('member_id' in patch || 'id' in patch) {
+        merged.member_id = patch.member_id || patch.id || activeMemberData.member_id || null;
+    }
+    if ('dob' in patch) {
+        const iso = (typeof MemberDatePicker !== 'undefined' && MemberDatePicker.formatIso)
+            ? MemberDatePicker.formatIso(patch.dob)
+            : (patch.dob || '');
+        merged.dob = iso || patch.dob || '';
+    }
+    activeMemberData = merged;
+    return activeMemberData;
+}
 let currentMobileTab = 'home';
 let previousMobileTab = 'home';
 let previousProfileSubScreen = null;
@@ -445,20 +466,19 @@ async function fetchDashboardData() {
         }
 
         const data = await res.json();
-        activeMemberData = Object.assign({}, activeMemberData, data);
+        setMemberData(data);
         syncAttendanceState();
 
         // Fill home fields
         if (document.getElementById('homeMemberFirstName')) {
-            document.getElementById('homeMemberFirstName').innerText = data.first_name;
+            document.getElementById('homeMemberFirstName').innerText = activeMemberData.first_name || 'User';
         }
         if (document.getElementById('homeStreakDaysText')) {
-            document.getElementById('homeStreakDaysText').innerText = data.streak;
+            document.getElementById('homeStreakDaysText').innerText = data.streak || '0';
         }
         if (document.getElementById('homeStreakDaysLabel')) {
             document.getElementById('homeStreakDaysLabel').innerText = data.streak === 1 ? 'Day' : 'Days';
         }
-
 
         // Attendance stats
         if (document.getElementById('homeWeeklyVisitsCount')) {
@@ -487,22 +507,12 @@ async function fetchDashboardData() {
         const meRes = await fetch('/api/auth/me');
         const meData = await meRes.json();
         if (meData.user) {
-            activeMemberData.last_name = meData.user.member_details.last_name;
-            activeMemberData.email = meData.user.email;
-            activeMemberData.phone = meData.user.member_details.phone;
-            activeMemberData.emergency_contact = meData.user.member_details.emergency_contact;
-            activeMemberData.emergency_contact_name = meData.user.member_details.emergency_contact_name;
-            activeMemberData.emergency_contact_number = meData.user.member_details.emergency_contact_number;
-            activeMemberData.emergency_contact_relation = meData.user.member_details.emergency_contact_relation;
-            activeMemberData.dob = meData.user.member_details.dob;
-            activeMemberData.gender = meData.user.member_details.gender;
-            activeMemberData.height = meData.user.member_details.height;
-            activeMemberData.weight = meData.user.member_details.weight;
-            activeMemberData.profile_photo = meData.user.member_details.profile_photo;
-            
+            const meObj = Object.assign({ email: meData.user.email }, meData.user.member_details || {});
+            setMemberData(meObj);
+
             // Format & set membership ID
             if (document.getElementById('homeMembershipId')) {
-                const rawId = meData.user.member_details.id || meData.user.member_id;
+                const rawId = activeMemberData.member_id;
                 document.getElementById('homeMembershipId').innerText = formatMembershipId(rawId);
             }
         }
@@ -544,9 +554,11 @@ async function fetchDashboardData() {
 
         memberNotifications = data.notifications || [];
         renderNotificationsScreen();
-        
+
         // Fetch Leaderboard
         fetchLeaderboard();
+
+        memberDataReady = true;
 
         // Reactively populate edit profile form with loaded member state
         populateProfileFields();
@@ -1279,7 +1291,7 @@ function handleProfilePhotoUpload(event) {
             });
             const resData = await res.json();
             if (res.ok && resData.success) {
-                activeMemberData.profile_photo = base64;
+                setMemberData({ profile_photo: base64 });
                 syncMemberProfileState();
                 showMobileToast('Profile photo updated successfully', 'success');
             } else if (res.status === 401 || res.status === 403) {
@@ -1318,7 +1330,7 @@ async function removeProfilePhoto() {
         });
         const resData = await res.json();
         if (res.ok && resData.success) {
-            activeMemberData.profile_photo = '';
+            setMemberData({ profile_photo: '' });
             syncMemberProfileState();
             showMobileToast('Profile photo removed.', 'success');
         } else if (res.status === 401 || res.status === 403) {
@@ -1381,7 +1393,6 @@ function validateDobDate(date) {
 let tempRegisterData = null;
 let verifyTimerInterval = null;
 let selectedDobDate = new Date(2000, 8, 15);
-let dobPickerContext = 'onboarding'; // 'onboarding' | 'editProfile'
 let onboardingDobIso = null;
 let currentHeightFt = 5;
 let currentHeightIn = 6;
@@ -1616,12 +1627,7 @@ function simulateOwnerVerificationGlow() {
 // Modal Date Pickers
 const DOB_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function openDobDatePicker(context = 'onboarding') {
-    dobPickerContext = context;
-    if (context === 'editProfile') {
-        const existing = parseStoredDob(document.getElementById('profDobIso').value || activeMemberData.dob);
-        selectedDobDate = existing || new Date(2000, 8, 15);
-    }
+function openDobDatePicker() {
     document.getElementById('modalDobPicker').style.display = 'flex';
     showDobDayView();
     renderDobCalendar();
@@ -1769,21 +1775,11 @@ function confirmDobPicker() {
     const iso = formatDobIso(selectedDobDate);
     const display = formatDobDisplay(selectedDobDate);
 
-    if (dobPickerContext === 'editProfile') {
-        document.getElementById('profDob').value = display;
-        document.getElementById('profDobIso').value = iso;
-        enableProfileSave();
-    } else {
-        document.getElementById('personalDobVal').innerText = display;
-        onboardingDobIso = iso;
-        isDobSelected = true;
-        validatePersonalForm();
-    }
+    document.getElementById('personalDobVal').innerText = display;
+    onboardingDobIso = iso;
+    isDobSelected = true;
+    validatePersonalForm();
     closeDobDatePicker();
-}
-
-function openEditProfileDobPicker() {
-    openDobDatePicker('editProfile');
 }
 
 function closeDobPicker() {
@@ -1936,7 +1932,7 @@ async function submitPersonalizedDataAndComplete() {
         const resData = await res.json();
         if (resData.success) {
             showMobileToast('Profile personalized successfully!', 'success');
-            activeMemberData.preferences_completed = true;
+            setMemberData({ preferences_completed: true });
             proceedToMemberApp();
         } else {
             showMobileToast(resData.error || 'Failed to save preferences.', 'error');
@@ -2006,8 +2002,7 @@ function setupAuthForms() {
                         errBanner.style.display = 'block';
                         return;
                     }
-                    activeMemberData.member_id = data.user.member_id;
-                    activeMemberData.preferences_completed = data.user.preferences_completed;
+                    setMemberData({ member_id: data.user.member_id, preferences_completed: data.user.preferences_completed });
                     
                     if (!data.user.preferences_completed) {
                         showPersonalizeView();
@@ -2119,6 +2114,8 @@ function selectGym(id, name, code) {
 async function logoutMemberApp() {
     try {
         await fetch('/api/auth/logout', { method: 'POST' });
+        activeMemberData = {};
+        memberDataReady = false;
         memberAuthWrapper.style.display = 'flex';
         memberAppWrapper.style.display = 'none';
 
@@ -3373,14 +3370,14 @@ function hideProfileSubScreen(screenId) {
     populateProfileFields();
 }
 
-function enableProfileSave() {
-    const button = document.getElementById('profileSaveButton');
-    if (button) button.disabled = false;
-}
-
 async function saveProfileChangesRedesigned(e) {
     if (e && e.preventDefault) e.preventDefault();
-    
+
+    if (!memberDataReady || !activeMemberData.member_id) {
+        showMobileToast('Still loading your profile - please try again in a moment.', 'info');
+        return;
+    }
+
     const rawName = (document.getElementById('profFirst') && document.getElementById('profFirst').value.trim());
     const fullName = rawName || `${activeMemberData.first_name || ''} ${activeMemberData.last_name || ''}`.trim();
     
@@ -3409,11 +3406,6 @@ async function saveProfileChangesRedesigned(e) {
     const first = parts[0] || activeMemberData.first_name || '';
     const last = parts.slice(1).join(' ') || activeMemberData.last_name || '';
 
-    activeMemberData.first_name = first;
-    activeMemberData.last_name = last;
-    activeMemberData.phone = phone;
-    activeMemberData.dob = dobIso;
-
     if (submitButton) {
         submitButton.disabled = true;
         submitButton.textContent = 'Saving...';
@@ -3433,6 +3425,7 @@ async function saveProfileChangesRedesigned(e) {
         });
         const resData = await res.json();
         if (res.ok && resData.success) {
+            setMemberData({ first_name: first, last_name: last, phone: phone, dob: dobIso });
             syncMemberProfileState();
             showMobileToast('Profile updated successfully!', 'success');
             hideProfileSubScreen('profileEditSubScreen');
@@ -3452,10 +3445,9 @@ async function saveProfileChangesRedesigned(e) {
 }
 
 // Emergency Contacts Management
-function getEmergencyContactsKey() {
-    return `gymos_emergency_contacts_${activeMemberData.member_id || 'guest'}`;
-}
-
+// The backend stores a single primary emergency contact on the member record
+// itself (emergency_contact_name/number/relation) - there is no separate
+// contacts list, so this reads/writes activeMemberData directly.
 function renderEmergencyContacts() {
     const container = document.getElementById('emergencyContactsList');
     if (!container) return;
@@ -3472,58 +3464,6 @@ function renderEmergencyContacts() {
         <button class="emergency-action-btn" onclick="editEmergencyContact()">Edit</button>
         <button class="emergency-action-btn delete" onclick="deleteEmergencyContact()">Delete</button>
     </div></div>`;
-    return;
-
-    const key = getEmergencyContactsKey();
-    let contacts = [];
-    try {
-        contacts = JSON.parse(localStorage.getItem(key)) || [];
-    } catch (e) {
-        contacts = [];
-    }
-
-    if (contacts.length === 0) return;
-
-    container.innerHTML = '';
-    contacts.forEach(contact => {
-        const card = document.createElement('div');
-        card.className = 'emergency-contact-card';
-        card.innerHTML = `
-            <div class="emergency-contact-details">
-                <h4>${escapeHtml(contact.name)} <span class="emergency-contact-relation">${escapeHtml(contact.relation)}</span></h4>
-                <p>${escapeHtml(contact.phone)}</p>
-            </div>
-            <div class="emergency-contact-actions">
-                <button class="emergency-action-btn" onclick="editEmergencyContact(${contact.id})">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                </button>
-                <button class="emergency-action-btn delete" onclick="deleteEmergencyContact(${contact.id})">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                </button>
-            </div>
-        `;
-        container.appendChild(card);
-    });
-
-    // Update database field emergency_contact with serialized first contact
-    if (contacts.length > 0) {
-        const primary = `${contacts[0].name} (${contacts[0].relation}) / ${contacts[0].phone}`;
-        if (activeMemberData.emergency_contact !== primary) {
-            activeMemberData.emergency_contact = primary;
-            // Sync silently
-            fetch('/api/member/profile', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    phone: activeMemberData.phone,
-                    emergency_contact: primary,
-                    emergency_contact_name: `${contacts[0].name} (${contacts[0].relation})`,
-                    emergency_contact_number: contacts[0].phone,
-                    profile_photo: activeMemberData.profile_photo
-                })
-            }).catch(err => console.error(err));
-        }
-    }
 }
 
 function openAddEmergencyContactModal() {
@@ -3541,87 +3481,43 @@ function closeEmergencyContactModal() {
 
 function saveEmergencyContactSubmit(e) {
     e.preventDefault();
-    const id = document.getElementById('emergencyContactId').value;
     const name = document.getElementById('emergencyName').value.trim();
     const relation = document.getElementById('emergencyRelation').value.trim();
     const phone = document.getElementById('emergencyPhone').value.trim();
 
     saveEmergencyContact({ name, relation, phone });
-    return;
-
-    const key = getEmergencyContactsKey();
-    let contacts = [];
-    try {
-        contacts = JSON.parse(localStorage.getItem(key)) || [];
-    } catch (err) {
-        contacts = [];
-    }
-
-    if (id) {
-        // Edit
-        const idx = contacts.findIndex(c => c.id == id);
-        if (idx !== -1) {
-            contacts[idx] = { id: parseInt(id), name, relation, phone };
-        }
-    } else {
-        // Add
-        const newId = contacts.length > 0 ? Math.max(...contacts.map(c => c.id)) + 1 : 1;
-        contacts.push({ id: newId, name, relation, phone });
-    }
-
-    localStorage.setItem(key, JSON.stringify(contacts));
-    closeEmergencyContactModal();
-    renderEmergencyContacts();
-    showMobileToast('Emergency contact saved', 'success');
 }
 
-function editEmergencyContact(id) {
-    if (id === undefined) {
-        document.getElementById('emergencyContactId').value = 'primary';
-        document.getElementById('emergencyName').value = activeMemberData.emergency_contact_name || '';
-        document.getElementById('emergencyRelation').value = activeMemberData.emergency_contact_relation || '';
-        document.getElementById('emergencyPhone').value = activeMemberData.emergency_contact_number || '';
-        document.getElementById('emergencyModalTitle').innerText = 'Edit Emergency Contact';
-        document.getElementById('emergencyContactModal').style.display = 'flex';
-        return;
-    }
-    const key = getEmergencyContactsKey();
-    const contacts = JSON.parse(localStorage.getItem(key)) || [];
-    const contact = contacts.find(c => c.id == id);
-    if (!contact) return;
-
-    document.getElementById('emergencyContactId').value = contact.id;
-    document.getElementById('emergencyName').value = contact.name;
-    document.getElementById('emergencyRelation').value = contact.relation;
-    document.getElementById('emergencyPhone').value = contact.phone;
+function editEmergencyContact() {
+    document.getElementById('emergencyContactId').value = 'primary';
+    document.getElementById('emergencyName').value = activeMemberData.emergency_contact_name || '';
+    document.getElementById('emergencyRelation').value = activeMemberData.emergency_contact_relation || '';
+    document.getElementById('emergencyPhone').value = activeMemberData.emergency_contact_number || '';
     document.getElementById('emergencyModalTitle').innerText = 'Edit Emergency Contact';
     document.getElementById('emergencyContactModal').style.display = 'flex';
 }
 
-function deleteEmergencyContact(id) {
-    if (id === undefined) {
-        if (window.confirm('Remove this emergency contact?')) saveEmergencyContact({ name: '', relation: '', phone: '' });
-        return;
-    }
-    const key = getEmergencyContactsKey();
-    let contacts = JSON.parse(localStorage.getItem(key)) || [];
-    contacts = contacts.filter(c => c.id != id);
-    localStorage.setItem(key, JSON.stringify(contacts));
-    renderEmergencyContacts();
-    showMobileToast('Emergency contact removed', 'info');
+function deleteEmergencyContact() {
+    if (window.confirm('Remove this emergency contact?')) saveEmergencyContact({ name: '', relation: '', phone: '' });
 }
 
 async function saveEmergencyContact(contact) {
+    if (!memberDataReady || !activeMemberData.member_id) {
+        showMobileToast('Still loading your profile - please try again in a moment.', 'info');
+        return;
+    }
+
     const legacy = contact.name ? `${contact.name} (${contact.relation}) / ${contact.phone}` : '';
     try {
+        // Only the emergency-contact fields are sent - this must never touch
+        // name/phone/dob/photo, which belong to the Edit Profile and Photo flows.
         const res = await fetch('/api/member/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-            phone: activeMemberData.phone, first_name: activeMemberData.first_name, last_name: activeMemberData.last_name,
-            dob: activeMemberData.dob || '', emergency_contact: legacy, emergency_contact_name: contact.name,
-            emergency_contact_number: contact.phone, emergency_contact_relation: contact.relation, profile_photo: activeMemberData.profile_photo || ''
+            phone: activeMemberData.phone, emergency_contact: legacy, emergency_contact_name: contact.name,
+            emergency_contact_number: contact.phone, emergency_contact_relation: contact.relation
         }) });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || 'Unable to save contact');
-        Object.assign(activeMemberData, { emergency_contact: legacy, emergency_contact_name: contact.name, emergency_contact_number: contact.phone, emergency_contact_relation: contact.relation });
+        setMemberData({ emergency_contact: legacy, emergency_contact_name: contact.name, emergency_contact_number: contact.phone, emergency_contact_relation: contact.relation });
         closeEmergencyContactModal();
         renderEmergencyContacts();
         showMobileToast(contact.name ? 'Emergency contact saved.' : 'Emergency contact removed.', 'success');

@@ -3802,10 +3802,12 @@ def member_update_profile():
     # DOB validation only if DOB is explicitly provided
     dob_provided = "dob" in data
     dob = None
+    dob_has_value = False
     if dob_provided and data.get("dob") is not None and str(data.get("dob")).strip() != "":
         dob, dob_error = parse_and_validate_dob(data.get("dob"))
         if dob_error:
             return jsonify({"error": dob_error}), 400
+        dob_has_value = True
 
     phone = data.get("phone")
     first_name = (data.get("first_name") or "").strip()
@@ -3849,7 +3851,7 @@ def member_update_profile():
         cursor.execute("""
             UPDATE members
             SET first_name = COALESCE(NULLIF(?, ''), first_name),
-                last_name = COALESCE(?, last_name),
+                last_name = COALESCE(NULLIF(?, ''), last_name),
                 phone = COALESCE(NULLIF(?, ''), phone),
                 dob = CASE WHEN ? THEN ? ELSE dob END,
                 emergency_contact = COALESCE(NULLIF(?, ''), emergency_contact),
@@ -3858,7 +3860,7 @@ def member_update_profile():
                 emergency_contact_relation = COALESCE(?, emergency_contact_relation),
                 profile_photo = CASE WHEN ? THEN ? ELSE profile_photo END
             WHERE id = ? AND gym_id = ?
-        """, (first_name, last_name, phone, dob_provided, dob, legacy_emergency, emergency_name,
+        """, (first_name, last_name, phone, dob_has_value, dob, legacy_emergency, emergency_name,
                emergency_number, emergency_relation, photo_provided, photo, m_id, session["gym_id"]))
         log_action(cursor, "member_profile_updated_self", "member", m_id, {"phone": phone})
         conn.commit()
