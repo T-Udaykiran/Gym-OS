@@ -281,23 +281,23 @@
 }
 
 .greeting-text {
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--text-secondary);
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    color: var(--text-secondary) !important;
 }
 
 .gym-title-headline {
-    font-size: 26px;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    color: var(--text-primary);
-    margin-top: 2px;
+    font-size: 36px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    color: #111827 !important;
+    margin-top: 2px !important;
 }
 
 .current-date-info {
-    font-size: 13.5px;
-    color: var(--text-tertiary);
-    margin-top: 4px;
+    font-size: 13.5px !important;
+    color: var(--text-tertiary) !important;
+    margin-top: 4px !important;
 }
 
 /* Search bar, Notification & Settings control */
@@ -2955,4 +2955,23 @@
         background-color: transparent;
         box-shadow: none;
     }
+}
+
+.module-page-header {
+    margin-bottom: 24px !important;
+    padding-bottom: 12px !important;
+    border-bottom: 1px solid var(--gray-border) !important;
+}
+.module-page-header h2 {
+    font-size: 36px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    color: #111827 !important;
+    margin: 0 0 4px 0 !important;
+}
+.module-page-header p {
+    font-size: 15.5px !important;
+    color: var(--text-secondary) !important;
+    font-weight: normal !important;
+    margin: 0 !important;
 }

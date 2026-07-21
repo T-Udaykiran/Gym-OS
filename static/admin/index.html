@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-title" content="GymOS Admin">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="stylesheet" href="/shared/styles.css">
-    <link rel="stylesheet" href="/admin/style.css">
+    <link rel="stylesheet" href="/admin/style.css?v=3">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="/vendor/qrcode.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -294,46 +294,23 @@
                 </button>
             </header>
 
-            <!-- TOP CUSTOM HEADER -->
-            <header class="header-bar-fitzone">
-                <div class="greeting-block" style="display: flex; align-items: center; gap: 14px;">
-                    <img id="dashboardGymImage" src="" alt="Gym photo" style="display: none; width: 52px; height: 52px; border-radius: 12px; object-fit: cover; flex-shrink: 0;">
-                    <div>
-                        <span class="greeting-text">Good Morning, <strong id="greetingUser">Ramesh 👋</strong></span>
-                        <h1 class="gym-title-headline" id="headerGymName">FitZone Gym</h1>
-                        <span class="current-date-info" id="realTimeHeaderDate">Friday, 10 July 2026</span>
-                    </div>
-                </div>
-                <div class="header-controls" style="position: relative;">
-                    <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
-                        <div class="search-input-header" style="flex: 1; max-width: none;">
-                            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                            <input type="text" placeholder="Search members..." oninput="triggerGlobalSearch(this.value)">
-                        </div>
-                    </div>
-                    <button class="btn-round-control" id="ownerBellBtn" onclick="toggleNotificationPopover(event)" style="position: relative;">
-                        <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                        </svg>
-                        <span id="ownerBellBadge" class="badge-count-red" style="display:none;">5</span>
-                    </button>
-                    <button class="date-selector-trigger" onclick="alert('Simulated calendar schedule display.')"
-                        id="currentCalendarDisplayTrigger">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span>10 Jul 2026</span>
-                    </button>
-                </div>
-            </header>
-
-            <!-- ================= 1. TAB: DASHBOARD ================= -->
             <section id="dashboardTab" class="tab-content active">
+                <!-- DASHBOARD SPECIFIC HEADER & UTILITY BAR -->
+                <header class="header-bar-fitzone" style="margin-bottom: 24px;">
+                    <div class="greeting-block">
+                        <span class="greeting-text" style="font-size: 13.5px; color: var(--text-secondary); display: block;"><span id="greetingTimePrefix">Good Morning</span>, <strong id="greetingUser">Ramesh 👋</strong></span>
+                        <h1 class="gym-title-headline" style="font-size: 24px; font-weight: 800; color: #fff; margin: 4px 0;" id="headerGymName">FitZone Gym</h1>
+                    </div>
+                    <div class="header-controls" style="position: relative; display: flex; gap: 12px; align-items: center;">
+                        <button class="btn-round-control" id="ownerBellBtn" onclick="toggleNotificationPopover(event)" style="position: relative;" aria-label="Notifications">
+                            <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                            <span id="ownerBellBadge" class="badge-count-red" style="display:none;">0</span>
+                        </button>
+                    </div>
+                </header>
 
                 <!-- 6 Top KPI Metrics -->
                 <div class="metric-kpi-grid">
@@ -349,14 +326,14 @@
                                 </svg>
                             </div>
                         </div>
-                        <div class="kpi-value" id="statActiveMembers">324</div>
-                        <span class="kpi-trend-growth growth-positive">
+                        <div class="kpi-value" id="statActiveMembers">0</div>
+                        <span class="kpi-trend-growth growth-positive" style="display: none;">
                             <svg style="width: 12px; height: 12px;" fill="none" viewBox="0 0 24 24"
                                 stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
                                     d="M5 10l7-7m0 0l7 7m-7-7v18" />
                             </svg>
-                            <span>12 vs last month</span>
+                            <span>0 vs last month</span>
                         </span>
                     </div>
 
@@ -372,14 +349,14 @@
                                 </svg>
                             </div>
                         </div>
-                        <div class="kpi-value" id="statNewMembersWeek">8</div>
-                        <span class="kpi-trend-growth growth-positive">
+                        <div class="kpi-value" id="statNewMembersWeek">0</div>
+                        <span class="kpi-trend-growth growth-positive" style="display: none;">
                             <svg style="width: 12px; height: 12px;" fill="none" viewBox="0 0 24 24"
                                 stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
                                     d="M5 10l7-7m0 0l7 7m-7-7v18" />
                             </svg>
-                            <span>3 vs last week</span>
+                            <span>0 vs last week</span>
                         </span>
                     </div>
 
@@ -395,9 +372,9 @@
                                 </svg>
                             </div>
                         </div>
-                        <div class="kpi-value" id="statTodayCheckins">176</div>
+                        <div class="kpi-value" id="statTodayCheckins">0</div>
                         <span class="kpi-trend-growth growth-neutral" style="color: #3b82f6;">
-                            <span id="checkinRatioPercentText">65% of members</span>
+                            <span id="checkinRatioPercentText">0% of active members</span>
                         </span>
                     </div>
 
@@ -409,14 +386,14 @@
                                 <span style="font-weight: 700; font-size:16px;">₹</span>
                             </div>
                         </div>
-                        <div class="kpi-value" id="statMonthlyRevenue">₹3,48,000</div>
-                        <span class="kpi-trend-growth growth-positive">
+                        <div class="kpi-value" id="statMonthlyRevenue">₹0</div>
+                        <span class="kpi-trend-growth growth-positive" style="display: none;">
                             <svg style="width: 12px; height: 12px;" fill="none" viewBox="0 0 24 24"
                                 stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
                                     d="M5 10l7-7m0 0l7 7m-7-7v18" />
                             </svg>
-                            <span>18% vs last month</span>
+                            <span>0% vs last month</span>
                         </span>
                     </div>
 
@@ -428,9 +405,9 @@
                                 <span style="font-weight:700; font-size:16px;">!</span>
                             </div>
                         </div>
-                        <div class="kpi-value" id="statPendingPayments">12</div>
+                        <div class="kpi-value" id="statPendingPayments">0</div>
                         <span class="kpi-trend-growth growth-negative">
-                            <span id="statPendingAmountVal">₹18,600 total</span>
+                            <span id="statPendingAmountVal">₹0 total</span>
                         </span>
                         <button class="kpi-nav-btn" type="button" title="View Pending Dues" aria-label="View Pending Dues">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
@@ -449,7 +426,7 @@
                                 </svg>
                             </div>
                         </div>
-                        <div class="kpi-value" id="statExpiredCount">9</div>
+                        <div class="kpi-value" id="statExpiredCount">0</div>
                         <span class="kpi-trend-growth growth-neutral" style="color: var(--warning);">
                             <span>Next 7 days</span>
                         </span>
@@ -619,8 +596,11 @@
                 </footer>
             </section>
 
-            <!-- ================= 2. TAB: MEMBERS ================= -->
             <section id="membersTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Members</h2>
+                    <p>Manage your gym members, memberships, and account status.</p>
+                </div>
                 <div class="premium-table-card">
                             <div class="premium-table-header">
                                 <div class="premium-table-header-left">
@@ -720,8 +700,11 @@
                         </div>
             </section>
 
-            <!-- ================= 3. TAB: ATTENDANCE ================= -->
             <section id="attendanceTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Attendance</h2>
+                    <p>Track daily member attendance and check-ins.</p>
+                </div>
                 <div class="premium-table-card">
                     <div class="premium-table-header">
                         <div class="premium-table-header-left">
@@ -798,8 +781,11 @@
                 </div>
             </section>
 
-            <!-- ================= 4. TAB: PAYMENTS ================= -->
             <section id="paymentsTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Payments</h2>
+                    <p>Review, approve, and manage membership payments.</p>
+                </div>
                 <div class="premium-table-card">
                     <div class="premium-table-header">
                         <div class="premium-table-header-left">
@@ -886,11 +872,13 @@
 
             <!-- ================= TAB: PENDING DUES ================= -->
             <section id="pending-duesTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Pending Dues</h2>
+                    <p>Monitor unpaid memberships and outstanding balances.</p>
+                </div>
                 <div class="premium-table-card">
                     <div class="premium-table-header">
                         <div class="premium-table-header-left">
-                            <h3 style="margin: 0; font-size: 16px; font-weight: 800;">Pending Dues</h3>
-                            <span class="panel-subtitle" style="margin-left: 10px;">Members with pending or overdue payments</span>
                         </div>
                         <div class="premium-table-header-right">
                             <button class="btn btn-secondary" onclick="downloadPendingDuesCSV()" style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
@@ -919,11 +907,13 @@
 
             <!-- ================= TAB: EXPIRING SOON ================= -->
             <section id="expiring-soonTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Expiring Memberships</h2>
+                    <p>Members whose memberships are nearing expiration.</p>
+                </div>
                 <div class="premium-table-card">
                     <div class="premium-table-header">
                         <div class="premium-table-header-left">
-                            <h3 style="margin: 0; font-size: 16px; font-weight: 800;">Expiring Soon</h3>
-                            <span class="panel-subtitle" style="margin-left: 10px;">Memberships expiring in the next 7 days</span>
                         </div>
                         <div class="premium-table-header-right">
                             <button class="btn btn-secondary" onclick="downloadExpiringSoonCSV()" style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
@@ -949,13 +939,10 @@
                 </div>
             </section>
 
-            <!-- ================= TAB: PENDING APPROVALS ================= -->
             <section id="pending-approvalsTab" class="tab-content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <div>
-                        <h3 style="font-size: 18px; font-weight:700; margin: 0;">Pending Member Approvals</h3>
-                        <p style="font-size: 13px; color: var(--text-tertiary); margin-top: 4px; margin-bottom: 0;" id="pendingApprovalsSubheading">0 registrations waiting for owner review</p>
-                    </div>
+                <div class="module-page-header">
+                    <h2>Pending Approvals</h2>
+                    <p id="pendingApprovalsSubheading">Review member requests awaiting approval.</p>
                 </div>
 
                 <div class="premium-filter-card card" style="margin-bottom: 24px; padding: 18px 24px;">
@@ -987,20 +974,24 @@
 
             <!-- ================= 5. TAB: MEMBERSHIP PLANS ================= -->
             <section id="plansTab" class="tab-content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                    <h3 style="font-size: 18px; font-weight:700;">Define Active Membership Offerings</h3>
+                <div class="module-page-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
+                    <div>
+                        <h2>Membership Plans</h2>
+                        <p>Create and manage gym membership plans.</p>
+                    </div>
                     <button class="btn btn-primary" onclick="openModal('addPlanModal')"
-                        style="font-size:13.5px; padding: 10px 18px;">Create New Plan</button>
+                        style="font-size:13.5px; padding: 10px 18px; margin-bottom: 4px;">Create New Plan</button>
                 </div>
                 <div class="grid-3" id="plansContainer" style="margin-top: 16px;"></div>
             </section>
 
             <!-- ================= 6. TAB: REPORTS ================= -->
             <section id="reportsTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Reports</h2>
+                    <p>View business analytics and performance reports.</p>
+                </div>
                 <div class="card" style="max-width: 750px; margin-bottom: 24px;">
-                    <h3 style="margin-bottom: 12px;">Analytics & System Reports</h3>
-                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 24px;">Compile reports,
-                        exports, and check statistics log summary details here.</p>
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 30px;">
                         <div class="card"
                             style="padding: 16px; border-radius: var(--radius-md); text-align: center; background-color: var(--bg-app); border: none;">
@@ -1075,10 +1066,11 @@
 
             <!-- ================= 7. TAB: REMINDERS ================= -->
             <section id="remindersTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Reminders</h2>
+                    <p>Schedule and manage member reminders.</p>
+                </div>
                 <div class="card" style="max-width: 800px;">
-                    <h3 style="margin-bottom: 12px;">Outstanding Dues Dispatcher</h3>
-                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;">Dispatch quick
-                        WhatsApp alert links to members with pending or overdue subscription balances.</p>
                     <div class="premium-table-container">
                         <table class="premium-table" id="remindersTable">
                             <thead>
@@ -1100,10 +1092,11 @@
 
             <!-- ================= 8. TAB: SETTINGS ================= -->
             <section id="settingsTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Settings</h2>
+                    <p>Configure GymOS preferences and system settings.</p>
+                </div>
                 <div class="card" style="max-width: 650px;">
-                    <h3 style="margin-bottom: 6px;">Business Configuration</h3>
-                    <p style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 24px;">Update details
-                        shown to members on receipts and dashboard checkins.</p>
                     <form id="settingsForm">
                         <div class="input-group">
                             <label for="settingsGymCode">Gym ID</label>
@@ -1129,28 +1122,46 @@
                         </div>
                         <div class="input-group">
                             <label for="settingsQRToken">Universal Gym Check-In QR Token</label>
-                            <input type="text" id="settingsQRToken" class="input-control"
-                                placeholder="Update token key for security check-ins">
-                            <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">Modifying this
-                                token updates the QR validator. Members will need to refresh scan codes.</small>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="settingsQRToken" class="input-control" disabled style="background-color: var(--bg-hover); font-family: monospace; font-weight: 600;" placeholder="gymos-token-...">
+                                <button type="button" class="btn btn-secondary" style="white-space: nowrap;" onclick="copyQRToken()">Copy</button>
+                                <button type="button" class="btn btn-secondary" style="white-space: nowrap; color: var(--danger-dark); border-color: rgba(239,68,68,0.3);" onclick="regenerateQRToken()">Regenerate</button>
+                            </div>
+                            <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px; display: block;">🔒 System Generated — Modifying this token invalidates all existing QR codes. Members will need to refresh scan codes.</small>
                         </div>
+
                         <div class="input-group">
-                            <label for="settingsGymImageUrl">Gym Photo URL</label>
-                            <input type="text" id="settingsGymImageUrl" class="input-control"
-                                placeholder="https://... image shown on the dashboard and member app">
-                            <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">Displayed on
-                                the owner dashboard header and the member home screen.</small>
+                            <label>Gym Logo</label>
+                            <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                                <div id="gymLogoPreviewContainer" style="width: 64px; height: 64px; border-radius: 12px; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0;">
+                                    <img id="gymLogoPreview" src="" alt="Gym Logo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                    <span id="gymLogoFallback" style="font-weight: 700; font-size: 24px; color: var(--accent);">⚡</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+                                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                        <label for="gymLogoFileInput" class="btn btn-secondary" style="cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; margin-bottom: 0;">
+                                            Upload Logo
+                                        </label>
+                                        <input type="file" id="gymLogoFileInput" accept="image/png, image/jpeg, image/webp" style="display: none;" onchange="handleGymLogoSelect(event)">
+                                        <button type="button" id="btnRemoveGymLogo" class="btn btn-ghost" style="font-size: 13px; color: var(--danger-dark); display: none;" onclick="removeGymLogo()">Remove Logo</button>
+                                    </div>
+                                    <small style="color: var(--text-tertiary); font-size: 12px;">PNG, JPG or WEBP. Maximum file size 2MB.</small>
+                                </div>
+                            </div>
                         </div>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="submit" class="btn btn-primary" style="margin-top: 12px;">Save Changes</button>
                     </form>
                 </div>
             </section>
 
             <!-- ================= 9. TAB: NOTIFICATIONS ================= -->
             <section id="notificationsTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Notification History</h2>
+                    <p>Review all system alerts and automated membership events.</p>
+                </div>
                 <div class="premium-table-header" style="border: 1px solid var(--border-color); border-bottom: none; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 20px 24px;">
                     <div class="premium-table-header-left" style="gap: 16px;">
-                        <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: var(--text-primary);">Notification History</h3>
                         <div class="search-input-header" style="max-width: 300px; flex: 1;">
                             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1208,17 +1219,21 @@
                     <input type="text" id="mPhone" class="input-control" placeholder="+155512345" required>
                 </div>
                 <div class="input-group">
-                    <label for="mEmergency">Emergency Contact</label>
-                    <input type="text" id="mEmergency" class="input-control" placeholder="Name / Phone">
+                    <label for="mEmergencyName">Emergency Contact Name</label>
+                    <input type="text" id="mEmergencyName" class="input-control" placeholder="Contact Name" required>
                 </div>
                 <div class="input-group">
-                    <label for="mPassword">Create Password (Optional)</label>
-                    <input type="password" id="mPassword" class="input-control" placeholder="Defaults to password123">
+                    <label for="mEmergencyNumber">Emergency Contact Number</label>
+                    <input type="text" id="mEmergencyNumber" class="input-control" placeholder="Contact Number" required>
                 </div>
                 <div class="input-group">
-                    <label for="mPlanSelect">Membership Plan (Optional)</label>
-                    <select id="mPlanSelect" class="input-control">
-                        <option value="">No plan &mdash; add later</option>
+                    <label for="mPassword">Create Password</label>
+                    <input type="password" id="mPassword" class="input-control" placeholder="Enter password" required>
+                </div>
+                <div class="input-group">
+                    <label for="mPlanSelect">Membership Plan</label>
+                    <select id="mPlanSelect" class="input-control" required>
+                        <option value="">Select a plan</option>
                     </select>
                 </div>
                 <div id="mPlanOptionsSection" style="display:none;">
@@ -1248,7 +1263,7 @@
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary"
-                    style="width: 100%; margin-top: 12px; font-weight:600;">Create Account</button>
+                    style="width: 100%; margin-top: 12px; font-weight:600;">Add Member</button>
             </form>
         </div>
     </div>
@@ -1286,8 +1301,12 @@
                     <input type="text" id="emPhone" class="input-control" required>
                 </div>
                 <div class="input-group">
-                    <label for="emEmergency">Emergency Contact</label>
-                    <input type="text" id="emEmergency" class="input-control" placeholder="Name / Phone">
+                    <label for="emEmergencyName">Emergency Contact Name</label>
+                    <input type="text" id="emEmergencyName" class="input-control" placeholder="Contact Name" required>
+                </div>
+                <div class="input-group">
+                    <label for="emEmergencyNumber">Emergency Contact Number</label>
+                    <input type="text" id="emEmergencyNumber" class="input-control" placeholder="Contact Number" required>
                 </div>
                 <div class="input-group">
                     <label for="emPassword">Reset Password (Optional)</label>
@@ -1496,6 +1515,61 @@
         </div>
     </div>
 
+    <!-- MODAL: REVIEW PAYMENT -->
+    <div id="reviewPaymentModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Review Payment Request</h3>
+                <button class="modal-close" onclick="closeModal('reviewPaymentModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding-top: 10px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13.5px;">
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Member Name</span>
+                        <strong id="reviewMemberName" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Membership Plan</span>
+                        <strong id="reviewPlanName" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Amount</span>
+                        <strong id="reviewAmount" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Payment Date</span>
+                        <strong id="reviewPaymentDate" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Payment Method</span>
+                        <strong id="reviewPaymentMethod" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Submitted Time</span>
+                        <strong id="reviewSubmittedTime" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase; margin-bottom: 6px;">Uploaded Receipt / Proof</span>
+                    <div id="reviewReceiptContainer" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; background: var(--bg-raised); text-align: center; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+                        <!-- dynamic rendering of img or pdf iframe -->
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <input type="hidden" id="reviewPaymentId">
+                <button class="btn btn-secondary" onclick="closeModal('reviewPaymentModal')">Close</button>
+                <button class="btn btn-primary" style="background-color: var(--danger-dark); border-color: var(--danger-dark);" onclick="triggerReviewReject()">Reject</button>
+                <button class="btn btn-primary" style="background-color: var(--success); border-color: var(--success); color: white;" onclick="triggerReviewApprove()">Approve</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: MONTHLY ATTENDANCE CALENDAR -->
     <div id="attendanceMonthlyModal" class="modal-overlay">
         <div class="modal-container" style="max-width: 560px;">
@@ -1633,7 +1707,7 @@
     <!-- TOAST CONTAINER LAYER -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <script src="/admin/app.js"></script>
+    <script src="/admin/app.js?v=3"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

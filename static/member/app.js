@@ -1,7 +1,19 @@
 // GymOS Member App Controller
 let activeMemberData = {};
 let currentMobileTab = 'home';
-let notificationsPanelOpen = false;
+let previousMobileTab = 'home';
+let previousProfileSubScreen = null;
+let previousActivitySubScreen = null;
+let memberNotifications = [];
+
+const ROOT_MOBILE_TABS = new Set(['home', 'activity', 'leaders', 'profile']);
+
+function setBottomNavigationVisible(visible) {
+    const tabbar = document.querySelector('.app-tabbar');
+    if (tabbar) tabbar.classList.toggle('is-hidden', !visible);
+    const header = document.querySelector('.app-header');
+    if (header) header.style.display = visible ? 'flex' : 'none';
+}
 
 // DOM Elements
 const simTime = document.getElementById('simTime');
@@ -96,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(updateSimulatorClock, 1000);
     checkMemberSession();
     setupAuthForms();
+    updatePwaInstallMenuItem();
 
     // Listen for network connectivity change events
     window.addEventListener('online', () => {
@@ -173,7 +186,7 @@ function switchMobileNav(tabName) {
     
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
-    const btnIdx = { home: 0, activity: 1, scan: 2, leaders: 3, profile: 4 };
+    const btnIdx = { home: 0, activity: 1, leaders: 2, profile: 3 };
     let targetTab = tabName;
     
     // Highlight the activity tab if we are on the attendance history page
@@ -183,6 +196,7 @@ function switchMobileNav(tabName) {
     }
     
     currentMobileTab = targetTab;
+    setBottomNavigationVisible(ROOT_MOBILE_TABS.has(targetTab));
 
     const btns = document.querySelectorAll('.tab-btn');
     if (btns[btnIdx[activeBtnTab]]) {
@@ -194,9 +208,16 @@ function switchMobileNav(tabName) {
     if (targetScreen) targetScreen.classList.add('active');
 
     // Refresh page fields
-    if (targetTab === 'home') fetchDashboardData();
-    if (targetTab === 'scan') resetScannerView();
+    if (targetTab === 'home') {
+        fetchDashboardData();
+        syncAttendanceState();
+    }
+    if (targetTab === 'scan') {
+        syncAttendanceState();
+        resetScannerView();
+    }
     if (targetTab === 'activity') {
+        syncAttendanceState();
         fetchActivityData();
         hideActivitySubScreen();
     }
@@ -214,11 +235,6 @@ function switchMobileNav(tabName) {
     }
     if (targetTab === 'payments') { renderBillingBills(); fetchAndRenderPlans(); }
     if (targetTab === 'profile') populateProfileFields();
-
-    // Close notifs panel when navigating
-    const notifPanel = document.getElementById('notifOverlayPanel');
-    if (notifPanel) notifPanel.style.display = 'none';
-    notificationsPanelOpen = false;
 
     // Scroll to top inside simulator screen view
     if (targetScreen) targetScreen.scrollTop = 0;
@@ -245,9 +261,15 @@ async function checkMemberSession() {
                 document.getElementById('authLoginError').innerText = 'Your registration request was rejected. Please contact your gym.';
                 document.getElementById('authLoginError').style.display = 'block';
             } else {
-                memberAuthWrapper.style.display = 'none';
-                memberAppWrapper.style.display = 'flex';
-                fetchDashboardData();
+                if (memberDetails && !memberDetails.preferences_completed) {
+                    memberAuthWrapper.style.display = 'flex';
+                    memberAppWrapper.style.display = 'none';
+                    showPersonalizeView();
+                } else {
+                    memberAuthWrapper.style.display = 'none';
+                    memberAppWrapper.style.display = 'flex';
+                    fetchDashboardData();
+                }
             }
         } else {
             memberAuthWrapper.style.display = 'flex';
@@ -349,8 +371,27 @@ function formatDateShort(dateTimeStr) {
     return `${day} ${month}`;
 }
 
+function setDashboardLoading(loading) {
+    const elements = [
+        document.getElementById('homeMemberFirstName'),
+        document.getElementById('homeStreakDaysText'),
+        document.getElementById('homeWeeklyVisitsCount'),
+        document.getElementById('homeMonthlyVisitsCount'),
+        document.getElementById('homeTimeSpentText')
+    ];
+    elements.forEach(el => {
+        if (!el) return;
+        if (loading) {
+            el.classList.add('skeleton-loader');
+        } else {
+            el.classList.remove('skeleton-loader');
+        }
+    });
+}
+
 // Load stats from server
 async function fetchDashboardData() {
+    setDashboardLoading(true);
     try {
         const res = await fetch('/api/member/dashboard');
         if (res.status === 403) {
@@ -362,6 +403,7 @@ async function fetchDashboardData() {
 
         const data = await res.json();
         activeMemberData = data;
+        syncAttendanceState();
 
         // Fill home fields
         if (document.getElementById('homeMemberFirstName')) {
@@ -414,6 +456,13 @@ async function fetchDashboardData() {
             activeMemberData.email = meData.user.email;
             activeMemberData.phone = meData.user.member_details.phone;
             activeMemberData.emergency_contact = meData.user.member_details.emergency_contact;
+            activeMemberData.emergency_contact_name = meData.user.member_details.emergency_contact_name;
+            activeMemberData.emergency_contact_number = meData.user.member_details.emergency_contact_number;
+            activeMemberData.emergency_contact_relation = meData.user.member_details.emergency_contact_relation;
+            activeMemberData.dob = meData.user.member_details.dob;
+            activeMemberData.gender = meData.user.member_details.gender;
+            activeMemberData.height = meData.user.member_details.height;
+            activeMemberData.weight = meData.user.member_details.weight;
             activeMemberData.profile_photo = meData.user.member_details.profile_photo;
             
             // Format & set membership ID
@@ -449,7 +498,7 @@ async function fetchDashboardData() {
 
         // Notification indicator dot
         const bellDot = document.getElementById('notifBadgeCount');
-        const unreadNotifs = data.notifications.filter(n => n.read_status === 0);
+        const unreadNotifs = (data.notifications || []).filter(n => n.read_status === 0);
         if (bellDot) {
             if (unreadNotifs.length > 0) {
                 bellDot.style.display = 'block';
@@ -458,31 +507,16 @@ async function fetchDashboardData() {
             }
         }
 
-        // Build Notification panel view lists
-        const notifPanel = document.getElementById('notifPanelList');
-        if (notifPanel) {
-            notifPanel.innerHTML = '';
-            if (data.notifications.length === 0) {
-                notifPanel.innerHTML = '<p style="font-size:12px; color:var(--text-tertiary); text-align:center; padding:10px 0;">No notifications yet.</p>';
-            } else {
-                data.notifications.slice(0, 5).forEach(n => {
-                    const timeStamp = new Date(n.created_at).toLocaleDateString();
-                    const unreadStyle = n.read_status === 0 ? 'background-color: var(--accent-light); border-left:3px solid var(--accent);' : '';
-                    notifPanel.innerHTML += `
-              <div style="padding:10px; border-radius: var(--radius-sm); font-size:12.5px; border-bottom:1px solid #f1f5f9; ${unreadStyle}">
-                <div style="font-weight:600; color:var(--text-primary);">${n.message}</div>
-                <div style="font-size:10px; color:var(--text-secondary); margin-top:4px;">${timeStamp}</div>
-              </div>
-            `;
-                });
-            }
-        }
+        memberNotifications = data.notifications || [];
+        renderNotificationsScreen();
         
         // Fetch Leaderboard
         fetchLeaderboard();
 
     } catch (err) {
         console.error('Fetch dashboard stats failed', err);
+    } finally {
+        setDashboardLoading(false);
     }
 }
 
@@ -544,7 +578,7 @@ function renderBillingBills() {
     container.innerHTML = '';
 
     if (!activeMemberData.billing_history || activeMemberData.billing_history.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-tertiary); padding: 40px 0; font-size: 13px;">No invoices available.</p>';
+        container.innerHTML = '<p style="text-align: center; color: var(--text-tertiary); padding: 40px 0; font-size: 13px;">No payment history available.</p>';
         return;
     }
 
@@ -572,7 +606,7 @@ function renderBillingBills() {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
-        }) : (invoice.due_date || 'Jul 11, 2026');
+        }) : (invoice.due_date || 'Date unavailable');
 
         let rightActionHtml = '';
         if (invoice.status === 'paid' || invoice.status === 'pending_approval' || invoice.status === 'rejected') {
@@ -604,6 +638,15 @@ function renderBillingBills() {
 }
 
 function downloadMemberReceipt(invoice) {
+    if (invoice.receipt_file_url) {
+        const link = document.createElement('a');
+        link.href = invoice.receipt_file_url;
+        const extension = invoice.receipt_file_type === 'application/pdf' ? 'pdf' : 'png';
+        link.download = `GymOS-Receipt-${invoice.receipt_number || invoice.id}.${extension}`;
+        link.click();
+        showMobileToast('Receipt document downloaded.', 'success');
+        return;
+    }
     const receiptId = invoice.receipt_number || `RC-${invoice.id}`;
     const d = new Date(invoice.payment_date).toLocaleString();
     const receipt = `
@@ -629,7 +672,7 @@ function downloadMemberReceipt(invoice) {
       <div>Date: ${d}</div>
       <div class="divider"></div>
       <div class="row"><span class="bold">Member:</span> <span>${activeMemberData.first_name} ${activeMemberData.last_name || ''}</span></div>
-      <div class="row"><span class="bold">Paid Value:</span> <span>$${invoice.amount.toFixed(2)}</span></div>
+      <div class="row"><span class="bold">Paid Value:</span> <span>₹${invoice.amount.toFixed(2)}</span></div>
       <div class="row"><span class="bold">Payment Status:</span> <span>PAID</span></div>
       <div class="divider"></div>
       <div class="center bold">THANK YOU FOR WORKING OUT WITH US!</div>
@@ -656,26 +699,34 @@ function populateProfileFields() {
     
     // Set Profile Home Fields
     document.getElementById('profileHomeName').innerText = fullName;
-    if (activeMemberData.profile_photo) {
-        document.getElementById('profileHomeAvatar').src = activeMemberData.profile_photo;
-        document.getElementById('profileAvatarImg').src = activeMemberData.profile_photo;
-        document.getElementById('profileAvatarBase64').value = activeMemberData.profile_photo;
+    const avatarSrc = getMemberAvatarSrc(activeMemberData.profile_photo, activeMemberData.first_name, activeMemberData.last_name);
+    
+    const avatar = document.getElementById('profileHomeAvatar');
+    if (avatar) {
+        avatar.src = avatarSrc;
+        avatar.style.display = 'block';
+    }
+    const accountAvatar = document.getElementById('profileAvatarImg');
+    if (accountAvatar) {
+        accountAvatar.src = avatarSrc;
+        accountAvatar.style.display = 'block';
+    }
+    const base64Input = document.getElementById('profileAvatarBase64');
+    if (base64Input) {
+        base64Input.value = activeMemberData.profile_photo || '';
     }
 
     // Set Streak, Time Spent, Rank stats dynamically
-    const streak = activityDataGlobal ? activityDataGlobal.streak : 0;
-    const hours = activityDataGlobal ? activityDataGlobal.total_workout_hours : 0;
+    const streak = activityDataGlobal ? (activityDataGlobal.streak || 0) : 0;
+    const hoursFormatted = activityDataGlobal ? (activityDataGlobal.total_workout_formatted || (activityDataGlobal.total_workout_hours ? `${activityDataGlobal.total_workout_hours}h` : '0m')) : '0m';
     document.getElementById('profileHomeStreak').innerText = `${streak}d`;
-    document.getElementById('profileHomeTimeSpent').innerText = `${hours}hrs`;
-    // Rank logic: search active member in leaderboard list
-    let rankText = '#3';
-    if (leaderboardRepo && leaderboardRepo.getLeaderboard) {
-        const board = leaderboardRepo.getLeaderboard('weekly');
-        const memberName = fullName.toLowerCase();
-        const foundIndex = board.findIndex(item => `${item.first_name || ''} ${item.last_name || ''}`.toLowerCase().trim() === memberName);
-        if (foundIndex !== -1) {
-            rankText = `#${foundIndex + 1}`;
-        }
+    document.getElementById('profileHomeTimeSpent').innerText = hoursFormatted;
+    
+    // Rank logic: use all_time_rank from backend activityDataGlobal to match Leaderboard screen 100%
+    let rankText = '--';
+    if (activityDataGlobal) {
+        const rnk = activityDataGlobal.all_time_rank || activityDataGlobal.weekly_rank || 0;
+        if (rnk > 0) rankText = `#${rnk}`;
     }
     document.getElementById('profileHomeRank').innerText = rankText;
 
@@ -684,59 +735,60 @@ function populateProfileFields() {
     document.getElementById('profPhone').value = activeMemberData.phone || '';
     document.getElementById('profEmail').value = activeMemberData.email || '';
     
-    // DOB from localStorage or default
-    const dobKey = `gymos_dob_${activeMemberData.member_id || 'guest'}`;
-    document.getElementById('profDob').value = localStorage.getItem(dobKey) || '12 May, 1994';
+    document.getElementById('profDob').value = activeMemberData.dob || '';
 }
 
-// Notifications trigger
-function toggleNotificationsPanel() {
-    const panel = document.getElementById('notifOverlayPanel');
-    if (notificationsPanelOpen) {
-        panel.style.display = 'none';
-        notificationsPanelOpen = false;
-    } else {
-        panel.style.display = 'block';
-        notificationsPanelOpen = true;
-        // Just clear the unread badge visually on open
-        const badge = document.getElementById('notifBadgeCount');
-        if (badge) badge.style.display = 'none';
+// Notifications are a secondary screen, so the bottom tab bar is hidden while open.
+function openNotificationsScreen() {
+    previousMobileTab = currentMobileTab;
+    previousProfileSubScreen = document.querySelector('.profile-subscreen.active')?.id || null;
+    previousActivitySubScreen = document.querySelector('.activity-screen-sub.active')?.id || null;
+    switchMobileNav('notifications');
+    renderNotificationsScreen();
+}
+
+function closeNotificationsScreen() {
+    switchMobileNav(previousMobileTab || 'home');
+    if (previousProfileSubScreen) showProfileSubScreen(previousProfileSubScreen);
+    if (previousActivitySubScreen) showActivitySubScreen(previousActivitySubScreen);
+    previousProfileSubScreen = null;
+    previousActivitySubScreen = null;
+}
+
+function renderNotificationsScreen() {
+    const list = document.getElementById('notificationsList');
+    if (!list) return;
+
+    if (memberNotifications.length === 0) {
+        list.innerHTML = `
+            <div class="notifications-empty-state">
+                <span aria-hidden="true">🔔</span>
+                <h3>No notifications yet</h3>
+                <p>Updates about your membership and activity will appear here.</p>
+            </div>`;
+        return;
     }
+
+    list.innerHTML = memberNotifications.map(notification => {
+        const timestamp = notification.created_at ? new Date(notification.created_at).toLocaleDateString() : '';
+        const unreadClass = Number(notification.read_status) === 0 ? ' is-unread' : '';
+        return `<article class="notification-item${unreadClass}">
+            <p>${escapeHtml(notification.message || '')}</p>
+            <time>${timestamp}</time>
+        </article>`;
+    }).join('');
 }
 
 async function markMemberNotificationsRead() {
     try {
-        const notifPanel = document.getElementById('notifPanelList');
-        if (notifPanel) {
-            const items = notifPanel.children;
-            for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                // Check if element has style property
-                if (item.style) {
-                    item.style.transition = 'all 0.4s ease-out';
-                    item.style.transform = 'translateX(120%)';
-                    item.style.opacity = '0';
-                }
-            }
-        }
-        
-        // Wait for swipe transition to finish
-        await new Promise(resolve => setTimeout(resolve, 400));
-
         await fetch('/api/member/notifications/read', { method: 'POST' });
-        
+        memberNotifications = memberNotifications.map(notification => ({ ...notification, read_status: 1 }));
+        renderNotificationsScreen();
         const badge = document.getElementById('notifBadgeCount');
         if (badge) badge.style.display = 'none';
-        
-        const panel = document.getElementById('notifOverlayPanel');
-        if (panel) {
-            panel.style.display = 'none';
-            notificationsPanelOpen = false;
-        }
-        
-        fetchDashboardData();
     } catch (err) {
         console.error(err);
+        showMobileToast('Unable to mark notifications as read.', 'error');
     }
 }
 
@@ -843,6 +895,128 @@ function formatDurationLong(durationStr) {
     return result.join(' ') || '0 Minutes';
 }
 
+let activeAttendanceSession = null;
+let liveWorkoutTimerInterval = null;
+
+async function syncAttendanceState() {
+    try {
+        const res = await fetch('/api/member/attendance/active');
+        if (res.ok) {
+            const data = await res.json();
+            activeAttendanceSession = data;
+            renderAttendanceStateUI();
+        }
+    } catch (err) {
+        console.error("Failed to sync active attendance state:", err);
+    }
+}
+
+function renderAttendanceStateUI() {
+    const viewfinder = document.getElementById('scannerViewfinder');
+    const instructions = document.getElementById('scannerInstructionsBlock');
+    const cameraState = document.getElementById('scannerCameraState');
+    const successBox = document.getElementById('scannerSuccessAnimationBox');
+    
+    const checkinState = document.getElementById('checkinSuccessState');
+    const checkoutState = document.getElementById('checkoutSuccessState');
+    const completedState = document.getElementById('completedWarningState');
+
+    if (!activeAttendanceSession || activeAttendanceSession.state === 'not_checked_in') {
+        if (viewfinder) viewfinder.style.display = 'flex';
+        if (instructions) instructions.style.display = 'flex';
+        if (cameraState) cameraState.style.display = 'flex';
+        if (successBox) successBox.style.display = 'none';
+        
+        if (checkinState) checkinState.style.display = 'none';
+        if (checkoutState) checkoutState.style.display = 'none';
+        if (completedState) completedState.style.display = 'none';
+        
+        stopLiveWorkoutTimer();
+    } else if (activeAttendanceSession.state === 'checked_in') {
+        stopCameraScanner();
+        
+        if (viewfinder) viewfinder.style.display = 'none';
+        if (instructions) instructions.style.display = 'none';
+        if (cameraState) cameraState.style.display = 'none';
+        if (successBox) successBox.style.display = 'flex';
+        
+        if (checkinState) checkinState.style.display = 'block';
+        if (checkoutState) checkoutState.style.display = 'none';
+        if (completedState) completedState.style.display = 'none';
+        
+        const session = activeAttendanceSession.session;
+        if (session && session.check_in_time) {
+            const timeValEl = document.getElementById('checkinTimeVal');
+            if (timeValEl) timeValEl.innerText = formatTime12hr(session.check_in_time);
+            startLiveWorkoutTimer(session.check_in_time);
+        }
+    } else if (activeAttendanceSession.state === 'completed') {
+        stopCameraScanner();
+        stopLiveWorkoutTimer();
+        
+        if (viewfinder) viewfinder.style.display = 'none';
+        if (instructions) instructions.style.display = 'none';
+        if (cameraState) cameraState.style.display = 'none';
+        if (successBox) successBox.style.display = 'flex';
+        
+        if (checkinState) checkinState.style.display = 'none';
+        if (checkoutState) checkoutState.style.display = 'block';
+        if (completedState) completedState.style.display = 'none';
+        
+        const session = activeAttendanceSession.session;
+        if (session) {
+            if (document.getElementById('checkoutDurationVal')) {
+                document.getElementById('checkoutDurationVal').innerText = formatDurationLong(session.duration);
+            }
+            if (document.getElementById('successCheckinTime')) {
+                document.getElementById('successCheckinTime').innerText = formatTime12hr(session.check_in_time);
+            }
+            if (document.getElementById('successCheckoutTime')) {
+                document.getElementById('successCheckoutTime').innerText = formatTime12hr(session.check_out_time);
+            }
+        }
+    }
+}
+
+function parseCheckInTimeMs(checkInTimeStr) {
+    if (!checkInTimeStr) return Date.now();
+    const iso = checkInTimeStr.replace(' ', 'T');
+    const dt = new Date(iso);
+    if (!isNaN(dt.getTime())) return dt.getTime();
+    const fallback = new Date(checkInTimeStr);
+    return !isNaN(fallback.getTime()) ? fallback.getTime() : Date.now();
+}
+
+function startLiveWorkoutTimer(checkInTimeStr) {
+    stopLiveWorkoutTimer();
+    const startTime = parseCheckInTimeMs(checkInTimeStr);
+    
+    function updateTimer() {
+        const now = Date.now();
+        const diffSec = Math.max(0, Math.floor((now - startTime) / 1000));
+        
+        const hrs = Math.floor(diffSec / 3600);
+        const mins = Math.floor((diffSec % 3600) / 60);
+        const secs = diffSec % 60;
+        
+        const pad = (n) => n.toString().padStart(2, '0');
+        const timerEl = document.getElementById('liveWorkoutDurationTimer');
+        if (timerEl) {
+            timerEl.innerText = `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+        }
+    }
+    
+    updateTimer();
+    liveWorkoutTimerInterval = setInterval(updateTimer, 1000);
+}
+
+function stopLiveWorkoutTimer() {
+    if (liveWorkoutTimerInterval) {
+        clearInterval(liveWorkoutTimerInterval);
+        liveWorkoutTimerInterval = null;
+    }
+}
+
 async function simulateQuickScan() {
     try {
         const res = await fetch('/api/member/qr-token');
@@ -885,50 +1059,14 @@ async function submitCheckinCode(token, action = 'scan') {
         }
 
         // 2. Already completed today
-        if (data.completed_today || res.status === 409 && data.completed_today) {
-            document.getElementById('scannerViewfinder').style.display = 'none';
-            document.getElementById('scannerSuccessAnimationBox').style.display = 'flex';
-            
-            document.getElementById('checkinSuccessState').style.display = 'none';
-            document.getElementById('checkoutSuccessState').style.display = 'none';
-            document.getElementById('completedWarningState').style.display = 'block';
-
-            document.getElementById('warningCheckinTime').innerText = formatTime12hr(data.check_in_time);
-            document.getElementById('warningCheckoutTime').innerText = formatTime12hr(data.check_out_time);
-            document.getElementById('warningDuration').innerText = formatDurationLong(data.duration);
+        if (data.completed_today || (res.status === 409 && data.completed_today)) {
+            await syncAttendanceState();
             return;
         }
 
         if (res.status === 200 || res.status === 201 || data.success) {
-            document.getElementById('scannerViewfinder').style.display = 'none';
-            document.getElementById('scannerSuccessAnimationBox').style.display = 'flex';
-
-            if (data.type === 'checkout') {
-                // Show State 2: Checkout success
-                document.getElementById('checkinSuccessState').style.display = 'none';
-                document.getElementById('checkoutSuccessState').style.display = 'block';
-                document.getElementById('completedWarningState').style.display = 'none';
-
-                if (document.getElementById('checkoutDurationVal')) {
-                    document.getElementById('checkoutDurationVal').innerText = formatDurationLong(data.duration);
-                }
-                if (document.getElementById('successCheckinTime')) {
-                    document.getElementById('successCheckinTime').innerText = formatTime12hr(data.check_in_time);
-                }
-                if (document.getElementById('successCheckoutTime')) {
-                    document.getElementById('successCheckoutTime').innerText = formatTime12hr(data.check_out_time);
-                }
-                showMobileToast('Check-out complete!', 'success');
-            } else {
-                // Show State 1: Check-in success
-                document.getElementById('checkinSuccessState').style.display = 'block';
-                document.getElementById('checkoutSuccessState').style.display = 'none';
-                document.getElementById('completedWarningState').style.display = 'none';
-
-                document.getElementById('checkinTimeVal').innerText = formatTime12hr(data.check_in_time);
-                showMobileToast('Check-in verified!', 'success');
-            }
-
+            showMobileToast(data.type === 'checkout' ? 'Check-out complete!' : 'Check-in verified!', 'success');
+            await syncAttendanceState();
             fetchDashboardData();
         } else {
             showMobileToast(data.error || 'Invalid code scanned', 'error');
@@ -947,14 +1085,24 @@ async function submitCheckinCode(token, action = 'scan') {
 }
 
 function resetScannerView() {
-    document.getElementById('scannerViewfinder').style.display = 'flex';
-    document.getElementById('scannerSuccessAnimationBox').style.display = 'none';
+    if (activeAttendanceSession && activeAttendanceSession.state !== 'not_checked_in') {
+        renderAttendanceStateUI();
+        return;
+    }
+    const viewfinder = document.getElementById('scannerViewfinder');
+    const instructions = document.getElementById('scannerInstructionsBlock');
+    const cameraState = document.getElementById('scannerCameraState');
+    const successBox = document.getElementById('scannerSuccessAnimationBox');
+
+    if (viewfinder) viewfinder.style.display = 'flex';
+    if (instructions) instructions.style.display = 'flex';
+    if (cameraState) cameraState.style.display = 'flex';
+    if (successBox) successBox.style.display = 'none';
     startCameraScanner();
 }
 
 function beginCheckoutScan() {
-    scannerAttendanceAction = 'checkout';
-    resetScannerView();
+    promptCheckoutFromActiveState();
 }
 
 function finishAttendanceFlow() {
@@ -963,16 +1111,30 @@ function finishAttendanceFlow() {
     switchMobileNav('home');
 }
 
+function promptCheckoutFromActiveState() {
+    document.getElementById('checkoutConfirmModal').style.display = 'flex';
+}
+
 function closeCheckoutConfirmation() {
     pendingCheckoutToken = null;
     document.getElementById('checkoutConfirmModal').style.display = 'none';
-    resetScannerView();
 }
 
-function confirmCheckout() {
-    if (!pendingCheckoutToken) return;
+async function confirmCheckout() {
     document.getElementById('checkoutConfirmModal').style.display = 'none';
-    submitCheckinCode(pendingCheckoutToken, 'checkout');
+    try {
+        const res = await fetch('/api/member/check-out', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showMobileToast('Check-out completed!', 'success');
+            await syncAttendanceState();
+            fetchDashboardData();
+        } else {
+            showMobileToast(data.error || 'Check-out failed.', 'error');
+        }
+    } catch (err) {
+        showMobileToast('Check-out request failed. Please try again.', 'error');
+    }
 }
 
 function toggleManualCodeField() {
@@ -1001,6 +1163,95 @@ function hideLeaderboardGuide() {
     document.getElementById('subScreenLeaderboardGuide').style.display = 'none';
 }
 
+function getMemberInitials(firstName, lastName) {
+    const fn = (firstName || '').trim();
+    const ln = (lastName || '').trim();
+    
+    if (fn && ln) {
+        return (fn.charAt(0) + ln.charAt(0)).toUpperCase();
+    }
+    if (fn) {
+        const parts = fn.split(/\s+/).filter(Boolean);
+        if (parts.length >= 3) {
+            return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+        } else if (parts.length === 2) {
+            return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+        }
+        return fn.charAt(0).toUpperCase();
+    }
+    if (ln) {
+        return ln.charAt(0).toUpperCase();
+    }
+    return 'M';
+}
+
+function generateInitialsAvatarDataUrl(firstName, lastName, size = 100) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    const grad = ctx.createLinearGradient(0, 0, size, size);
+    grad.addColorStop(0, '#1c1c1e');
+    grad.addColorStop(1, '#2c2c2e');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(199, 255, 36, 0.4)';
+    ctx.lineWidth = Math.max(2, size * 0.04);
+    ctx.stroke();
+
+    const initials = getMemberInitials(firstName, lastName);
+    ctx.fillStyle = '#c7ff24';
+    ctx.font = `900 ${Math.floor(size * 0.4)}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initials, size / 2, size / 2 + size * 0.03);
+
+    return canvas.toDataURL('image/png');
+}
+
+function getMemberAvatarSrc(userOrPhoto, firstName = '', lastName = '') {
+    if (typeof userOrPhoto === 'object' && userOrPhoto !== null) {
+        if (userOrPhoto.profile_photo) return userOrPhoto.profile_photo;
+        return generateInitialsAvatarDataUrl(userOrPhoto.first_name, userOrPhoto.last_name);
+    }
+    if (userOrPhoto && typeof userOrPhoto === 'string' && userOrPhoto.trim() !== '') {
+        return userOrPhoto;
+    }
+    return generateInitialsAvatarDataUrl(firstName, lastName);
+}
+
+function syncAllProfilePhotoElements() {
+    const photo = activeMemberData.profile_photo || '';
+    const fn = activeMemberData.first_name || '';
+    const ln = activeMemberData.last_name || '';
+    const avatarSrc = getMemberAvatarSrc(photo, fn, ln);
+
+    const homeAvatar = document.getElementById('profileHomeAvatar');
+    if (homeAvatar) {
+        homeAvatar.src = avatarSrc;
+        homeAvatar.style.display = 'block';
+    }
+
+    const accountAvatar = document.getElementById('profileAvatarImg');
+    if (accountAvatar) {
+        accountAvatar.src = avatarSrc;
+        accountAvatar.style.display = 'block';
+    }
+
+    const base64Input = document.getElementById('profileAvatarBase64');
+    if (base64Input) {
+        base64Input.value = photo;
+    }
+
+    if (typeof fetchLeaderboard === 'function') {
+        fetchLeaderboard();
+    }
+}
+
 function handleProfilePhotoUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1026,42 +1277,106 @@ function handleProfilePhotoUpload(event) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     phone: phone,
+                    first_name: activeMemberData.first_name,
+                    last_name: activeMemberData.last_name,
+                    dob: activeMemberData.dob || '',
                     emergency_contact: emergency,
+                    emergency_contact_name: activeMemberData.emergency_contact_name || '',
+                    emergency_contact_number: activeMemberData.emergency_contact_number || '',
+                    emergency_contact_relation: activeMemberData.emergency_contact_relation || '',
                     profile_photo: base64
                 })
             });
             const resData = await res.json();
             if (resData.success) {
-                document.getElementById('profileAvatarImg').src = base64;
-                document.getElementById('profileAvatarBase64').value = base64;
-                document.getElementById('profileHomeAvatar').src = base64;
                 activeMemberData.profile_photo = base64;
+                syncAllProfilePhotoElements();
                 showMobileToast('Profile photo updated successfully', 'success');
             } else {
-                showMobileToast(resData.error || 'Failed to save profile photo.', 'error');
+                showMobileToast('Unable to upload profile picture. Please try again.', 'error');
             }
         } catch (err) {
             console.error(err);
-            showMobileToast('Network error uploading profile photo.', 'error');
+            showMobileToast('Unable to upload profile picture. Please try again.', 'error');
         } finally {
             if (spinner) spinner.style.display = 'none';
             event.target.value = ''; // Reset file input
         }
     };
     reader.onerror = () => {
-        showMobileToast('Error reading file.', 'error');
+        showMobileToast('Unable to upload profile picture. Please try again.', 'error');
         if (spinner) spinner.style.display = 'none';
         event.target.value = '';
     };
     reader.readAsDataURL(file);
 }
 
+async function removeProfilePhoto() {
+    closePhotoOptionsSheet();
+    const phone = document.getElementById('profPhone').value || activeMemberData.phone || '';
+    const emergency = document.getElementById('profEmergency').value || activeMemberData.emergency_contact || '';
+    
+    const spinner = document.getElementById('profilePhotoLoading');
+    if (spinner) spinner.style.display = 'flex';
+
+    try {
+        const res = await fetch('/api/member/profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                phone: phone,
+                first_name: activeMemberData.first_name,
+                last_name: activeMemberData.last_name,
+                dob: activeMemberData.dob || '',
+                emergency_contact: emergency,
+                emergency_contact_name: activeMemberData.emergency_contact_name || '',
+                emergency_contact_number: activeMemberData.emergency_contact_number || '',
+                emergency_contact_relation: activeMemberData.emergency_contact_relation || '',
+                profile_photo: ''
+            })
+        });
+        const resData = await res.json();
+        if (resData.success) {
+            activeMemberData.profile_photo = '';
+            syncAllProfilePhotoElements();
+            showMobileToast('Profile photo removed.', 'success');
+        } else {
+            showMobileToast('Unable to remove profile picture. Please try again.', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showMobileToast('Unable to remove profile picture. Please try again.', 'error');
+    } finally {
+        if (spinner) spinner.style.display = 'none';
+    }
+}
+
 // Auth screen control
 let tempRegisterData = null;
 let verifyTimerInterval = null;
 let selectedDobDate = new Date(2000, 8, 15);
-let currentHeightVal = 180;
-let currentWeightVal = 192;
+let currentHeightFt = 5;
+let currentHeightIn = 6;
+let currentWeightVal = 70;
+
+let isDobSelected = false;
+let isSexSelected = false;
+let isHeightSelected = false;
+let isWeightSelected = false;
+
+function validatePersonalForm() {
+    const btn = document.getElementById('onboardingContinueBtn');
+    if (!btn) return;
+    if (isDobSelected && isSexSelected && isHeightSelected && isWeightSelected) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+    } else {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    }
+}
 
 function showSplashView() {
     hideAllAuthViews();
@@ -1164,6 +1479,11 @@ function connectMemberSse(memberId) {
     sseSource = new EventSource('/api/stream');
     sseSource.onmessage = function(e) {
         const data = JSON.parse(e.data);
+        if (data.type === 'GYM_SETTINGS_UPDATED') {
+            if (data.payload && data.payload.gym_logo !== undefined) {
+                updateMemberAppGymLogo(data.payload.gym_logo);
+            }
+        }
         if (data.type === 'MEMBER_STATUS_CHANGED') {
             const payload = data.payload;
             if (payload.member_id === currentMemberId) {
@@ -1194,6 +1514,16 @@ function connectMemberSse(memberId) {
     sseSource.onerror = function() {
         console.log('SSE connection closed or lost.');
     };
+}
+
+function updateMemberAppGymLogo(logoUrl) {
+    const el = document.getElementById('memberAppHeaderLogo');
+    if (!el) return;
+    if (logoUrl) {
+        el.innerHTML = `<img src="${logoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" alt="Gym Logo">`;
+    } else {
+        el.innerHTML = `⚡`;
+    }
 }
 
 function proceedToMemberApp() {
@@ -1405,8 +1735,15 @@ function renderDobYearGrid() {
 }
 
 function confirmDobPicker() {
+    const today = new Date();
+    if (selectedDobDate > today) {
+        showMobileToast('Date of Birth cannot be in the future.', 'error');
+        return;
+    }
     const formatted = `${selectedDobDate.getDate()} ${DOB_MONTH_NAMES[selectedDobDate.getMonth()]} ${selectedDobDate.getFullYear()}`;
     document.getElementById('personalDobVal').innerText = formatted;
+    isDobSelected = true;
+    validatePersonalForm();
     closeDobDatePicker();
 }
 
@@ -1430,6 +1767,8 @@ function selectGenderVal(val) {
         if (btn.innerText === val) btn.classList.add('active');
         else btn.classList.remove('active');
     });
+    isSexSelected = true;
+    validatePersonalForm();
     closeGenderDropdown();
 }
 
@@ -1461,22 +1800,35 @@ function triggerProfilePhotoUpdate() {
 // Height Modal
 function openHeightPickerDialog() {
     document.getElementById('modalHeightPicker').style.display = 'flex';
-    document.getElementById('heightPickerVal').innerText = currentHeightVal;
+    document.getElementById('heightFtPickerVal').innerText = currentHeightFt;
+    document.getElementById('heightInPickerVal').innerText = currentHeightIn;
 }
 
 function closeHeightPicker() {
     document.getElementById('modalHeightPicker').style.display = 'none';
 }
 
-function adjustHeightVal(delta) {
-    currentHeightVal += delta;
-    if (currentHeightVal < 100) currentHeightVal = 100;
-    if (currentHeightVal > 250) currentHeightVal = 250;
-    document.getElementById('heightPickerVal').innerText = currentHeightVal;
+function adjustHeightFt(delta) {
+    currentHeightFt += delta;
+    if (currentHeightFt < 3) currentHeightFt = 3;
+    if (currentHeightFt > 8) currentHeightFt = 8;
+    document.getElementById('heightFtPickerVal').innerText = currentHeightFt;
+}
+
+function adjustHeightIn(delta) {
+    currentHeightIn += delta;
+    if (currentHeightIn < 0) {
+        currentHeightIn = 11;
+    } else if (currentHeightIn > 11) {
+        currentHeightIn = 0;
+    }
+    document.getElementById('heightInPickerVal').innerText = currentHeightIn;
 }
 
 function confirmHeightPicker() {
-    document.getElementById('personalHeightVal').innerText = `${currentHeightVal} cm`;
+    document.getElementById('personalHeightVal').innerText = `${currentHeightFt}'${currentHeightIn}"`;
+    isHeightSelected = true;
+    validatePersonalForm();
     closeHeightPicker();
 }
 
@@ -1498,13 +1850,53 @@ function adjustWeightVal(delta) {
 }
 
 function confirmWeightPicker() {
-    document.getElementById('personalWeightVal').innerText = `${currentWeightVal} lb`;
+    document.getElementById('personalWeightVal').innerText = `${currentWeightVal} kg`;
+    isWeightSelected = true;
+    validatePersonalForm();
     closeWeightPicker();
 }
 
-function submitPersonalizedDataAndComplete() {
-    showMobileToast('Profile personalized successfully!', 'success');
-    proceedToMemberApp();
+async function submitPersonalizedDataAndComplete() {
+    const dob = document.getElementById('personalDobVal').innerText;
+    const gender = document.getElementById('personalGenderVal').innerText;
+    
+    const weightValStr = document.getElementById('personalWeightVal').innerText;
+    const heightValStr = document.getElementById('personalHeightVal').innerText;
+    
+    if (!isDobSelected || !isSexSelected || !isHeightSelected || !isWeightSelected) {
+        showMobileToast('Please fill all mandatory fields.', 'error');
+        return;
+    }
+    
+    const weight = parseFloat(weightValStr);
+    
+    // Parse height and convert to cm for internal backward compatibility
+    let height = null;
+    if (heightValStr.includes("'")) {
+        const parts = heightValStr.replace('"', '').split("'");
+        const ft = parseInt(parts[0]);
+        const inches = parseInt(parts[1]);
+        height = (ft * 12 + inches) * 2.54;
+    }
+    
+    try {
+        const res = await fetch('/api/member/preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dob, gender, height, weight })
+        });
+        const resData = await res.json();
+        if (resData.success) {
+            showMobileToast('Profile personalized successfully!', 'success');
+            activeMemberData.preferences_completed = true;
+            proceedToMemberApp();
+        } else {
+            showMobileToast(resData.error || 'Failed to save preferences.', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showMobileToast('Network error saving preferences.', 'error');
+    }
 }
 
 async function submitRegistrationAndShowPending() {
@@ -1566,10 +1958,18 @@ function setupAuthForms() {
                         errBanner.style.display = 'block';
                         return;
                     }
-                    memberAuthWrapper.style.display = 'none';
-                    memberAppWrapper.style.display = 'flex';
-                    showMobileToast('Welcome back!', 'success');
-                    fetchDashboardData();
+                    activeMemberData.member_id = data.user.member_id;
+                    activeMemberData.preferences_completed = data.user.preferences_completed;
+                    
+                    if (!data.user.preferences_completed) {
+                        showPersonalizeView();
+                        showMobileToast('Welcome! Please complete your fitness preferences.', 'info');
+                    } else {
+                        memberAuthWrapper.style.display = 'none';
+                        memberAppWrapper.style.display = 'flex';
+                        showMobileToast('Welcome back!', 'success');
+                        fetchDashboardData();
+                    }
                 } else if (res.status === 403 && data.status === 'pending') {
                     // Navigate to pending view
                     hideAllAuthViews();
@@ -1586,7 +1986,7 @@ function setupAuthForms() {
                     errBanner.style.display = 'block';
                 }
             } catch (err) {
-                errBanner.innerText = 'Server offline. Cannot authenticate.';
+                errBanner.innerText = 'Unable to connect to server. Ensure you accept the self-signed certificate if using HTTPS, or check server connection.';
                 errBanner.style.display = 'block';
             }
         });
@@ -1614,7 +2014,8 @@ function setupAuthForms() {
                 last_name: last_name,
                 email: document.getElementById('regEmailInput').value.trim(),
                 phone: document.getElementById('regPhoneInput').value.trim(),
-                emergency_contact: document.getElementById('regEmergencyInput').value.trim(),
+                emergency_contact_name: document.getElementById('regEmergencyNameInput').value.trim(),
+                emergency_contact_number: document.getElementById('regEmergencyNumberInput').value.trim(),
                 password: document.getElementById('regPasswordInput').value.trim()
             };
 
@@ -1686,6 +2087,44 @@ async function logoutMemberApp() {
 // PWA Install Prompt handling
 let deferredPrompt = null;
 
+function updatePwaInstallMenuItem() {
+    const menuItem = document.getElementById('pwaInstallMenuItem');
+    const menuLabel = document.getElementById('pwaInstallMenuLabel');
+    const menuArrow = document.getElementById('pwaInstallMenuArrow');
+    if (!menuItem || !menuLabel) return;
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    
+    if (isStandalone) {
+        menuLabel.innerText = 'GymOS Installed';
+        menuLabel.style.color = 'rgba(255,255,255,0.4)';
+        menuItem.style.opacity = '0.6';
+        menuItem.style.cursor = 'default';
+        if (menuArrow) menuArrow.style.display = 'none';
+    } else {
+        menuLabel.innerText = 'Install GymOS';
+        menuLabel.style.color = '';
+        menuItem.style.opacity = '';
+        menuItem.style.cursor = '';
+        if (menuArrow) menuArrow.style.display = 'block';
+    }
+}
+
+function triggerPwaInstallFromMenu() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone) {
+        showMobileToast('GymOS is already installed on this device.', 'info');
+        return;
+    }
+
+    if (!deferredPrompt) {
+        showMobileToast('GymOS is already installed on this device. (Or PWA installation is not supported by this browser.)', 'info');
+        return;
+    }
+
+    triggerAppInstall();
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
     // Prevent default mini-infobar from showing
     e.preventDefault();
@@ -1698,6 +2137,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
             installBanner.style.display = 'flex';
         }
     }
+    updatePwaInstallMenuItem();
 });
 
 window.addEventListener('appinstalled', (evt) => {
@@ -1705,6 +2145,7 @@ window.addEventListener('appinstalled', (evt) => {
     const installBanner = document.getElementById('pwaInstallBanner');
     if (installBanner) installBanner.style.display = 'none';
     deferredPrompt = null;
+    updatePwaInstallMenuItem();
 });
 
 function triggerAppInstall() {
@@ -1719,6 +2160,7 @@ function triggerAppInstall() {
             console.log('User dismissed the install prompt');
         }
         deferredPrompt = null;
+        updatePwaInstallMenuItem();
     });
 }
 
@@ -1753,7 +2195,7 @@ async function fetchLeaderboard() {
             const medals = ['🥇', '🥈', '🥉'];
             const rankBadge = idx < 3 ? medals[idx] : `<span style="font-weight:700; color:var(--text-tertiary); width:18px; display:inline-block; text-align:center;">${idx + 1}</span>`;
             
-            const avatarUrl = user.profile_photo || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop';
+            const avatarUrl = getMemberAvatarSrc(user);
             
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -1819,11 +2261,64 @@ async function fetchAndRenderPlans() {
     }
 }
 
+let selectedReceiptFile = null;
+
+function triggerFileInput() {
+    document.getElementById('paymentScreenshotInput').click();
+}
+
+function handleFileSelection(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate size (1 MB max)
+    if (file.size > 1024 * 1024) {
+        showMobileToast('File size exceeds the 1 MB limit.', 'error');
+        e.target.value = '';
+        return;
+    }
+
+    // Validate file type (JPG, PNG, PDF)
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+        showMobileToast('Only JPG, PNG, and PDF receipt formats are supported.', 'error');
+        e.target.value = '';
+        return;
+    }
+
+    selectedReceiptFile = file;
+    document.getElementById('progressFileName').innerText = file.name;
+    document.getElementById('fileUploadTitle').innerText = file.name;
+    document.getElementById('fileUploadDottedZone').style.display = 'none';
+    document.getElementById('fileUploadProgressCard').style.display = 'flex';
+}
+
+async function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+}
+
 function initiateMemberPayment(paymentId, amount) {
     document.getElementById('modalPaymentId').value = paymentId;
     document.getElementById('modalPlanId').value = '';
     document.getElementById('modalPaymentAmount').innerText = `₹${amount.toFixed(2)}`;
     document.getElementById('modalPaymentRef').value = '';
+    
+    // Set default date to today
+    document.getElementById('modalPaymentDate').value = new Date().toISOString().split('T')[0];
+    
+    // Reset file state
+    selectedReceiptFile = null;
+    document.getElementById('paymentScreenshotInput').value = '';
+    document.getElementById('fileUploadDottedZone').style.display = 'block';
+    document.getElementById('fileUploadTitle').innerText = 'Choose Receipt File...';
+    document.getElementById('fileUploadProgressCard').style.display = 'none';
+    document.getElementById('progressFillBar').style.width = '0%';
+    
     document.getElementById('memberPaymentModal').style.display = 'flex';
 }
 
@@ -1832,6 +2327,18 @@ function initiatePlanPurchase(planId, price) {
     document.getElementById('modalPlanId').value = planId;
     document.getElementById('modalPaymentAmount').innerText = `₹${price.toFixed(2)}`;
     document.getElementById('modalPaymentRef').value = '';
+    
+    // Set default date to today
+    document.getElementById('modalPaymentDate').value = new Date().toISOString().split('T')[0];
+    
+    // Reset file state
+    selectedReceiptFile = null;
+    document.getElementById('paymentScreenshotInput').value = '';
+    document.getElementById('fileUploadDottedZone').style.display = 'block';
+    document.getElementById('fileUploadTitle').innerText = 'Choose Receipt File...';
+    document.getElementById('fileUploadProgressCard').style.display = 'none';
+    document.getElementById('progressFillBar').style.width = '0%';
+    
     document.getElementById('memberPaymentModal').style.display = 'flex';
 }
 
@@ -1843,45 +2350,80 @@ async function submitPaymentRequest(event) {
     event.preventDefault();
     const paymentId = document.getElementById('modalPaymentId').value;
     const planId = document.getElementById('modalPlanId').value;
+    const method = document.getElementById('modalPaymentMethod').value;
+    const date = document.getElementById('modalPaymentDate').value;
     const ref = document.getElementById('modalPaymentRef').value.trim();
     
-    if (!ref) {
-        showMobileToast('Transaction reference is required.', 'error');
+    if (!selectedReceiptFile) {
+        showMobileToast('Please select and upload payment proof receipt.', 'error');
         return;
     }
+
+    const submitBtn = document.getElementById('uploadPaymentSubmitBtn');
+    submitBtn.disabled = true;
+
+    // Simulate upload progress
+    const progressCard = document.getElementById('fileUploadProgressCard');
+    const fillBar = document.getElementById('progressFillBar');
+    progressCard.style.display = 'flex';
     
-    closePaymentModal();
-    
-    try {
-        let res;
-        if (paymentId) {
-            res = await fetch(`/api/member/payments/${paymentId}/pay`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ transaction_reference: ref })
-            });
-        } else if (planId) {
-            res = await fetch('/api/member/purchase-plan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ plan_id: parseInt(planId), transaction_reference: ref })
-            });
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += 10;
+        fillBar.style.width = `${progress}%`;
+        if (progress >= 100) {
+            clearInterval(progressInterval);
+            completePaymentSubmission();
         }
-        
-        const data = await res.json();
-        if (res.status === 200 || data.success) {
-            showMobileToast('Payment request submitted to Owner!', 'success');
-            fetchDashboardData();
-            if (currentMobileTab === 'payments') {
-                renderBillingBills();
-                fetchAndRenderPlans();
+    }, 50);
+
+    async function completePaymentSubmission() {
+        try {
+            const base64Data = await readFileAsBase64(selectedReceiptFile);
+            const fileType = selectedReceiptFile.type;
+
+            let res;
+            const payload = {
+                transaction_reference: ref,
+                payment_method: method,
+                payment_date: date,
+                receipt_file_url: base64Data,
+                receipt_file_type: fileType
+            };
+
+            if (paymentId) {
+                res = await fetch(`/api/member/payments/${paymentId}/pay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } else if (planId) {
+                payload.plan_id = parseInt(planId);
+                res = await fetch('/api/member/purchase-plan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
             }
-        } else {
-            showMobileToast(data.error || 'Payment request failed.', 'error');
+
+            const data = await res.json();
+            if (res.status === 200 || data.success) {
+                showMobileToast('Payment request submitted to Owner!', 'success');
+                closePaymentModal();
+                fetchDashboardData();
+                if (currentMobileTab === 'payments') {
+                    renderBillingBills();
+                    fetchAndRenderPlans();
+                }
+            } else {
+                showMobileToast(data.error || 'Payment request failed.', 'error');
+            }
+        } catch (err) {
+            console.error('Payment submit error', err);
+            showMobileToast('Network error, please try again.', 'error');
+        } finally {
+            submitBtn.disabled = false;
         }
-    } catch (err) {
-        console.error('Payment submit error', err);
-        showMobileToast('Network error, please try again.', 'error');
     }
 }
 
@@ -2123,8 +2665,7 @@ function populateActivityDashboard(data) {
 }
 
 function showActivitySubScreen(screenId) {
-    document.getElementById('notifOverlayPanel').style.display = 'none';
-    notificationsPanelOpen = false;
+    setBottomNavigationVisible(false);
     
     document.querySelectorAll('.activity-screen-sub').forEach(el => {
         el.classList.remove('active');
@@ -2155,16 +2696,34 @@ function hideActivitySubScreen() {
     document.querySelectorAll('.activity-screen-sub').forEach(el => {
         el.classList.remove('active');
     });
+    setBottomNavigationVisible(true);
 }
 
 function renderHistorySubScreen() {
     const container = document.getElementById('subHistoryListContainer');
+    const loadingState = document.getElementById('subHistoryLoadingState');
+    const emptyState = document.getElementById('subHistoryEmptyState');
+    const errorState = document.getElementById('subHistoryErrorState');
+
     if (!container) return;
     container.innerHTML = '';
-    
-    const searchVal = document.getElementById('historySearchField').value.toLowerCase().trim();
-    let logs = (activityDataGlobal && activityDataGlobal.logs) ? activityDataGlobal.logs : [];
-    
+    if (loadingState) loadingState.style.display = 'none';
+    if (emptyState) emptyState.style.display = 'none';
+    if (errorState) errorState.style.display = 'none';
+
+    if (!activityDataGlobal) {
+        if (loadingState) loadingState.style.display = 'block';
+        return;
+    }
+
+    if (activityDataGlobal.error) {
+        if (errorState) errorState.style.display = 'block';
+        return;
+    }
+
+    const searchVal = document.getElementById('historySearchField')?.value.toLowerCase().trim() || '';
+    let logs = Array.isArray(activityDataGlobal.logs) ? [...activityDataGlobal.logs] : [];
+
     if (searchVal) {
         logs = logs.filter(log => {
             const dateStr = formatDateShort(log.check_in_time).toLowerCase();
@@ -2172,7 +2731,7 @@ function renderHistorySubScreen() {
             return dateStr.includes(searchVal) || branchStr.includes(searchVal);
         });
     }
-    
+
     if (currentHistoryFilter === 'weekly') {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -2187,18 +2746,20 @@ function renderHistorySubScreen() {
             return logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear();
         });
     }
-    
+
     if (logs.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-tertiary); padding: 40px 0; font-size: 13px;">No check-ins match the criteria.</p>';
+        if (emptyState) emptyState.style.display = 'flex';
         return;
     }
-    
+
     logs.forEach(log => {
         const dateLabel = formatLogDateHeader(log.check_in_time);
         const inStr = formatTime12hr(log.check_in_time);
         const outStr = log.check_out_time ? formatTime12hr(log.check_out_time) : '--:--';
         
         let durationStr = 'Active';
+        let statusBadge = '<span style="font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 12px; background: rgba(199,255,36,0.15); color: var(--accent);">⚡ Active</span>';
+        
         if (log.check_out_time) {
             const checkinDate = new Date(log.check_in_time.replace(' ', 'T'));
             const checkoutDate = new Date(log.check_out_time.replace(' ', 'T'));
@@ -2206,30 +2767,33 @@ function renderHistorySubScreen() {
             const hrs = Math.floor(diff / 60);
             const mins = diff % 60;
             durationStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+            statusBadge = '<span style="font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 12px; background: rgba(34,197,94,0.15); color: #22c55e;">✓ Completed</span>';
         }
-        
+
         const card = document.createElement('div');
         card.style.background = '#1c1c1e';
         card.style.border = '1px solid rgba(255,255,255,0.05)';
         card.style.borderRadius = '14px';
         card.style.padding = '14px 16px';
         card.style.textAlign = 'left';
-        card.style.marginBottom = '12px';
 
         card.innerHTML = `
-            <h4 style="font-size: 13.5px; font-weight: 800; color: #fff; margin: 0 0 12px 0;">${dateLabel}</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="font-size: 13.5px; font-weight: 800; color: #fff; margin: 0;">${dateLabel}</h4>
+                ${statusBadge}
+            </div>
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                 <div style="flex: 1;">
                     <span style="font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 600;">Check In</span>
-                    <p style="font-size: 14.5px; font-weight: 800; color: #fff; margin: 4px 0 0 0;">${inStr}</p>
+                    <p style="font-size: 14px; font-weight: 800; color: #fff; margin: 4px 0 0 0;">${inStr}</p>
                 </div>
                 <div style="flex: 1;">
                     <span style="font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 600;">Check Out</span>
-                    <p style="font-size: 14.5px; font-weight: 800; color: #fff; margin: 4px 0 0 0;">${outStr}</p>
+                    <p style="font-size: 14px; font-weight: 800; color: #fff; margin: 4px 0 0 0;">${outStr}</p>
                 </div>
                 <div style="flex: 1; text-align: right;">
                     <span style="font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 600;">Duration</span>
-                    <p style="font-size: 14.5px; font-weight: 800; color: #fff; margin: 4px 0 0 0;">${durationStr}</p>
+                    <p style="font-size: 14px; font-weight: 800; color: #fff; margin: 4px 0 0 0;">${durationStr}</p>
                 </div>
             </div>
         `;
@@ -2527,6 +3091,16 @@ async function renderLeaderboardSubScreen() {
             currentMemberRank = activityDataGlobal.all_time_rank || 0;
         }
     }
+    
+    const emptyState = document.getElementById('leaderboardEmptyState');
+    if (leaderboard.length === 0) {
+        if (mainContent) mainContent.style.display = 'none';
+        if (emptyState) emptyState.style.display = 'flex';
+        return;
+    } else {
+        if (mainContent) mainContent.style.display = 'flex';
+        if (emptyState) emptyState.style.display = 'none';
+    }
 
     // Populate Rank 1
     const r1 = leaderboard.find(u => u.rank === 1);
@@ -2535,7 +3109,7 @@ async function renderLeaderboardSubScreen() {
         if (p1) p1.style.visibility = 'visible';
         document.getElementById('podiumRank1Name').innerText = `${r1.first_name} ${r1.last_name}`;
         document.getElementById('podiumRank1Count').innerText = `${r1.checkin_count || r1.points || 0} CHECK-INS`;
-        document.getElementById('podiumRank1Img').src = r1.profile_photo || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop';
+        document.getElementById('podiumRank1Img').src = getMemberAvatarSrc(r1);
     } else {
         if (p1) p1.style.visibility = 'hidden';
     }
@@ -2547,7 +3121,7 @@ async function renderLeaderboardSubScreen() {
         if (p2) p2.style.visibility = 'visible';
         document.getElementById('podiumRank2Name').innerText = `${r2.first_name} ${r2.last_name}`;
         document.getElementById('podiumRank2Count').innerText = `${r2.checkin_count || r2.points || 0} CHECK-INS`;
-        document.getElementById('podiumRank2Img').src = r2.profile_photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop';
+        document.getElementById('podiumRank2Img').src = getMemberAvatarSrc(r2);
     } else {
         if (p2) p2.style.visibility = 'hidden';
     }
@@ -2559,7 +3133,7 @@ async function renderLeaderboardSubScreen() {
         if (p3) p3.style.visibility = 'visible';
         document.getElementById('podiumRank3Name').innerText = `${r3.first_name} ${r3.last_name}`;
         document.getElementById('podiumRank3Count').innerText = `${r3.checkin_count || r3.points || 0} CHECK-INS`;
-        document.getElementById('podiumRank3Img').src = r3.profile_photo || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop';
+        document.getElementById('podiumRank3Img').src = getMemberAvatarSrc(r3);
     } else {
         if (p3) p3.style.visibility = 'hidden';
     }
@@ -2580,7 +3154,7 @@ async function renderLeaderboardSubScreen() {
     // Filter and display Ranks >= 4
     const listRankings = leaderboard.filter(u => u.rank >= 4);
     listRankings.forEach(user => {
-        const avatarUrl = user.profile_photo || 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop';
+        const avatarUrl = getMemberAvatarSrc(user);
         const isSelf = user.id === activeMemberData.member_id || (user.first_name === activityDataGlobal.first_name && user.last_name === activityDataGlobal.last_name);
         
         const row = document.createElement('div');
@@ -2740,6 +3314,7 @@ function renderInsightsSubScreen() {
 // ================= REDESIGNED PROFILE HELPER FUNCTIONS =================
 
 function showProfileSubScreen(screenId) {
+    setBottomNavigationVisible(false);
     const homeView = document.getElementById('profileHomeView');
     if (homeView) homeView.style.display = 'none';
 
@@ -2755,7 +3330,7 @@ function showProfileSubScreen(screenId) {
     if (screenId === 'profileEmergencySubScreen') {
         renderEmergencyContacts();
     } else if (screenId === 'profileStatsSubScreen') {
-        renderWeightTrendChart();
+        renderStatsSubScreen();
     }
 }
 
@@ -2769,8 +3344,14 @@ function hideProfileSubScreen(screenId) {
     if (homeView) {
         homeView.style.display = 'block';
     }
+    setBottomNavigationVisible(true);
     
     populateProfileFields();
+}
+
+function enableProfileSave() {
+    const button = document.getElementById('profileSaveButton');
+    if (button) button.disabled = false;
 }
 
 async function saveProfileChangesRedesigned(e) {
@@ -2780,10 +3361,6 @@ async function saveProfileChangesRedesigned(e) {
     const dob = document.getElementById('profDob').value.trim();
     const photo = document.getElementById('profileAvatarBase64').value;
 
-    // Save DOB locally
-    const dobKey = `gymos_dob_${activeMemberData.member_id || 'guest'}`;
-    localStorage.setItem(dobKey, dob);
-
     // Split name
     const parts = fullName.split(' ');
     const first = parts[0] || '';
@@ -2792,6 +3369,10 @@ async function saveProfileChangesRedesigned(e) {
     activeMemberData.first_name = first;
     activeMemberData.last_name = last;
     activeMemberData.phone = phone;
+    activeMemberData.dob = dob;
+    const submitButton = document.getElementById('profileSaveButton');
+    submitButton.disabled = true;
+    submitButton.textContent = 'Saving...';
 
     // Call API
     try {
@@ -2800,7 +3381,13 @@ async function saveProfileChangesRedesigned(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 phone: phone,
+                first_name: first,
+                last_name: last,
+                dob: dob,
                 emergency_contact: activeMemberData.emergency_contact || '',
+                emergency_contact_name: activeMemberData.emergency_contact_name || '',
+                emergency_contact_number: activeMemberData.emergency_contact_number || '',
+                emergency_contact_relation: activeMemberData.emergency_contact_relation || '',
                 profile_photo: photo
             })
         });
@@ -2813,6 +3400,9 @@ async function saveProfileChangesRedesigned(e) {
         }
     } catch (err) {
         showMobileToast('Error saving profile changes', 'error');
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Save Changes';
     }
 }
 
@@ -2825,6 +3415,20 @@ function renderEmergencyContacts() {
     const container = document.getElementById('emergencyContactsList');
     if (!container) return;
 
+    const name = activeMemberData.emergency_contact_name;
+    const phone = activeMemberData.emergency_contact_number;
+    if (!name || !phone) {
+        container.innerHTML = '<p class="empty-state-message">No emergency contact added.</p>';
+        return;
+    }
+    container.innerHTML = `<div class="emergency-contact-card"><div class="emergency-contact-details">
+        <h4>${escapeHtml(name)} <span class="emergency-contact-relation">${escapeHtml(activeMemberData.emergency_contact_relation || '')}</span></h4>
+        <p>${escapeHtml(phone)}</p></div><div class="emergency-contact-actions">
+        <button class="emergency-action-btn" onclick="editEmergencyContact()">Edit</button>
+        <button class="emergency-action-btn delete" onclick="deleteEmergencyContact()">Delete</button>
+    </div></div>`;
+    return;
+
     const key = getEmergencyContactsKey();
     let contacts = [];
     try {
@@ -2833,14 +3437,7 @@ function renderEmergencyContacts() {
         contacts = [];
     }
 
-    // Default mock contacts if empty
-    if (contacts.length === 0) {
-        contacts = [
-            { id: 1, name: 'John Doni', relation: 'Brother', phone: '+1 (555) 987-6543' },
-            { id: 2, name: 'Elena Doni', relation: 'Spouse', phone: '+1 (555) 555-0199' }
-        ];
-        localStorage.setItem(key, JSON.stringify(contacts));
-    }
+    if (contacts.length === 0) return;
 
     container.innerHTML = '';
     contacts.forEach(contact => {
@@ -2875,6 +3472,8 @@ function renderEmergencyContacts() {
                 body: JSON.stringify({
                     phone: activeMemberData.phone,
                     emergency_contact: primary,
+                    emergency_contact_name: `${contacts[0].name} (${contacts[0].relation})`,
+                    emergency_contact_number: contacts[0].phone,
                     profile_photo: activeMemberData.profile_photo
                 })
             }).catch(err => console.error(err));
@@ -2901,6 +3500,9 @@ function saveEmergencyContactSubmit(e) {
     const name = document.getElementById('emergencyName').value.trim();
     const relation = document.getElementById('emergencyRelation').value.trim();
     const phone = document.getElementById('emergencyPhone').value.trim();
+
+    saveEmergencyContact({ name, relation, phone });
+    return;
 
     const key = getEmergencyContactsKey();
     let contacts = [];
@@ -2929,6 +3531,15 @@ function saveEmergencyContactSubmit(e) {
 }
 
 function editEmergencyContact(id) {
+    if (id === undefined) {
+        document.getElementById('emergencyContactId').value = 'primary';
+        document.getElementById('emergencyName').value = activeMemberData.emergency_contact_name || '';
+        document.getElementById('emergencyRelation').value = activeMemberData.emergency_contact_relation || '';
+        document.getElementById('emergencyPhone').value = activeMemberData.emergency_contact_number || '';
+        document.getElementById('emergencyModalTitle').innerText = 'Edit Emergency Contact';
+        document.getElementById('emergencyContactModal').style.display = 'flex';
+        return;
+    }
     const key = getEmergencyContactsKey();
     const contacts = JSON.parse(localStorage.getItem(key)) || [];
     const contact = contacts.find(c => c.id == id);
@@ -2943,6 +3554,10 @@ function editEmergencyContact(id) {
 }
 
 function deleteEmergencyContact(id) {
+    if (id === undefined) {
+        if (window.confirm('Remove this emergency contact?')) saveEmergencyContact({ name: '', relation: '', phone: '' });
+        return;
+    }
     const key = getEmergencyContactsKey();
     let contacts = JSON.parse(localStorage.getItem(key)) || [];
     contacts = contacts.filter(c => c.id != id);
@@ -2951,86 +3566,402 @@ function deleteEmergencyContact(id) {
     showMobileToast('Emergency contact removed', 'info');
 }
 
-// Body Stats Management
-function getBodyStats() {
-    const key = `gymos_body_stats_${activeMemberData.member_id || 'guest'}`;
-    let stats = { weight: 192, height: 190, bmi: 24.3 };
+async function saveEmergencyContact(contact) {
+    const legacy = contact.name ? `${contact.name} (${contact.relation}) / ${contact.phone}` : '';
     try {
-        const saved = localStorage.getItem(key);
-        if (saved) stats = JSON.parse(saved);
-    } catch (e) {}
-    return stats;
+        const res = await fetch('/api/member/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+            phone: activeMemberData.phone, first_name: activeMemberData.first_name, last_name: activeMemberData.last_name,
+            dob: activeMemberData.dob || '', emergency_contact: legacy, emergency_contact_name: contact.name,
+            emergency_contact_number: contact.phone, emergency_contact_relation: contact.relation, profile_photo: activeMemberData.profile_photo || ''
+        }) });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Unable to save contact');
+        Object.assign(activeMemberData, { emergency_contact: legacy, emergency_contact_name: contact.name, emergency_contact_number: contact.phone, emergency_contact_relation: contact.relation });
+        closeEmergencyContactModal();
+        renderEmergencyContacts();
+        showMobileToast(contact.name ? 'Emergency contact saved.' : 'Emergency contact removed.', 'success');
+    } catch (error) {
+        console.error(error);
+        showMobileToast('Something went wrong. Please try again.', 'error');
+    }
 }
 
-function renderWeightTrendChart() {
-    const stats = getBodyStats();
-    document.getElementById('statWeightVal').innerText = stats.weight;
-    document.getElementById('statHeightVal').innerText = stats.height;
-    document.getElementById('statBmiVal').innerText = stats.bmi;
+// Authoritative API-backed emergency contacts. These declarations replace the
+// retired browser-local implementation above and always use the logged-in
+// member's server-side session scope.
+let emergencyContacts = [];
 
+async function renderEmergencyContacts() {
+    const container = document.getElementById('emergencyContactsList');
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state-message">Loading emergency contacts…</p>';
+    try {
+        const res = await fetch('/api/member/emergency-contacts');
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Unable to load contacts');
+        emergencyContacts = data.contacts || [];
+        
+        // Hide/disable Add button if 2 contacts exist, show limit message
+        const addBtn = document.querySelector('#profileEmergencySubScreen .floating-add-btn');
+        let limitMsg = document.getElementById('emergencyLimitMessage');
+        if (!limitMsg) {
+            limitMsg = document.createElement('p');
+            limitMsg.id = 'emergencyLimitMessage';
+            limitMsg.style.cssText = 'text-align: center; font-size: 13.5px; color: rgba(255,255,255,0.4); margin-top: 16px; font-weight: 500;';
+            container.parentNode.appendChild(limitMsg);
+        }
+
+        if (emergencyContacts.length >= 2) {
+            if (addBtn) addBtn.style.display = 'none';
+            limitMsg.innerText = 'You can add a maximum of 2 emergency contacts.';
+            limitMsg.style.display = 'block';
+        } else {
+            if (addBtn) addBtn.style.display = 'flex';
+            limitMsg.style.display = 'none';
+        }
+
+        if (!emergencyContacts.length) {
+            container.innerHTML = '<div class="notifications-empty-state"><span aria-hidden="true">☎</span><h3>No Emergency Contacts Added</h3><p>Add an emergency contact so the gym can reach someone if needed.</p></div>';
+            return;
+        }
+
+        container.innerHTML = emergencyContacts.map(contact => {
+            const isPrimary = contact.contact_type === 'primary';
+            const title = isPrimary ? 'Primary Emergency Contact' : 'Secondary Emergency Contact';
+            const relation = contact.relationship ? ` <span class="emergency-contact-relation" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-left: 8px;">${escapeHtml(contact.relationship)}</span>` : '';
+            return `<div class="emergency-contact-card" style="background: #1c1c1e; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <div class="emergency-contact-details" style="text-align: left;">
+                    <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255, 255, 255, 0.4); display: block; margin-bottom: 4px;">${title}</span>
+                    <h4 style="margin: 0 0 4px 0; font-size: 15px; color: #fff;">${escapeHtml(contact.name)}${relation}</h4>
+                    <p style="margin: 0; font-size: 13px; color: rgba(255,255,255,0.6);">${escapeHtml(contact.phone)}</p>
+                </div>
+                <div class="emergency-contact-actions" style="display: flex; gap: 8px;">
+                    <button class="emergency-action-btn" onclick="editEmergencyContact('${contact.id}')" style="background: rgba(255,255,255,0.05); border: none; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #fff;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                    </button>
+                    <button class="emergency-action-btn delete" onclick="deleteEmergencyContact('${contact.id}')" style="background: rgba(255,69,58,0.15); border: none; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #ff453a;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+    } catch (error) {
+        console.error(error);
+        container.innerHTML = '<p class="empty-state-message">Something went wrong. Please try again.</p>';
+    }
+}
+
+function openAddEmergencyContactModal() {
+    document.getElementById('emergencyContactId').value = '';
+    document.getElementById('emergencyName').value = '';
+    document.getElementById('emergencyRelation').value = '';
+    document.getElementById('emergencyPhone').value = '';
+    document.getElementById('emergencyModalTitle').innerText = 'Add Emergency Contact';
+    document.getElementById('emergencyContactModal').style.display = 'flex';
+}
+
+async function saveEmergencyContactSubmit(event) {
+    event.preventDefault();
+    const contactId = document.getElementById('emergencyContactId').value;
+    const payload = { name: document.getElementById('emergencyName').value.trim(), relationship: document.getElementById('emergencyRelation').value.trim(), phone: document.getElementById('emergencyPhone').value.trim() };
+    const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.textContent = 'Saving...';
+    try {
+        const res = await fetch(contactId ? `/api/member/emergency-contacts/${contactId}` : '/api/member/emergency-contacts', { method: contactId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Unable to save contact');
+        closeEmergencyContactModal();
+        await renderEmergencyContacts();
+        showMobileToast('Emergency contact saved.', 'success');
+    } catch (error) {
+        console.error(error);
+        showMobileToast(error.message || 'Something went wrong. Please try again.', 'error');
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Save';
+    }
+}
+
+function editEmergencyContact(contactId) {
+    const contact = emergencyContacts.find(item => String(item.id) === String(contactId));
+    if (!contact) return;
+    document.getElementById('emergencyContactId').value = contact.id;
+    document.getElementById('emergencyName').value = contact.name;
+    document.getElementById('emergencyRelation').value = contact.relationship || '';
+    document.getElementById('emergencyPhone').value = contact.phone;
+    document.getElementById('emergencyModalTitle').innerText = 'Edit Emergency Contact';
+    document.getElementById('emergencyContactModal').style.display = 'flex';
+}
+
+async function deleteEmergencyContact(contactId) {
+    if (contactId === 'primary') {
+        const secondary = emergencyContacts.find(c => c.contact_type === 'secondary');
+        if (secondary) {
+            const promote = window.confirm(`The primary contact cannot be deleted directly. Do you want to promote your secondary contact ("${secondary.name}") to become the new primary contact?`);
+            if (promote) {
+                try {
+                    // 1. Promote secondary contact details to primary contact
+                    let res = await fetch('/api/member/emergency-contacts/primary', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: secondary.name,
+                            phone: secondary.phone,
+                            relationship: secondary.relationship
+                        })
+                    });
+                    const d1 = await res.json();
+                    if (!res.ok || !d1.success) throw new Error(d1.error || 'Failed to update primary contact');
+
+                    // 2. Delete the secondary contact
+                    res = await fetch(`/api/member/emergency-contacts/${secondary.id}`, { method: 'DELETE' });
+                    const d2 = await res.json();
+                    if (!res.ok || !d2.success) throw new Error(d2.error || 'Failed to remove secondary contact');
+
+                    showMobileToast('Secondary contact promoted to Primary.', 'success');
+                    await renderEmergencyContacts();
+                } catch (error) {
+                    console.error(error);
+                    showMobileToast(error.message || 'Something went wrong. Please try again.', 'error');
+                }
+            }
+        } else {
+            alert('The primary contact is required and cannot be deleted. You can edit its details instead.');
+        }
+        return;
+    }
+
+    if (!window.confirm('Remove this emergency contact?')) return;
+    try {
+        const res = await fetch(`/api/member/emergency-contacts/${contactId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Unable to remove contact');
+        await renderEmergencyContacts();
+        showMobileToast('Emergency contact removed.', 'success');
+    } catch (error) {
+        console.error(error);
+        showMobileToast(error.message || 'Something went wrong. Please try again.', 'error');
+    }
+}
+
+// Body Stats Management
+let bodyStatsHistory = [];
+
+async function fetchBodyStatsHistory() {
+    try {
+        const res = await fetch('/api/member/body-stats');
+        const data = await res.json();
+        if (data.success) {
+            bodyStatsHistory = data.stats || [];
+        }
+    } catch (e) {
+        console.error("Error fetching body stats:", e);
+    }
+}
+
+function renderStatsSubScreen() {
+    fetchBodyStatsHistory().then(() => {
+        const weightValEl = document.getElementById('statWeightVal');
+        const heightValEl = document.getElementById('statHeightVal');
+        const bmiValEl = document.getElementById('statBmiVal');
+        const bmiCatEl = document.getElementById('statBmiCategory');
+        const goalWeightEl = document.getElementById('statGoalWeightVal');
+        const progressTextEl = document.getElementById('progressStatsText');
+        const progressRemEl = document.getElementById('progressRemainingText');
+        const lastUpdatedValEl = document.getElementById('statsLastUpdatedVal');
+        const emptyStateEl = document.getElementById('statsEmptyState');
+        const trendCardEl = document.getElementById('weightTrendCard');
+        const trendBadgeEl = document.getElementById('weightTrendDiffBadge');
+        const trendDiffEl = document.getElementById('weightTrendDiffText');
+        
+        if (bodyStatsHistory.length === 0) {
+            weightValEl.innerText = '--';
+            heightValEl.innerText = '--';
+            bmiValEl.innerText = '--';
+            bmiCatEl.innerText = '--';
+            goalWeightEl.innerText = '--';
+            progressTextEl.innerText = 'Current: -- • Goal: --';
+            progressRemEl.innerText = '--';
+            lastUpdatedValEl.innerText = 'Updated --';
+            if (emptyStateEl) emptyStateEl.style.display = 'flex';
+            if (trendCardEl) trendCardEl.style.display = 'none';
+            return;
+        }
+
+        const latest = bodyStatsHistory[bodyStatsHistory.length - 1];
+        const weightKg = latest.weight;
+        const heightCm = latest.height;
+        const goalKg = latest.goal_weight;
+        
+        const heightM = heightCm / 100;
+        const bmi = parseFloat((weightKg / (heightM * heightM)).toFixed(1));
+        
+        let category = 'Normal';
+        if (bmi < 18.5) category = 'Underweight';
+        else if (bmi < 25) category = 'Normal';
+        else if (bmi < 30) category = 'Overweight';
+        else category = 'Obese';
+        
+        const totalInches = heightCm / 2.54;
+        const ft = Math.floor(totalInches / 12);
+        const inches = Math.round(totalInches % 12);
+        
+        weightValEl.innerHTML = `${weightKg} <span style="font-size: 12px; font-weight: 500; opacity: 0.6;">kg</span>`;
+        heightValEl.innerText = `${ft}'${inches}"`;
+        bmiValEl.innerText = bmi;
+        bmiCatEl.innerText = category;
+        
+        if (goalKg) {
+            goalWeightEl.innerHTML = `${goalKg} <span style="font-size: 12px; font-weight: 500; opacity: 0.6;">kg</span>`;
+            progressTextEl.innerHTML = `Current: ${weightKg} kg &bull; Goal: ${goalKg} kg`;
+            const diff = weightKg - goalKg;
+            if (diff <= 0) {
+                progressRemEl.innerText = 'Goal Achieved 🎉';
+            } else {
+                progressRemEl.innerText = `${parseFloat(diff.toFixed(1))} kg to goal`;
+            }
+        } else {
+            goalWeightEl.innerText = '--';
+            progressTextEl.innerHTML = `Current: ${weightKg} kg &bull; Goal: Not Set`;
+            progressRemEl.innerText = '--';
+        }
+
+        let updatedText = 'Updated --';
+        if (latest.created_at) {
+            const dateStr = latest.created_at.split(' ')[0];
+            const recordDate = new Date(dateStr);
+            const today = new Date();
+            recordDate.setHours(0,0,0,0);
+            today.setHours(0,0,0,0);
+            const diffTime = today - recordDate;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) {
+                updatedText = 'Updated Today';
+            } else if (diffDays === 1) {
+                updatedText = 'Updated Yesterday';
+            } else {
+                updatedText = `Updated ${diffDays} days ago`;
+            }
+        }
+        lastUpdatedValEl.innerText = updatedText;
+
+        if (bodyStatsHistory.length < 2) {
+            if (emptyStateEl) emptyStateEl.style.display = 'flex';
+            if (trendCardEl) trendCardEl.style.display = 'none';
+        } else {
+            if (emptyStateEl) emptyStateEl.style.display = 'none';
+            if (trendCardEl) trendCardEl.style.display = 'block';
+            
+            const prev = bodyStatsHistory[bodyStatsHistory.length - 2];
+            const diff = latest.weight - prev.weight;
+            if (diff < 0) {
+                trendDiffEl.innerText = `↓ ${Math.abs(parseFloat(diff.toFixed(1)))} kg`;
+                trendBadgeEl.style.color = '#10b981';
+            } else if (diff > 0) {
+                trendDiffEl.innerText = `↑ ${parseFloat(diff.toFixed(1))} kg`;
+                trendBadgeEl.style.color = '#ef4444';
+            } else {
+                trendDiffEl.innerText = 'No change';
+                trendBadgeEl.style.color = 'var(--text-tertiary)';
+            }
+            
+            renderTrendChartSVG();
+        }
+    });
+}
+
+function renderTrendChartSVG() {
     const container = document.getElementById('weightTrendChartContainer');
     if (!container) return;
-
-    // Define data points (mock historical data ending with user's current weight)
-    const months = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
-    const weights = [196, 195, 193, 191, 193, stats.weight];
+    container.innerHTML = '';
+    
+    const entries = bodyStatsHistory.slice(-6);
+    const weights = entries.map(e => e.weight);
+    const labels = entries.map(e => {
+        if (!e.created_at) return '';
+        const dateParts = e.created_at.split(' ')[0].split('-');
+        const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    });
 
     const width = 340;
     const height = 150;
-    const padding = 20;
+    const padding = 25;
     const graphWidth = width - padding * 2;
-    const graphHeight = height - padding * 2;
+    const graphHeight = height - padding * 2.5;
 
-    const maxW = Math.max(...weights) + 2;
-    const minW = Math.min(...weights) - 2;
-    const range = maxW - minW;
+    const maxW = Math.max(...weights) + 1;
+    const minW = Math.min(...weights) - 1;
+    const range = maxW - minW || 1;
 
     let points = '';
     let circlesHtml = '';
     let labelsHtml = '';
 
-    const stepX = graphWidth / (weights.length - 1);
+    const stepX = graphWidth / Math.max(1, weights.length - 1);
     weights.forEach((w, idx) => {
         const x = padding + idx * stepX;
         const y = padding + graphHeight - ((w - minW) / range) * graphHeight;
         points += `${x},${y} `;
         
         circlesHtml += `<circle cx="${x}" cy="${y}" r="4.5" fill="#c7ff24" stroke="#0b0b0b" stroke-width="1.5" />`;
-        labelsHtml += `<text x="${x}" y="${height - 2}" text-anchor="middle" font-size="9" fill="var(--text-tertiary)" font-weight="500">${months[idx]}</text>`;
+        labelsHtml += `<text x="${x}" y="${height - 4}" text-anchor="middle" font-size="8" fill="var(--text-tertiary)" font-weight="500">${labels[idx]}</text>`;
     });
 
-    container.innerHTML = `
-        <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
-            <defs>
-                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#c7ff24" stop-opacity="0.15" />
-                    <stop offset="100%" stop-color="#c7ff24" stop-opacity="0.0" />
-                </linearGradient>
-            </defs>
+    let polylineHtml = '';
+    if (weights.length > 1) {
+        polylineHtml = `<polyline points="${points.trim()}" fill="none" stroke="#c7ff24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />`;
+    }
+
+    const svg = `
+        <svg width="100%" height="100%" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible;">
+            <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
+            <line x1="${padding}" y1="${padding + graphHeight / 2}" x2="${width - padding}" y2="${padding + graphHeight / 2}" stroke="rgba(255,255,255,0.03)" stroke-width="1" />
+            <line x1="${padding}" y1="${padding + graphHeight}" x2="${width - padding}" y2="${padding + graphHeight}" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
             
-            <!-- Grid Lines -->
-            <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="var(--border-color)" stroke-width="1" stroke-dasharray="2,2" />
-            <line x1="${padding}" y1="${padding + graphHeight/2}" x2="${width - padding}" y2="${padding + graphHeight/2}" stroke="var(--border-color)" stroke-width="1" stroke-dasharray="2,2" />
-            <line x1="${padding}" y1="${padding + graphHeight}" x2="${width - padding}" y2="${padding + graphHeight}" stroke="var(--border-color)" stroke-width="1" />
-
-            <!-- Area under line -->
-            <polygon points="${padding},${padding + graphHeight} ${points} ${width - padding},${padding + graphHeight}" fill="url(#chartGrad)" />
-
-            <!-- Line path -->
-            <polyline points="${points.trim()}" fill="none" stroke="#c7ff24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
-
-            <!-- Circles and Labels -->
+            ${polylineHtml}
             ${circlesHtml}
             ${labelsHtml}
         </svg>
     `;
+    container.innerHTML = svg;
+}
+
+function updateModalBmiRealtime() {
+    const weight = parseFloat(document.getElementById('statsWeightInput').value) || 0;
+    const ft = parseInt(document.getElementById('statsHeightFt').value) || 0;
+    const inches = parseInt(document.getElementById('statsHeightIn').value) || 0;
+    
+    if (weight > 0 && (ft > 0 || inches > 0)) {
+        const heightCm = ((ft * 12) + inches) * 2.54;
+        const heightM = heightCm / 100;
+        const bmi = (weight / (heightM * heightM)).toFixed(1);
+        document.getElementById('modalBmiVal').innerText = bmi;
+    } else {
+        document.getElementById('modalBmiVal').innerText = '--';
+    }
 }
 
 function openUpdateStatsModal() {
-    const stats = getBodyStats();
-    document.getElementById('statsWeightInput').value = stats.weight;
-    document.getElementById('statsHeightInput').value = stats.height;
-    document.getElementById('statsBmiInput').value = stats.bmi;
+    const latest = bodyStatsHistory[bodyStatsHistory.length - 1];
+    document.getElementById('statsWeightInput').value = latest ? latest.weight : '';
+    const totalInches = latest ? latest.height / 2.54 : null;
+    document.getElementById('statsHeightFt').value = totalInches ? Math.floor(totalInches / 12) : '';
+    document.getElementById('statsHeightIn').value = totalInches ? Math.round(totalInches % 12) : '';
+    document.getElementById('statsGoalWeightInput').value = latest?.goal_weight || '';
+    
+    const wInput = document.getElementById('statsWeightInput');
+    const ftSelect = document.getElementById('statsHeightFt');
+    const inSelect = document.getElementById('statsHeightIn');
+    if (wInput && !wInput.dataset.bmiListener) {
+        wInput.addEventListener('input', updateModalBmiRealtime);
+        ftSelect.addEventListener('change', updateModalBmiRealtime);
+        inSelect.addEventListener('change', updateModalBmiRealtime);
+        wInput.dataset.bmiListener = 'true';
+    }
+    
+    updateModalBmiRealtime();
     document.getElementById('updateStatsModal').style.display = 'flex';
 }
 
@@ -3038,23 +3969,37 @@ function closeUpdateStatsModal() {
     document.getElementById('updateStatsModal').style.display = 'none';
 }
 
-function saveStatsSubmit(e) {
+async function saveStatsSubmit(e) {
     e.preventDefault();
-    const weight = parseInt(document.getElementById('statsWeightInput').value);
-    const height = parseInt(document.getElementById('statsHeightInput').value);
-    const bmi = parseFloat(document.getElementById('statsBmiInput').value);
-
-    const stats = { weight, height, bmi };
-    const key = `gymos_body_stats_${activeMemberData.member_id || 'guest'}`;
-    localStorage.setItem(key, JSON.stringify(stats));
-
-    closeUpdateStatsModal();
-    renderWeightTrendChart();
-    showMobileToast('Stats updated successfully', 'success');
+    const weight = parseFloat(document.getElementById('statsWeightInput').value);
+    const ft = parseInt(document.getElementById('statsHeightFt').value);
+    const inches = parseInt(document.getElementById('statsHeightIn').value);
+    const goalVal = document.getElementById('statsGoalWeightInput').value;
+    const goal_weight = goalVal ? parseFloat(goalVal) : null;
+    
+    const heightCm = ((ft * 12) + inches) * 2.54;
+    
+    try {
+        const res = await fetch('/api/member/body-stats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ weight, height: heightCm, goal_weight })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showMobileToast('Stats updated successfully', 'success');
+            closeUpdateStatsModal();
+            renderStatsSubScreen();
+        } else {
+            showMobileToast(data.error || 'Failed to update stats', 'error');
+        }
+    } catch (err) {
+        showMobileToast('Server offline. Cannot update stats.', 'error');
+    }
 }
 
 // Password Change Redesigned
-function submitChangePasswordRedesigned(e) {
+async function submitChangePasswordRedesigned(e) {
     e.preventDefault();
     const oldPw = document.getElementById('oldPasswordInput').value;
     const newPw = document.getElementById('newPasswordInput').value;
@@ -3065,105 +4010,23 @@ function submitChangePasswordRedesigned(e) {
         return;
     }
 
-    // Mock API success since changing password endpoint is not available
-    showMobileToast('Password changed successfully!', 'success');
-    document.getElementById('profileChangePasswordForm').reset();
-    hideProfileSubScreen('profilePasswordSubScreen');
-}
-
-// ================= REDESIGNED PAYMENT UPLOAD SIMULATOR =================
-
-let simulatedUploadTimer = null;
-let selectedFileObject = null;
-
-function openUploadPaymentModal() {
-    selectedFileObject = null;
-    document.getElementById('paymentSenderName').value = '';
-    document.getElementById('paymentMethodSelect').value = 'online';
-    document.getElementById('fileUploadDottedZone').style.display = 'block';
-    document.getElementById('fileUploadProgressCard').style.display = 'none';
-    document.getElementById('uploadPaymentSubmitBtn').disabled = true;
-    document.getElementById('uploadPaymentModal').style.display = 'flex';
-}
-
-function closeUploadPaymentModal() {
-    cancelUploadSimulator();
-    document.getElementById('uploadPaymentModal').style.display = 'none';
-}
-
-function triggerFileInput() {
-    document.getElementById('paymentScreenshotInput').click();
-}
-
-function handleFileSelection(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    selectedFileObject = file;
-    document.getElementById('progressFileName').innerText = file.name;
-    document.getElementById('progressFileMeta').innerText = `0 KB of ${Math.round(file.size / 1024)} KB · Selected`;
-    document.getElementById('progressFillBar').style.width = '0%';
-    
-    document.getElementById('fileUploadDottedZone').style.display = 'none';
-    document.getElementById('fileUploadProgressCard').style.display = 'flex';
-    document.getElementById('uploadPaymentSubmitBtn').disabled = false;
-}
-
-function startSimulatedUpload() {
-    if (!selectedFileObject) return;
-
-    document.getElementById('uploadPaymentSubmitBtn').disabled = true;
-    let currentProgress = 0;
-    const totalSizeKb = Math.round(selectedFileObject.size / 1024);
-    
-    simulatedUploadTimer = setInterval(() => {
-        currentProgress += 20;
-        if (currentProgress > 100) currentProgress = 100;
-
-        const currentSizeKb = Math.round((currentProgress / 100) * totalSizeKb);
-        document.getElementById('progressFillBar').style.width = `${currentProgress}%`;
-        document.getElementById('progressFileMeta').innerText = `${currentSizeKb} KB of ${totalSizeKb} KB · ${currentProgress === 100 ? 'Completed' : 'Uploading...'}`;
-
-        if (currentProgress >= 100) {
-            clearInterval(simulatedUploadTimer);
-            setTimeout(() => {
-                submitRedesignedPaymentMock();
-            }, 300);
-        }
-    }, 300);
-}
-
-function cancelUploadSimulator() {
-    if (simulatedUploadTimer) {
-        clearInterval(simulatedUploadTimer);
-        simulatedUploadTimer = null;
+    const submitButton = e.currentTarget.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.textContent = 'Saving...';
+    try {
+        const res = await fetch('/api/member/password', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_password: oldPw, new_password: newPw }) });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Unable to change password');
+        showMobileToast('Password changed successfully.', 'success');
+        e.currentTarget.reset();
+        hideProfileSubScreen('profilePasswordSubScreen');
+    } catch (error) {
+        console.error(error);
+        showMobileToast(error.message || 'Something went wrong. Please try again.', 'error');
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Save Changes';
     }
-    selectedFileObject = null;
-    document.getElementById('paymentScreenshotInput').value = '';
-    document.getElementById('fileUploadDottedZone').style.display = 'block';
-    document.getElementById('fileUploadProgressCard').style.display = 'none';
-    document.getElementById('uploadPaymentSubmitBtn').disabled = true;
-}
-
-async function submitRedesignedPaymentMock() {
-    // Trigger success callback
-    closeUploadPaymentModal();
-    document.getElementById('paymentSuccessModal').style.display = 'flex';
-}
-
-function closeSuccessPaymentModal() {
-    document.getElementById('paymentSuccessModal').style.display = 'none';
-    // Add mock invoice pending approval to payments history
-    addMockPaymentInvoice();
-}
-
-function addMockPaymentInvoice() {
-    // Injects a mock pending approval payment into payments list
-    showMobileToast('Receipt uploaded and awaiting verification.', 'success');
-    
-    // We can also trigger the normal dashboard refresh
-    fetchDashboardData();
-    renderBillingBills();
 }
 
 function escapeHtml(str) {
@@ -3252,5 +4115,3 @@ function buyPlanFromDrawer(planId, price) {
     hidePlanPurchaseDrawer();
     initiatePlanPurchase(planId, price);
 }
-
-

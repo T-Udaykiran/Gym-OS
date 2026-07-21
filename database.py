@@ -90,9 +90,17 @@ def init_db():
         last_name TEXT NOT NULL,
         phone TEXT NOT NULL,
         emergency_contact TEXT,
+        emergency_contact_name TEXT,
+        emergency_contact_number TEXT,
+        emergency_contact_relation TEXT,
         status TEXT CHECK(status IN ('active', 'suspended', 'expired', 'pending', 'rejected')) DEFAULT 'pending',
         profile_photo TEXT,
         joined_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')),
+        preferences_completed BOOLEAN DEFAULT FALSE,
+        dob TEXT,
+        gender TEXT,
+        height REAL,
+        weight REAL,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     );
     """)
@@ -175,12 +183,42 @@ def init_db():
     );
     """)
 
+    # A member may have multiple emergency contacts. This is deliberately a
+    # first-class, gym-scoped record rather than browser-local profile state.
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS emergency_contacts (
+        id SERIAL PRIMARY KEY,
+        member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        gym_id INTEGER NOT NULL REFERENCES gyms(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        relationship TEXT,
+        contact_type TEXT CHECK(contact_type IN ('primary', 'secondary')) DEFAULT 'secondary',
+        created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')),
+        updated_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_emergency_contacts_member_gym ON emergency_contacts(member_id, gym_id)")
+
     # Create Settings table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS settings (
         id SERIAL PRIMARY KEY,
         key TEXT UNIQUE NOT NULL,
         value TEXT NOT NULL
+    );
+    """)
+
+    # Create Body Stats table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS body_stats (
+        id SERIAL PRIMARY KEY,
+        member_id INTEGER NOT NULL,
+        weight REAL NOT NULL,
+        height REAL NOT NULL,
+        goal_weight REAL,
+        created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')),
+        FOREIGN KEY (member_id) REFERENCES members (id) ON DELETE CASCADE
     );
     """)
 
@@ -220,8 +258,68 @@ def _migrate_multi_tenancy(cursor):
     safe to run on every startup, both for the already-migrated production
     database and for a brand new one.
     """
-    for table in ("users", "members", "plans", "memberships", "payments", "notifications", "settings"):
+    for table in ("users", "members", "plans", "memberships", "payments", "notifications", "settings", "body_stats"):
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS gym_id INTEGER NOT NULL DEFAULT 1")
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS preferences_completed BOOLEAN DEFAULT FALSE")
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS emergency_contact_name TEXT")
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS emergency_contact_number TEXT")
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS emergency_contact_relation TEXT")
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS dob TEXT")
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS gender TEXT")
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS height REAL")
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS weight REAL")
+    cursor.execute("ALTER TABLE gyms ADD COLUMN IF NOT EXISTS logo_url TEXT")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS emergency_contacts (
+            id SERIAL PRIMARY KEY,
+            member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+            gym_id INTEGER NOT NULL REFERENCES gyms(id) ON DELETE CASCADE,
+            name TEXT NOT NULL, phone TEXT NOT NULL, relationship TEXT,
+            contact_type TEXT CHECK(contact_type IN ('primary', 'secondary')) DEFAULT 'secondary',
+            created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')),
+            updated_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
+        )
+    """)
+    # Deduplicate member phones per gym if legacy duplicates exist
+    cursor.execute("SELECT id, phone, gym_id FROM members ORDER BY id ASC")
+    m_rows = cursor.fetchall()
+    seen_keys = set()
+    for m in m_rows:
+        key = (m["gym_id"], m["phone"])
+        if key in seen_keys and m["phone"]:
+            cursor.execute("UPDATE members SET phone = ? WHERE id = ?", (f"{m['phone']}_{m['id']}", m["id"]))
+        else:
+            seen_keys.add(key)
+
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_members_gym_phone ON members(gym_id, phone)")
+    cursor.execute("ALTER TABLE emergency_contacts ADD COLUMN IF NOT EXISTS contact_type TEXT CHECK(contact_type IN ('primary', 'secondary')) DEFAULT 'secondary'")
+    
+    # Backfill emergency contacts
+    cursor.execute("SELECT id, emergency_contact, emergency_contact_name, emergency_contact_number FROM members")
+    rows = cursor.fetchall()
+    for row in rows:
+        m_id = row["id"]
+        ec = row["emergency_contact"]
+        ec_name = row["emergency_contact_name"]
+        ec_num = row["emergency_contact_number"]
+        if ec and not ec_name and not ec_num:
+            if "/" in ec:
+                parts = ec.split("/", 1)
+                name = parts[0].strip()
+                num = parts[1].strip()
+            else:
+                name = ""
+                num = ec.strip()
+            cursor.execute("UPDATE members SET emergency_contact_name = ?, emergency_contact_number = ? WHERE id = ?", (name, num, m_id))
+
+    # Clean up duplicate primary contacts that were mistakenly copied to the emergency_contacts table
+    cursor.execute("""
+        DELETE FROM emergency_contacts 
+        WHERE (member_id, name, phone) IN (
+            SELECT id, emergency_contact_name, emergency_contact_number FROM members
+        )
+    """)
+
     cursor.execute("ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS gym_id INTEGER")
 
     # settings used to be unique on `key` alone (one gym); now every gym has
@@ -318,6 +416,29 @@ def _migrate_multi_tenancy(cursor):
         ('Monthly', 999.0, 1),
         ('Annual', 9999.0, 12)
         """)
+
+    # Payments table extension for end-to-end workflow
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS gym_id INTEGER")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS plan_id INTEGER")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_method TEXT")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS receipt_file_url TEXT")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS receipt_file_type TEXT")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS review_date TEXT")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS reviewed_by INTEGER")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS rejection_reason TEXT")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TEXT")
+    cursor.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS transaction_reference TEXT")
+    try:
+        cursor.execute("ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_status_check")
+    except Exception:
+        pass
+    try:
+        cursor.execute("""
+            ALTER TABLE payments ADD CONSTRAINT payments_status_check 
+            CHECK(status IN ('paid', 'pending', 'overdue', 'pending_approval', 'rejected'))
+        """)
+    except Exception:
+        pass
 
 def seed_data(conn):
     cursor = conn.cursor()

@@ -1,5 +1,6 @@
 import os
 import sys
+import uuid
 import sqlite3
 import json
 import queue
@@ -24,6 +25,18 @@ IST_OFFSET = timedelta(hours=5, minutes=30)
 
 def now_ist():
     return datetime.utcnow() + IST_OFFSET
+
+def generate_receipt_number(cursor, gym_id):
+    today_str = now_ist().strftime("%Y%m%d")
+    prefix = f"RC-{today_str}-"
+    cursor.execute("SELECT COUNT(*) FROM payments WHERE receipt_number LIKE ?", (prefix + "%",))
+    count = cursor.fetchone()[0] + 1
+    while True:
+        candidate = f"{prefix}{count:06d}"
+        cursor.execute("SELECT 1 FROM payments WHERE receipt_number = ?", (candidate,))
+        if not cursor.fetchone():
+            return candidate
+        count += 1
 
 # Active SSE event queues, each tagged with the gym they belong to so a
 # check-in at one gym never reaches another gym's dashboard.
@@ -87,6 +100,20 @@ def log_action(cursor, action, entity_type=None, entity_id=None, details=None, g
             gym_id if gym_id is not None else session.get("gym_id"),
         ),
     )
+
+def sync_primary_emergency_contact(cursor, member_id, gym_id):
+    """Mirror the first contact into legacy member columns for owner views.
+
+    The emergency_contacts table is authoritative. The columns on members are
+    kept populated so older owner screens and exports remain compatible.
+    """
+    cursor.execute("SELECT name, phone, relationship FROM emergency_contacts WHERE member_id = ? AND gym_id = ? ORDER BY id ASC LIMIT 1", (member_id, gym_id))
+    contact = cursor.fetchone()
+    if contact:
+        legacy = f"{contact['name']} / {contact['phone']}"
+        cursor.execute("UPDATE members SET emergency_contact = ?, emergency_contact_name = ?, emergency_contact_number = ?, emergency_contact_relation = ? WHERE id = ? AND gym_id = ?", (legacy, contact["name"], contact["phone"], contact["relationship"], member_id, gym_id))
+    else:
+        cursor.execute("UPDATE members SET emergency_contact = '', emergency_contact_name = '', emergency_contact_number = '', emergency_contact_relation = '' WHERE id = ? AND gym_id = ?", (member_id, gym_id))
 
 def is_subscription_active(gym_id):
     """Whether a tenant's (manually-managed) company subscription is current."""
@@ -176,12 +203,32 @@ def auth_register():
     first_name = data.get("first_name")
     last_name = data.get("last_name") or ""
     phone = data.get("phone")
-    emergency = data.get("emergency_contact")
+    emergency_name = data.get("emergency_contact_name")
+    emergency_number = data.get("emergency_contact_number")
+    legacy_emergency = data.get("emergency_contact")
+    
+    if (emergency_name is None and emergency_number is None) and legacy_emergency is not None:
+        if "/" in legacy_emergency:
+            parts = legacy_emergency.split("/", 1)
+            emergency_name = parts[0].strip()
+            emergency_number = parts[1].strip()
+        else:
+            emergency_name = ""
+            emergency_number = legacy_emergency.strip()
+            
+    if legacy_emergency is None:
+        if emergency_name and emergency_number:
+            legacy_emergency = f"{emergency_name} / {emergency_number}"
+        elif emergency_number:
+            legacy_emergency = emergency_number
+        else:
+            legacy_emergency = ""
+
     # Transitional default: the gym-picker UI isn't wired up on the
     # registration screen yet, so fall back to tenant #1 until it is.
     gym_id = data.get("gym_id") or 1
 
-    if not all([email, password, first_name, phone]):
+    if not all([email, password, first_name, phone, emergency_name, emergency_number]):
         return jsonify({"error": "Missing required registration fields"}), 400
 
     conn = database.get_db_connection()
@@ -207,10 +254,11 @@ def auth_register():
 
         # Create Member (status default is 'pending' and requires owner approval)
         cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status, gym_id) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
-            (user_id, first_name, last_name, phone, emergency, gym_id)
+            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, emergency_contact_name, emergency_contact_number, status, gym_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+            (user_id, first_name, last_name, phone, legacy_emergency, emergency_name, emergency_number, gym_id)
         )
         member_id = cursor.lastrowid
+        # Do not create separate emergency contact records unless the member later adds a secondary contact.
 
         # Create a welcome notification
         cursor.execute(
@@ -270,8 +318,9 @@ def auth_login():
     gym_id = user["gym_id"]
 
     member_id = None
+    preferences_completed = False
     if role == "member":
-        cursor.execute("SELECT id, status, first_name, last_name FROM members WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT id, status, first_name, last_name, preferences_completed FROM members WHERE user_id = ?", (user_id,))
         m = cursor.fetchone()
         if m:
             if m["status"] == "suspended":
@@ -284,6 +333,7 @@ def auth_login():
                 conn.close()
                 return jsonify({"error": "Your registration request was rejected. Please contact your gym.", "status": "rejected"}), 403
             member_id = m["id"]
+            preferences_completed = bool(m["preferences_completed"])
             
     session["user_id"] = user_id
     session["role"] = role
@@ -303,6 +353,7 @@ def auth_login():
             "email": user["email"],
             "role": role,
             "member_id": member_id,
+            "preferences_completed": preferences_completed if role == "member" else None,
             "subscription_active": is_subscription_active(gym_id) if role == "owner" else None
         }
     })
@@ -1030,11 +1081,9 @@ def admin_get_members():
     cursor = conn.cursor()
     
     count_query = """
-        SELECT COUNT(*)
+        SELECT COUNT(DISTINCT m.id)
         FROM members m
         JOIN users u ON m.user_id = u.id
-        LEFT JOIN memberships mb ON m.id = mb.member_id AND mb.status = 'active'
-        LEFT JOIN plans p ON mb.plan_id = p.id
         WHERE m.gym_id = ?
     """
 
@@ -1046,7 +1095,12 @@ def admin_get_members():
                (SELECT COUNT(*) FROM payments WHERE member_id = m.id AND status IN ('pending', 'overdue')) as pending_payment_count
         FROM members m
         JOIN users u ON m.user_id = u.id
-        LEFT JOIN memberships mb ON m.id = mb.member_id AND mb.status = 'active'
+        LEFT JOIN memberships mb ON mb.id = (
+            SELECT id FROM memberships
+            WHERE member_id = m.id
+            ORDER BY CASE WHEN status = 'active' THEN 1 ELSE 2 END, end_date DESC, id DESC
+            LIMIT 1
+        )
         LEFT JOIN plans p ON mb.plan_id = p.id
         WHERE m.gym_id = ?
     """
@@ -1124,33 +1178,113 @@ def admin_create_member():
     first_name = data.get("first_name")
     last_name = data.get("last_name") or ""
     phone = data.get("phone")
-    emergency = data.get("emergency_contact", "")
-    password = data.get("password") or "password123" # default signup password
+    emergency_name = data.get("emergency_contact_name")
+    emergency_number = data.get("emergency_contact_number")
+    legacy_emergency = data.get("emergency_contact")
     
-    if not all([email, first_name, phone]):
-        return jsonify({"error": "Missing required fields"}), 400
+    if (emergency_name is None and emergency_number is None) and legacy_emergency is not None:
+        if "/" in legacy_emergency:
+            parts = legacy_emergency.split("/", 1)
+            emergency_name = parts[0].strip()
+            emergency_number = parts[1].strip()
+        else:
+            emergency_name = ""
+            emergency_number = legacy_emergency.strip()
+            
+    if legacy_emergency is None:
+        if emergency_name and emergency_number:
+            legacy_emergency = f"{emergency_name} / {emergency_number}"
+        elif emergency_number:
+            legacy_emergency = emergency_number
+        else:
+            legacy_emergency = ""
+
+    password = data.get("password")
+    plan_id = data.get("plan_id")
+    
+    if not all([email, first_name, phone, password, plan_id, emergency_name, emergency_number]):
+        return jsonify({"error": "Missing required fields (including password, membership plan, and emergency contact)"}), 400
         
     conn = database.get_db_connection()
     cursor = conn.cursor()
     
     try:
         gym_id = session["gym_id"]
+        
+        # Verify Plan exists and get details
+        cursor.execute("SELECT name, price, duration_months FROM plans WHERE id = ? AND gym_id = ?", (plan_id, gym_id))
+        plan = cursor.fetchone()
+        if not plan:
+            conn.close()
+            return jsonify({"error": "Selected membership plan not found"}), 404
+            
         pw_hash = database.hash_password(password)
         cursor.execute("INSERT INTO users (email, password_hash, role, gym_id) VALUES (?, ?, 'member', ?)", (email, pw_hash, gym_id))
         u_id = cursor.lastrowid
 
         cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, status, gym_id) VALUES (?, ?, ?, ?, ?, 'active', ?)",
-            (u_id, first_name, last_name, phone, emergency, gym_id)
+            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, emergency_contact_name, emergency_contact_number, status, gym_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)",
+            (u_id, first_name, last_name, phone, legacy_emergency, emergency_name, emergency_number, gym_id)
         )
         member_id = cursor.lastrowid
 
+        # Insert primary contact into emergency_contacts table for complete relational integrity
+        if emergency_name or emergency_number:
+            cursor.execute("""
+                INSERT INTO emergency_contacts (member_id, gym_id, name, phone, relationship, contact_type)
+                VALUES (?, ?, ?, ?, 'Primary Contact', 'primary')
+            """, (member_id, gym_id, emergency_name or "", emergency_number or ""))
+
+        # Calculate membership start/end dates
+        start_date_str = data.get("start_date") or now_ist().strftime("%Y-%m-%d")
+        custom_end_date_str = data.get("end_date")
+        record_payment = data.get("record_payment", True)
+        
+        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+        if custom_end_date_str:
+            custom_end_date = datetime.strptime(custom_end_date_str, "%Y-%m-%d")
+            if custom_end_date <= start_date:
+                conn.close()
+                return jsonify({"error": "End date must be after the start date"}), 400
+            end_date_str = custom_end_date_str
+        else:
+            end_date = start_date + timedelta(days=plan["duration_months"] * 30)
+            end_date_str = end_date.strftime("%Y-%m-%d")
+            
+        # Create Fresh Membership
+        cursor.execute("""
+            INSERT INTO memberships (member_id, plan_id, status, start_date, end_date, price_paid, gym_id)
+            VALUES (?, ?, 'active', ?, ?, ?, ?)
+        """, (member_id, plan_id, start_date_str, end_date_str, plan["price"], gym_id))
+        membership_id = cursor.lastrowid
+        
+        # Record Payment
+        pay_status = "paid" if record_payment else "pending"
+        pay_date = now_ist().strftime("%Y-%m-%d %H:%M:%S") if record_payment else None
+        due_date = start_date_str if not record_payment else None
+        receipt = generate_receipt_number(cursor, gym_id)
+        
+        cursor.execute("""
+            INSERT INTO payments (membership_id, member_id, amount, status, payment_date, due_date, receipt_number, gym_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (membership_id, member_id, plan["price"], pay_status, pay_date, due_date, receipt, gym_id))
+        payment_id = cursor.lastrowid
+
+        # Create notifications
         cursor.execute(
             "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'welcome', ?, ?)",
             (u_id, f"Welcome to GymOS, {first_name}! An account has been created for you by the Owner. Password: {password}", gym_id)
         )
+        notif_msg = f"Your new membership '{plan['name']}' has been activated! Expires on: {end_date_str}."
+        cursor.execute("INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'renewal', ?, ?)", (u_id, notif_msg, gym_id))
         
         log_action(cursor, "member_created_by_owner", "member", member_id, {"name": f"{first_name} {last_name}", "email": email})
+        log_action(cursor, "plan_assigned", "member", member_id, {
+            "plan_name": plan["name"], "plan_id": plan_id, "membership_id": membership_id,
+            "payment_id": payment_id, "price": plan["price"], "record_payment": record_payment,
+            "start_date": start_date_str, "end_date": end_date_str, "custom_end_date": bool(custom_end_date_str)
+        })
+        
         conn.commit()
 
         broadcast_event("MEMBER_CREATED", {
@@ -1228,11 +1362,37 @@ def admin_update_member(id):
     first_name = data.get("first_name")
     last_name = data.get("last_name") or ""
     phone = data.get("phone")
-    emergency = data.get("emergency_contact")
+    emergency_name = data.get("emergency_contact_name")
+    emergency_number = data.get("emergency_contact_number")
+    emergency_relation = data.get("emergency_contact_relation")
+    legacy_emergency = data.get("emergency_contact")
+    
+    if (emergency_name is None and emergency_number is None) and legacy_emergency is not None:
+        if "/" in legacy_emergency:
+            parts = legacy_emergency.split("/", 1)
+            emergency_name = parts[0].strip()
+            emergency_number = parts[1].strip()
+        else:
+            emergency_name = ""
+            emergency_number = legacy_emergency.strip()
+            
+    if legacy_emergency is None:
+        if emergency_name and emergency_number:
+            legacy_emergency = f"{emergency_name} / {emergency_number}"
+        elif emergency_number:
+            legacy_emergency = emergency_number
+        else:
+            legacy_emergency = ""
+
     status = data.get("status")
     email = data.get("email")
     password = data.get("password")
     fee_pending = data.get("fee_pending")  # true/false/None (None = leave unchanged)
+    dob = data.get("dob")
+    gender = data.get("gender")
+    height = data.get("height")
+    weight = data.get("weight")
+    profile_photo = data.get("profile_photo")
 
     if not all([first_name, phone, status]):
         return jsonify({"error": "Missing required edit fields"}), 400
@@ -1241,7 +1401,7 @@ def admin_update_member(id):
     cursor = conn.cursor()
 
     try:
-        # Check current status
+        # Check current member status & verify gym ownership
         cursor.execute("SELECT status, user_id FROM members WHERE id = ? AND gym_id = ?", (id, session["gym_id"]))
         old_m = cursor.fetchone()
         if not old_m:
@@ -1250,9 +1410,27 @@ def admin_update_member(id):
 
         cursor.execute("""
             UPDATE members
-            SET first_name = ?, last_name = ?, phone = ?, emergency_contact = ?, status = ?
-            WHERE id = ?
-        """, (first_name, last_name, phone, emergency, status, id))
+            SET first_name = ?, last_name = ?, phone = ?, emergency_contact = ?, emergency_contact_name = ?, emergency_contact_number = ?, status = ?,
+                dob = COALESCE(?, dob), gender = COALESCE(?, gender), height = COALESCE(?, height), weight = COALESCE(?, weight),
+                emergency_contact_relation = COALESCE(?, emergency_contact_relation), profile_photo = COALESCE(?, profile_photo)
+            WHERE id = ? AND gym_id = ?
+        """, (first_name, last_name, phone, legacy_emergency, emergency_name, emergency_number, status,
+               dob, gender, height, weight, emergency_relation, profile_photo, id, session["gym_id"]))
+
+        # Upsert emergency_contacts primary record
+        cursor.execute("SELECT id FROM emergency_contacts WHERE member_id = ? AND contact_type = 'primary' LIMIT 1", (id,))
+        exist_ec = cursor.fetchone()
+        if exist_ec:
+            cursor.execute("""
+                UPDATE emergency_contacts
+                SET name = ?, phone = ?, relationship = COALESCE(?, relationship), updated_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+                WHERE id = ?
+            """, (emergency_name or "", emergency_number or "", emergency_relation or "Primary Contact", exist_ec["id"]))
+        elif emergency_name or emergency_number:
+            cursor.execute("""
+                INSERT INTO emergency_contacts (member_id, gym_id, name, phone, relationship, contact_type)
+                VALUES (?, ?, ?, ?, ?, 'primary')
+            """, (id, session["gym_id"], emergency_name or "", emergency_number or "", emergency_relation or "Primary Contact"))
 
         if email:
             cursor.execute("UPDATE users SET email = ? WHERE id = ?", (email, old_m["user_id"]))
@@ -1288,7 +1466,7 @@ def admin_update_member(id):
         })
         conn.commit()
 
-        broadcast_event("MEMBER_UPDATED", {"id": id, "name": f"{first_name} {last_name}", "status": status}, session["gym_id"])
+        broadcast_event("MEMBER_UPDATED", {"id": id, "name": f"{first_name} {last_name}", "status": status, "profile_photo": profile_photo}, session["gym_id"])
 
         return jsonify({"success": True})
     except sqlite3.IntegrityError as e:
@@ -1317,9 +1495,15 @@ def admin_delete_member(id):
     user_id = member["user_id"]
     name = f"{member['first_name']} {member['last_name']}"
 
+    cursor.execute("DELETE FROM emergency_contacts WHERE member_id = ?", (id,))
+    cursor.execute("DELETE FROM body_stats WHERE member_id = ?", (id,))
+    cursor.execute("DELETE FROM attendance WHERE member_id = ?", (id,))
+    cursor.execute("DELETE FROM payments WHERE member_id = ?", (id,))
+    cursor.execute("DELETE FROM memberships WHERE member_id = ?", (id,))
+    cursor.execute("DELETE FROM members WHERE id = ?", (id,))
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
     log_action(cursor, "member_deleted", "member", id, {
-        "name": name, "note": "cascades to memberships/payments/attendance/notifications"
+        "name": name, "note": "purged member and all related child records"
     })
     conn.commit()
     conn.close()
@@ -1397,7 +1581,7 @@ def admin_assign_plan(id):
         pay_status = "paid" if record_payment else "pending"
         pay_date = now_ist().strftime("%Y-%m-%d %H:%M:%S") if record_payment else None
         due_date = start_date_str if not record_payment else None
-        receipt = f"RC-{int(now_ist().timestamp())}-{id}"
+        receipt = generate_receipt_number(cursor, gym_id)
         
         cursor.execute("""
             INSERT INTO payments (membership_id, member_id, amount, status, payment_date, due_date, receipt_number, gym_id)
@@ -1684,12 +1868,21 @@ def admin_get_payments():
         WHERE p.gym_id = ?
     """
 
+    status_map_db = {
+        "Approved": "paid",
+        "Pending": "pending",
+        "Pending Approval": "pending_approval",
+        "Rejected": "rejected",
+        "Overdue": "overdue"
+    }
+    db_status = status_map_db.get(status_filter, status_filter)
+
     params = [session["gym_id"]]
     filter_sql = ""
     
-    if status_filter:
+    if db_status:
         filter_sql += " AND p.status = ?"
-        params.append(status_filter)
+        params.append(db_status)
 
     if year_filter and month_filter:
         filter_sql += " AND TO_CHAR(p.payment_date::timestamp, 'YYYY-MM') = ?"
@@ -1729,6 +1922,26 @@ def admin_get_payments():
     cursor.execute(query, params)
     data = [dict(row) for row in cursor.fetchall()]
     conn.close()
+
+    status_map_ui = {
+        "paid": "Approved",
+        "pending": "Pending",
+        "pending_approval": "Pending Approval",
+        "rejected": "Rejected",
+        "overdue": "Overdue"
+    }
+    for p in data:
+        p["status"] = status_map_ui.get(p["status"], p["status"])
+        if not p.get("due_date"):
+            p["due_date"] = "—"
+        if not p.get("payment_date"):
+            p["payment_date"] = "—"
+        if not p.get("payment_method"):
+            p["payment_method"] = "—"
+        if not p.get("rejection_reason"):
+            p["rejection_reason"] = "—"
+        if not p.get("transaction_reference"):
+            p["transaction_reference"] = "—"
     
     return jsonify({
         "data": data,
@@ -1868,6 +2081,22 @@ def admin_member_renewal_reminder(id):
 
 # ================= SETTINGS & QR ENDPOINTS =================
 
+@app.route("/api/admin/settings/regenerate-qr-token", methods=["POST"])
+@login_required("owner")
+def admin_regenerate_qr_token():
+    gym_id = session["gym_id"]
+    new_token = f"gymos-token-{uuid.uuid4().hex[:10]}"
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('qr_token', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (new_token, gym_id))
+    cursor.execute("UPDATE gyms SET qr_code_token = ? WHERE id = ?", (new_token, gym_id))
+    log_action(cursor, "qr_token_regenerated", "gym", gym_id, {"new_token": new_token})
+    conn.commit()
+    conn.close()
+
+    broadcast_event("GYM_SETTINGS_UPDATED", {"qr_token": new_token}, gym_id)
+    return jsonify({"success": True, "qr_token": new_token})
+
 @app.route("/api/admin/settings", methods=["GET", "POST"])
 @login_required("owner")
 def admin_settings():
@@ -1880,7 +2109,7 @@ def admin_settings():
         gym_phone = data.get("gym_phone")
         gym_address = data.get("gym_address")
         qr_token = data.get("qr_token")
-        gym_image_url = data.get("gym_image_url")
+        gym_logo = data.get("gym_logo") or data.get("gym_image_url") or ""
         gym_code = (data.get("gym_code") or "").strip().upper() or None
 
         if not gym_name:
@@ -1902,30 +2131,53 @@ def admin_settings():
             cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_address', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_address, gym_id))
         if qr_token:
             cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('qr_token', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (qr_token, gym_id))
-        if gym_image_url is not None:
-            cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_image_url', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_image_url, gym_id))
+        
+        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_logo', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_logo, gym_id))
+        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_image_url', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_logo, gym_id))
 
         # Update gyms table
-        cursor.execute("UPDATE gyms SET name = ?, phone = ?, address = ?, qr_code_token = ? WHERE id = ?", (gym_name, gym_phone, gym_address, qr_token, gym_id))
+        try:
+            cursor.execute("UPDATE gyms SET name = ?, phone = ?, address = ?, logo_url = ? WHERE id = ?", (gym_name, gym_phone, gym_address, gym_logo, gym_id))
+        except Exception:
+            cursor.execute("UPDATE gyms SET name = ?, phone = ?, address = ? WHERE id = ?", (gym_name, gym_phone, gym_address, gym_id))
+
+        if qr_token:
+            cursor.execute("UPDATE gyms SET qr_code_token = ? WHERE id = ?", (qr_token, gym_id))
         if gym_code:
             cursor.execute("UPDATE gyms SET gym_code = ? WHERE id = ?", (gym_code, gym_id))
 
         log_action(cursor, "settings_updated", "gym", gym_id, {
             "gym_name": gym_name, "gym_phone": gym_phone, "gym_address": gym_address,
-            "qr_token_changed": bool(qr_token), "gym_code": gym_code
+            "gym_code": gym_code
         })
         conn.commit()
         conn.close()
 
-        broadcast_event("GYM_SETTINGS_UPDATED", {"gym_name": gym_name}, gym_id)
+        broadcast_event("GYM_SETTINGS_UPDATED", {"gym_name": gym_name, "gym_logo": gym_logo, "qr_token": qr_token}, gym_id)
         return jsonify({"success": True})
 
     # GET method
     cursor.execute("SELECT * FROM settings WHERE gym_id = ?", (session["gym_id"],))
     settings = {row["key"]: row["value"] for row in cursor.fetchall()}
-    cursor.execute("SELECT gym_code FROM gyms WHERE id = ?", (session["gym_id"],))
-    gym_row = cursor.fetchone()
-    settings["gym_code"] = gym_row["gym_code"] if gym_row else None
+    try:
+        cursor.execute("SELECT gym_code, logo_url FROM gyms WHERE id = ?", (session["gym_id"],))
+        gym_row = cursor.fetchone()
+        if gym_row:
+            settings["gym_code"] = gym_row["gym_code"]
+            if gym_row["logo_url"]:
+                settings["gym_logo"] = gym_row["logo_url"]
+                settings["gym_image_url"] = gym_row["logo_url"]
+    except Exception:
+        cursor.execute("SELECT gym_code FROM gyms WHERE id = ?", (session["gym_id"],))
+        gym_row = cursor.fetchone()
+        if gym_row:
+            settings["gym_code"] = gym_row["gym_code"]
+
+    if "gym_logo" not in settings and "gym_image_url" in settings:
+        settings["gym_logo"] = settings["gym_image_url"]
+    elif "gym_image_url" not in settings and "gym_logo" in settings:
+        settings["gym_image_url"] = settings["gym_logo"]
+
     conn.close()
     return jsonify(settings)
 
@@ -2048,13 +2300,17 @@ def admin_manual_check_in(id):
 
     # Check if already checked in today
     cursor.execute("""
-        SELECT id FROM attendance
+        SELECT id, check_out_time FROM attendance
         WHERE member_id = ? AND status = 'success' AND check_in_time::date = ?
         ORDER BY check_in_time DESC LIMIT 1
     """, (id, today_str))
-    if cursor.fetchone():
+    att_today = cursor.fetchone()
+    if att_today:
         conn.close()
-        return jsonify({"error": "Member has already logged attendance today."}), 409
+        if att_today["check_out_time"] is None:
+            return jsonify({"error": "This member is already checked in."}), 409
+        else:
+            return jsonify({"error": "This member has already completed attendance today."}), 409
 
     try:
         cursor.execute("""
@@ -2107,7 +2363,7 @@ def admin_manual_check_out(id):
     att = cursor.fetchone()
     if not att:
         conn.close()
-        return jsonify({"error": "No active check-in session found for today."}), 400
+        return jsonify({"error": "This member is not currently checked in."}), 400
         
     try:
         cursor.execute("""
@@ -2172,16 +2428,47 @@ def member_submit_payment(id):
         conn.close()
         return jsonify({"error": "Payment already completed"}), 400
         
+    method = data.get("payment_method", "online")
+    date = data.get("payment_date")
+    receipt_url = data.get("receipt_file_url")
+    receipt_type = data.get("receipt_file_type")
+
     try:
-        # Update payment status to pending_approval and store receipt_number
+        # Auto-generate receipt number
+        receipt_no = generate_receipt_number(cursor, session["gym_id"])
+        
+        # Update payment status to pending_approval and store details
         cursor.execute("""
             UPDATE payments 
-            SET status = 'pending_approval', receipt_number = ? 
+            SET status = 'pending_approval', 
+                receipt_number = ?, 
+                transaction_reference = ?,
+                payment_method = ?, 
+                payment_date = ?, 
+                receipt_file_url = ?, 
+                receipt_file_type = ?,
+                updated_at = (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
             WHERE id = ?
-        """, (tx_ref, id))
+        """, (receipt_no, tx_ref, method, date, receipt_url, receipt_type, id))
         
         cursor.execute("SELECT user_id, first_name, last_name FROM members WHERE id = ?", (m_id,))
         m = cursor.fetchone()
+
+        # Notify the Gym Owner
+        cursor.execute("SELECT id FROM users WHERE role = 'owner' AND gym_id = ?", (session["gym_id"],))
+        owners = cursor.fetchall()
+        for owner in owners:
+            cursor.execute("""
+                INSERT INTO notifications (user_id, type, message)
+                VALUES (?, 'payment', ?)
+            """, (owner["id"], f"New payment of ₹{pay['amount']} submitted by {m['first_name']} {m['last_name']} and is awaiting review."))
+
+        # Notify the Member
+        if m and m["user_id"]:
+            cursor.execute("""
+                INSERT INTO notifications (user_id, type, message)
+                VALUES (?, 'payment', 'Your payment has been submitted and is awaiting review.')
+            """, (m["user_id"],))
 
         log_action(cursor, "payment_submitted_by_member", "payment", id, {
             "member_id": m_id, "amount": pay["amount"], "transaction_reference": tx_ref
@@ -2236,7 +2523,15 @@ def member_purchase_plan():
     end_date = now_ist() + timedelta(days=plan["duration_months"] * 30)
     end_date_str = end_date.strftime("%Y-%m-%d")
 
+    method = data.get("payment_method", "online")
+    date = data.get("payment_date")
+    receipt_url = data.get("receipt_file_url")
+    receipt_type = data.get("receipt_file_type")
+
     try:
+        # Auto-generate receipt number
+        receipt_no = generate_receipt_number(cursor, gym_id)
+
         # Create a new membership with status suspended (awaits payment approval)
         cursor.execute("""
             INSERT INTO memberships (member_id, plan_id, status, start_date, end_date, price_paid, gym_id)
@@ -2246,10 +2541,26 @@ def member_purchase_plan():
 
         # Create payment request in pending_approval status
         cursor.execute("""
-            INSERT INTO payments (membership_id, member_id, amount, status, receipt_number, gym_id)
-            VALUES (?, ?, ?, 'pending_approval', ?, ?)
-        """, (membership_id, m_id, plan["price"], tx_ref, gym_id))
+            INSERT INTO payments (membership_id, member_id, amount, status, receipt_number, transaction_reference, payment_method, payment_date, receipt_file_url, receipt_file_type, plan_id, gym_id)
+            VALUES (?, ?, ?, 'pending_approval', ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (membership_id, m_id, plan["price"], receipt_no, tx_ref, method, date, receipt_url, receipt_type, plan_id, gym_id))
         payment_id = cursor.lastrowid
+
+        # Notify the Gym Owner
+        cursor.execute("SELECT id FROM users WHERE role = 'owner' AND gym_id = ?", (gym_id,))
+        owners = cursor.fetchall()
+        for owner in owners:
+            cursor.execute("""
+                INSERT INTO notifications (user_id, type, message)
+                VALUES (?, 'payment', ?)
+            """, (owner["id"], f"New payment of ₹{plan['price']} submitted by {mbr['first_name']} {mbr['last_name']} and is awaiting review."))
+
+        # Notify the Member
+        if mbr and mbr["user_id"]:
+            cursor.execute("""
+                INSERT INTO notifications (user_id, type, message)
+                VALUES (?, 'payment', 'Your payment has been submitted and is awaiting review.')
+            """, (mbr["user_id"],))
 
         log_action(cursor, "plan_purchased_by_member", "payment", payment_id, {
             "member_id": m_id, "plan_id": plan_id, "plan_name": plan["name"],
@@ -2289,15 +2600,47 @@ def admin_approve_payment(id):
     
     try:
         # Update payment status
-        cursor.execute(
-            "UPDATE payments SET status = 'paid', payment_date = ? WHERE id = ?",
-            (pay_time, id)
-        )
+        cursor.execute("""
+            UPDATE payments 
+            SET status = 'paid', 
+                payment_date = ?, 
+                reviewed_by = ?, 
+                review_date = ?,
+                updated_at = (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
+            WHERE id = ?
+        """, (pay_time, session["user_id"], pay_time, id))
         
-        # Update associated membership to active
+        # Update associated membership to active (handling renewal extension)
         membership_id = pay["membership_id"]
         if membership_id:
-            cursor.execute("UPDATE memberships SET status = 'active' WHERE id = ?", (membership_id,))
+            cursor.execute("SELECT plan_id, member_id, start_date, end_date FROM memberships WHERE id = ?", (membership_id,))
+            new_m = cursor.fetchone()
+            if new_m:
+                # Find if there is another active membership ending in the future
+                cursor.execute("""
+                    SELECT end_date FROM memberships 
+                    WHERE member_id = ? AND status = 'active' AND id != ? AND end_date >= ?
+                    ORDER BY end_date DESC LIMIT 1
+                """, (pay["member_id"], membership_id, now_ist().strftime("%Y-%m-%d")))
+                existing_active = cursor.fetchone()
+                if existing_active:
+                    # Extend! Start date is the end date of the existing one, and new end date is extended by the duration.
+                    prev_end = datetime.strptime(existing_active["end_date"], "%Y-%m-%d")
+                    # Calculate duration in days of this new plan
+                    cursor.execute("SELECT duration_months FROM plans WHERE id = ?", (new_m["plan_id"],))
+                    pl = cursor.fetchone()
+                    duration_days = (pl["duration_months"] * 30) if pl else 30
+                    
+                    new_start_str = existing_active["end_date"]
+                    new_end_str = (prev_end + timedelta(days=duration_days)).strftime("%Y-%m-%d")
+                    
+                    cursor.execute("""
+                        UPDATE memberships 
+                        SET status = 'active', start_date = ?, end_date = ? 
+                        WHERE id = ?
+                    """, (new_start_str, new_end_str, membership_id))
+                else:
+                    cursor.execute("UPDATE memberships SET status = 'active' WHERE id = ?", (membership_id,))
             
         # Set member status to active
         cursor.execute("UPDATE members SET status = 'active' WHERE id = ?", (pay["member_id"],))
@@ -2307,8 +2650,8 @@ def admin_approve_payment(id):
         m = cursor.fetchone()
         if m:
             cursor.execute(
-                "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'renewal', ?, ?)",
-                (m["user_id"], f"Payment of ₹{pay['amount']} has been approved! Your membership is active.", session["gym_id"])
+                "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'payment', 'Your membership payment has been approved.', ?)",
+                (m["user_id"], session["gym_id"])
             )
 
         log_action(cursor, "payment_approved", "payment", id, {
@@ -2330,6 +2673,9 @@ def admin_approve_payment(id):
 @app.route("/api/admin/payments/<int:id>/reject", methods=["POST"])
 @login_required("owner")
 def admin_reject_payment(id):
+    data = request.get_json() or {}
+    reason = data.get("rejection_reason", "Receipt details are unclear.")
+    
     conn = database.get_db_connection()
     cursor = conn.cursor()
 
@@ -2340,30 +2686,43 @@ def admin_reject_payment(id):
         return jsonify({"error": "Payment not found"}), 404
         
     try:
-        # Reset payment status to pending and clear transaction reference
-        cursor.execute(
-            "UPDATE payments SET status = 'pending', receipt_number = NULL WHERE id = ?",
-            (id,)
-        )
+        # Update status to 'rejected' and save rejection reason, and also mark reviewed_by and review_date
+        review_time = now_ist().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("""
+            UPDATE payments 
+            SET status = 'rejected', 
+                rejection_reason = ?, 
+                reviewed_by = ?, 
+                review_date = ?,
+                updated_at = (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
+            WHERE id = ?
+        """, (reason, session["user_id"], review_time, id))
         
+        # Update associated membership to 'rejected'
+        membership_id = pay["membership_id"]
+        if membership_id:
+            cursor.execute("UPDATE memberships SET status = 'rejected' WHERE id = ?", (membership_id,))
+            
         # Notify member
         cursor.execute("SELECT user_id, first_name FROM members WHERE id = ?", (pay["member_id"],))
         m = cursor.fetchone()
         if m:
+            msg = f"Your payment was rejected. Reason: {reason}. Please review the reason and upload a new receipt."
             cursor.execute(
                 "INSERT INTO notifications (user_id, type, message, gym_id) VALUES (?, 'payment', ?, ?)",
-                (m["user_id"], f"Your payment request for ₹{pay['amount']} was rejected by the owner. Please verify details.", session["gym_id"])
+                (m["user_id"], msg, session["gym_id"])
             )
 
         log_action(cursor, "payment_rejected", "payment", id, {
-            "member_id": pay["member_id"], "amount": pay["amount"]
+            "member_id": pay["member_id"], "amount": pay["amount"], "rejection_reason": reason
         })
         conn.commit()
 
         broadcast_event("PAYMENT_REJECTED", {
             "id": id,
             "member_id": pay["member_id"],
-            "amount": pay["amount"]
+            "amount": pay["amount"],
+            "rejection_reason": reason
         }, session["gym_id"])
         return jsonify({"success": True})
     except Exception as e:
@@ -2528,12 +2887,37 @@ def member_dashboard():
 
     # Member notification center
     user_id = session["user_id"]
-    cursor.execute("SELECT * FROM notifications WHERE user_id = ? AND read_status = 0 ORDER BY created_at DESC LIMIT 10", (user_id,))
+    cursor.execute("SELECT * FROM notifications WHERE user_id = ? AND gym_id = ? ORDER BY created_at DESC LIMIT 50", (user_id, session["gym_id"]))
     notifs = [dict(r) for r in cursor.fetchall()]
     
     # Payment status
-    cursor.execute("SELECT * FROM payments WHERE member_id = ? ORDER BY created_at DESC", (m_id,))
+    cursor.execute("""
+        SELECT p.*, pl.name as plan_name 
+        FROM payments p
+        LEFT JOIN plans pl ON p.plan_id = pl.id
+        WHERE p.member_id = ? ORDER BY p.created_at DESC
+    """, (m_id,))
     billing_history = [dict(r) for r in cursor.fetchall()]
+    
+    status_map_ui = {
+        "paid": "Approved",
+        "pending": "Pending",
+        "pending_approval": "Pending Approval",
+        "rejected": "Rejected",
+        "overdue": "Overdue"
+    }
+    for b in billing_history:
+        b["status"] = status_map_ui.get(b["status"], b["status"])
+        if not b.get("due_date"):
+            b["due_date"] = "—"
+        if not b.get("payment_date"):
+            b["payment_date"] = "—"
+        if not b.get("payment_method"):
+            b["payment_method"] = "—"
+        if not b.get("rejection_reason"):
+            b["rejection_reason"] = "—"
+        if not b.get("transaction_reference"):
+            b["transaction_reference"] = "—"
     
     # Monthly Rank
     cursor.execute("""
@@ -2623,15 +3007,16 @@ def member_activity_data():
         """, (m_id,))
         logs = [dict(r) for r in cursor.fetchall()]
         
-        # 3. Calculate Streaks (Current & Longest)
+        # 3. Calculate Streaks (Current & Longest) - Cross-compatible
         cursor.execute("""
-            SELECT check_in_time::date::text as check_date
+            SELECT check_in_time
             FROM attendance
             WHERE member_id = ? AND status = 'success'
-            GROUP BY check_date
-            ORDER BY check_date DESC
+            ORDER BY check_in_time DESC
         """, (m_id,))
-        checkin_dates = [datetime.strptime(row[0], "%Y-%m-%d").date() for row in cursor.fetchall()]
+        raw_rows = cursor.fetchall()
+        checkin_dates_set = sorted(list(set(r[0][:10] for r in raw_rows if r[0])), reverse=True)
+        checkin_dates = [datetime.strptime(d, "%Y-%m-%d").date() for d in checkin_dates_set]
         
         today = now_ist().date()
         yesterday = today - timedelta(days=1)
@@ -2640,14 +3025,9 @@ def member_activity_data():
         if checkin_dates:
             if checkin_dates[0] == today or checkin_dates[0] == yesterday:
                 streak = 1
-                idx = 0
-                while idx + 1 < len(checkin_dates):
-                    diff = (checkin_dates[idx] - checkin_dates[idx+1]).days
-                    if diff == 1:
+                for i in range(len(checkin_dates) - 1):
+                    if (checkin_dates[i] - checkin_dates[i+1]).days == 1:
                         streak += 1
-                        idx += 1
-                    elif diff == 0:
-                        idx += 1
                     else:
                         break
                         
@@ -2669,80 +3049,116 @@ def member_activity_data():
         max_seconds = 0
         durations = []
         for l in logs:
-            if l["check_out_time"]:
-                in_t = datetime.strptime(l["check_in_time"], "%Y-%m-%d %H:%M:%S")
-                out_t = datetime.strptime(l["check_out_time"], "%Y-%m-%d %H:%M:%S")
-                diff = (out_t - in_t).total_seconds()
-                durations.append(diff)
-                total_seconds += diff
-                if diff > max_seconds:
-                    max_seconds = diff
+            if l.get("check_out_time"):
+                try:
+                    in_t = datetime.strptime(l["check_in_time"][:19], "%Y-%m-%d %H:%M:%S")
+                    out_t = datetime.strptime(l["check_out_time"][:19], "%Y-%m-%d %H:%M:%S")
+                    diff = max(0, (out_t - in_t).total_seconds())
+                    durations.append(diff)
+                    total_seconds += diff
+                    if diff > max_seconds:
+                        max_seconds = diff
+                except Exception:
+                    pass
                     
         total_hours = round(total_seconds / 3600.0, 1)
+        total_hrs_int = int(total_seconds // 3600)
+        total_mins_int = int((total_seconds % 3600) // 60)
+        if total_hrs_int > 0:
+            total_workout_formatted = f"{total_hrs_int}h {total_mins_int}m" if total_mins_int > 0 else f"{total_hrs_int}h"
+        else:
+            total_workout_formatted = f"{total_mins_int}m" if total_mins_int > 0 else "0m"
+
         avg_minutes = int((total_seconds / len(durations)) / 60) if durations else 0
         max_minutes = int(max_seconds / 60)
         
-        # 5. Period counters
+        # 5. Period counters - Portable SQL
+        gym_id = session["gym_id"]
+        week_start_str = (today - timedelta(days=6)).strftime("%Y-%m-%d 00:00:00")
+        month_start_str = (today - timedelta(days=29)).strftime("%Y-%m-%d 00:00:00")
+        year_start_str = today.strftime("%Y-01-01 00:00:00")
+
         cursor.execute("""
-            SELECT COUNT(DISTINCT check_in_time::date)
+            SELECT COUNT(DISTINCT SUBSTR(check_in_time, 1, 10))
             FROM attendance
-            WHERE member_id = ? AND status = 'success' AND check_in_time::date >= CURRENT_DATE - INTERVAL '6 days'
-        """, (m_id,))
+            WHERE member_id = ? AND status = 'success' AND check_in_time >= ?
+        """, (m_id, week_start_str))
         weekly_visits = cursor.fetchone()[0]
 
         cursor.execute("""
-            SELECT COUNT(DISTINCT check_in_time::date)
+            SELECT COUNT(DISTINCT SUBSTR(check_in_time, 1, 10))
             FROM attendance
-            WHERE member_id = ? AND status = 'success' AND TO_CHAR(check_in_time::timestamp, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
-        """, (m_id,))
+            WHERE member_id = ? AND status = 'success' AND check_in_time >= ?
+        """, (m_id, month_start_str))
         monthly_visits = cursor.fetchone()[0]
 
         cursor.execute("""
-            SELECT COUNT(DISTINCT check_in_time::date)
+            SELECT COUNT(DISTINCT SUBSTR(check_in_time, 1, 10))
             FROM attendance
-            WHERE member_id = ? AND status = 'success' AND TO_CHAR(check_in_time::timestamp, 'YYYY') = TO_CHAR(CURRENT_DATE, 'YYYY')
-        """, (m_id,))
+            WHERE member_id = ? AND status = 'success' AND check_in_time >= ?
+        """, (m_id, year_start_str))
         yearly_visits = cursor.fetchone()[0]
 
-        # 6. Ranks (Weekly, Monthly, All-time)
+        # 6. Single Source of Truth Leaderboards & Ranks
+        # All Time
         cursor.execute("""
-            WITH ranks AS (
-                SELECT member_id, COUNT(id) as cnt,
-                       RANK() OVER (ORDER BY COUNT(id) DESC) as rnk
-                FROM attendance
-                WHERE gym_id = ? AND status = 'success' AND check_in_time::date >= CURRENT_DATE - INTERVAL '6 days'
-                GROUP BY member_id
-            )
-            SELECT rnk FROM ranks WHERE member_id = ?
-        """, (session["gym_id"], m_id))
-        w_rnk_row = cursor.fetchone()
-        weekly_rank = w_rnk_row[0] if w_rnk_row else 0
+            SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
+            FROM members m
+            LEFT JOIN attendance a ON m.id = a.member_id AND a.status = 'success'
+            WHERE m.gym_id = ? AND m.status NOT IN ('pending', 'rejected')
+            GROUP BY m.id, m.first_name, m.last_name, m.profile_photo
+            ORDER BY checkin_count DESC, m.first_name ASC, m.id ASC
+        """, (gym_id,))
+        all_members_all_time = [dict(r) for r in cursor.fetchall()]
+        leaderboard_all = []
+        all_time_rank = 0
+        for idx, u in enumerate(all_members_all_time):
+            u["rank"] = idx + 1
+            u["points"] = u["checkin_count"] * 100
+            if u["id"] == m_id:
+                all_time_rank = u["rank"]
+            if idx < 10:
+                leaderboard_all.append(u)
 
+        # Monthly
         cursor.execute("""
-            WITH ranks AS (
-                SELECT member_id, COUNT(id) as cnt,
-                       RANK() OVER (ORDER BY COUNT(id) DESC) as rnk
-                FROM attendance
-                WHERE gym_id = ? AND status = 'success' AND check_in_time::date >= CURRENT_DATE - INTERVAL '29 days'
-                GROUP BY member_id
-            )
-            SELECT rnk FROM ranks WHERE member_id = ?
-        """, (session["gym_id"], m_id))
-        m_rnk_row = cursor.fetchone()
-        monthly_rank = m_rnk_row[0] if m_rnk_row else 0
+            SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
+            FROM members m
+            LEFT JOIN attendance a ON m.id = a.member_id AND a.status = 'success' AND a.check_in_time >= ?
+            WHERE m.gym_id = ? AND m.status NOT IN ('pending', 'rejected')
+            GROUP BY m.id, m.first_name, m.last_name, m.profile_photo
+            ORDER BY checkin_count DESC, m.first_name ASC, m.id ASC
+        """, (month_start_str, gym_id))
+        all_members_monthly = [dict(r) for r in cursor.fetchall()]
+        leaderboard_monthly = []
+        monthly_rank = 0
+        for idx, u in enumerate(all_members_monthly):
+            u["rank"] = idx + 1
+            u["points"] = u["checkin_count"] * 100
+            if u["id"] == m_id:
+                monthly_rank = u["rank"]
+            if idx < 10:
+                leaderboard_monthly.append(u)
 
+        # Weekly
         cursor.execute("""
-            WITH ranks AS (
-                SELECT member_id, COUNT(id) as cnt,
-                       RANK() OVER (ORDER BY COUNT(id) DESC) as rnk
-                FROM attendance
-                WHERE gym_id = ? AND status = 'success'
-                GROUP BY member_id
-            )
-            SELECT rnk FROM ranks WHERE member_id = ?
-        """, (session["gym_id"], m_id))
-        a_rnk_row = cursor.fetchone()
-        all_time_rank = a_rnk_row[0] if a_rnk_row else 0
+            SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
+            FROM members m
+            LEFT JOIN attendance a ON m.id = a.member_id AND a.status = 'success' AND a.check_in_time >= ?
+            WHERE m.gym_id = ? AND m.status NOT IN ('pending', 'rejected')
+            GROUP BY m.id, m.first_name, m.last_name, m.profile_photo
+            ORDER BY checkin_count DESC, m.first_name ASC, m.id ASC
+        """, (week_start_str, gym_id))
+        all_members_weekly = [dict(r) for r in cursor.fetchall()]
+        leaderboard_weekly = []
+        weekly_rank = 0
+        for idx, u in enumerate(all_members_weekly):
+            u["rank"] = idx + 1
+            u["points"] = u["checkin_count"] * 100
+            if u["id"] == m_id:
+                weekly_rank = u["rank"]
+            if idx < 10:
+                leaderboard_weekly.append(u)
         
         # Points (100 * checkin count)
         points = len(logs) * 100
@@ -2751,56 +3167,13 @@ def member_activity_data():
         today_str = now_ist().strftime("%Y-%m-%d")
         cursor.execute("""
             SELECT check_in_time, check_out_time FROM attendance
-            WHERE member_id = ? AND status = 'success' AND check_in_time::date = ?
+            WHERE member_id = ? AND status = 'success' AND SUBSTR(check_in_time, 1, 10) = ?
             ORDER BY check_in_time DESC LIMIT 1
         """, (m_id, today_str))
         today_att = cursor.fetchone()
         today_status = "Absent"
         if today_att:
             today_status = "Checked Out" if today_att["check_out_time"] else "Checked In"
-            
-        # 8. Leaderboards Top 10 lists
-        # Weekly
-        cursor.execute("""
-            SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
-            FROM members m
-            JOIN attendance a ON m.id = a.member_id
-            WHERE m.gym_id = ? AND a.status = 'success' AND a.check_in_time::date >= CURRENT_DATE - INTERVAL '6 days'
-            GROUP BY m.id
-            ORDER BY checkin_count DESC, m.first_name ASC LIMIT 10
-        """, (session["gym_id"],))
-        leaderboard_weekly = [dict(r) for r in cursor.fetchall()]
-        for idx, u in enumerate(leaderboard_weekly):
-            u["rank"] = idx + 1
-            u["points"] = u["checkin_count"] * 100
-
-        # Monthly
-        cursor.execute("""
-            SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
-            FROM members m
-            JOIN attendance a ON m.id = a.member_id
-            WHERE m.gym_id = ? AND a.status = 'success' AND a.check_in_time::date >= CURRENT_DATE - INTERVAL '29 days'
-            GROUP BY m.id
-            ORDER BY checkin_count DESC, m.first_name ASC LIMIT 10
-        """, (session["gym_id"],))
-        leaderboard_monthly = [dict(r) for r in cursor.fetchall()]
-        for idx, u in enumerate(leaderboard_monthly):
-            u["rank"] = idx + 1
-            u["points"] = u["checkin_count"] * 100
-
-        # All Time
-        cursor.execute("""
-            SELECT m.id, m.first_name, m.last_name, m.profile_photo, COUNT(a.id) as checkin_count
-            FROM members m
-            JOIN attendance a ON m.id = a.member_id
-            WHERE m.gym_id = ? AND a.status = 'success'
-            GROUP BY m.id
-            ORDER BY checkin_count DESC, m.first_name ASC LIMIT 10
-        """, (session["gym_id"],))
-        leaderboard_all = [dict(r) for r in cursor.fetchall()]
-        for idx, u in enumerate(leaderboard_all):
-            u["rank"] = idx + 1
-            u["points"] = u["checkin_count"] * 100
             
         # 9. Smart Insights
         insights = []
@@ -2816,12 +3189,13 @@ def member_activity_data():
         insights.append(f"Your longest check-in streak is {longest_streak} days.")
         
         # Relative comparison with last month
+        last_month_start_str = (today - timedelta(days=60)).strftime("%Y-%m-%d 00:00:00")
         cursor.execute("""
-            SELECT COUNT(DISTINCT check_in_time::date)
+            SELECT COUNT(DISTINCT SUBSTR(check_in_time, 1, 10))
             FROM attendance
             WHERE member_id = ? AND status = 'success'
-              AND TO_CHAR(check_in_time::timestamp, 'YYYY-MM') = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM')
-        """, (m_id,))
+              AND check_in_time >= ? AND check_in_time < ?
+        """, (m_id, last_month_start_str, month_start_str))
         last_month_count = cursor.fetchone()[0] or 0
         if monthly_visits > last_month_count:
             insights.append("You're more active this month than last month!")
@@ -2888,37 +3262,8 @@ def member_activity_data():
             }
         ]
         
-        # 11. Chart data details (visits by day of week and weekly hours)
-        cursor.execute("""
-            SELECT EXTRACT(DOW FROM check_in_time::timestamp)::int as dow, COUNT(id) as cnt
-            FROM attendance
-            WHERE member_id = ? AND status = 'success' AND TO_CHAR(check_in_time::timestamp, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
-            GROUP BY dow
-        """, (m_id,))
-        dow_counts = {int(r["dow"]): r["cnt"] for r in cursor.fetchall()}
-        visits_by_dow = [dow_counts.get(i, 0) for i in range(7)]
-        
-        # Workout hours by week (last 4 weeks)
-        workout_hours_by_week = []
-        for w in range(4):
-            offset_start = w * 7
-            offset_end = (w + 1) * 7
-            cursor.execute(f"""
-                SELECT check_in_time, check_out_time
-                FROM attendance
-                WHERE member_id = ? AND status = 'success'
-                  AND check_in_time::date <= CURRENT_DATE - INTERVAL '{offset_start} days'
-                  AND check_in_time::date > CURRENT_DATE - INTERVAL '{offset_end} days'
-            """, (m_id,))
-            week_logs = cursor.fetchall()
-            week_seconds = 0
-            for wl in week_logs:
-                if wl["check_out_time"]:
-                    in_t = datetime.strptime(wl["check_in_time"], "%Y-%m-%d %H:%M:%S")
-                    out_t = datetime.strptime(wl["check_out_time"], "%Y-%m-%d %H:%M:%S")
-                    week_seconds += (out_t - in_t).total_seconds()
-            workout_hours_by_week.append(round(week_seconds / 3600.0, 1))
-        workout_hours_by_week.reverse()
+        visits_by_dow = [0] * 7
+        workout_hours_by_week = [0.0] * 4
 
         return jsonify({
             "first_name": mb["first_name"],
@@ -2928,6 +3273,7 @@ def member_activity_data():
             "streak": streak,
             "longest_streak": longest_streak,
             "total_workout_hours": total_hours,
+            "total_workout_formatted": total_workout_formatted,
             "avg_duration_minutes": avg_minutes,
             "max_duration_minutes": max_minutes,
             "weekly_visits": weekly_visits,
@@ -2951,7 +3297,6 @@ def member_activity_data():
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
-
 @app.route("/api/member/qr-token", methods=["GET"])
 @login_required("member")
 def member_get_qr_token():
@@ -2961,6 +3306,143 @@ def member_get_qr_token():
     row = cursor.fetchone()
     conn.close()
     return jsonify({"qr_token": row["value"] if row else None})
+
+@app.route("/api/member/attendance/active", methods=["GET"])
+@login_required("member")
+def member_get_active_attendance():
+    m_id = session.get("member_id")
+    if not m_id:
+        return jsonify({"error": "Member session not found"}), 401
+    
+    gym_id = session["gym_id"]
+    today_str = now_ist().strftime("%Y-%m-%d")
+    
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    
+    # 1. Check for currently active session (checked in, not checked out yet)
+    cursor.execute("""
+        SELECT id, check_in_time, check_out_time, attendance_date, attendance_state, gym_id
+        FROM attendance
+        WHERE member_id = ? AND status = 'success' AND check_in_time::date = ? AND check_out_time IS NULL
+        ORDER BY check_in_time DESC LIMIT 1
+    """, (m_id, today_str))
+    active_att = cursor.fetchone()
+    
+    if active_att:
+        conn.close()
+        return jsonify({
+            "state": "checked_in",
+            "server_time": now_ist().strftime("%Y-%m-%d %H:%M:%S"),
+            "session": {
+                "id": active_att["id"],
+                "check_in_time": active_att["check_in_time"],
+                "attendance_date": active_att["attendance_date"],
+                "gym_id": active_att["gym_id"]
+            }
+        })
+        
+    # 2. Check if member completed a session today
+    cursor.execute("""
+        SELECT id, check_in_time, check_out_time, attendance_date, attendance_state, gym_id
+        FROM attendance
+        WHERE member_id = ? AND status = 'success' AND check_in_time::date = ? AND check_out_time IS NOT NULL
+        ORDER BY check_out_time DESC LIMIT 1
+    """, (m_id, today_str))
+    completed_att = cursor.fetchone()
+    
+    conn.close()
+    
+    if completed_att:
+        in_t = datetime.strptime(completed_att["check_in_time"], "%Y-%m-%d %H:%M:%S")
+        out_t = datetime.strptime(completed_att["check_out_time"], "%Y-%m-%d %H:%M:%S")
+        diff = int((out_t - in_t).total_seconds() / 60)
+        hours = diff // 60
+        mins = diff % 60
+        duration_str = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"
+        
+        return jsonify({
+            "state": "completed",
+            "server_time": now_ist().strftime("%Y-%m-%d %H:%M:%S"),
+            "session": {
+                "id": completed_att["id"],
+                "check_in_time": completed_att["check_in_time"],
+                "check_out_time": completed_att["check_out_time"],
+                "duration": duration_str,
+                "attendance_date": completed_att["attendance_date"]
+            }
+        })
+        
+    return jsonify({
+        "state": "not_checked_in",
+        "server_time": now_ist().strftime("%Y-%m-%d %H:%M:%S"),
+        "session": None
+    })
+
+@app.route("/api/member/check-out", methods=["POST"])
+@login_required("member")
+def member_direct_check_out():
+    m_id = session.get("member_id")
+    gym_id = session["gym_id"]
+    today_str = now_ist().strftime("%Y-%m-%d")
+    now_time_str = now_ist().strftime("%Y-%m-%d %H:%M:%S")
+    
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT first_name, last_name FROM members WHERE id = ?", (m_id,))
+    mbr = cursor.fetchone()
+    if not mbr:
+        conn.close()
+        return jsonify({"error": "Member records not found."}), 404
+        
+    cursor.execute("""
+        SELECT id, check_in_time FROM attendance
+        WHERE member_id = ? AND status = 'success' AND check_in_time::date = ? AND check_out_time IS NULL
+        ORDER BY check_in_time DESC LIMIT 1
+    """, (m_id, today_str))
+    active_att = cursor.fetchone()
+    
+    if not active_att:
+        conn.close()
+        return jsonify({"error": "No active check-in session found to check out."}), 400
+        
+    try:
+        cursor.execute("""
+            UPDATE attendance
+            SET check_out_time = ?, attendance_state = 'completed'
+            WHERE id = ?
+        """, (now_time_str, active_att["id"]))
+        conn.commit()
+        
+        in_t = datetime.strptime(active_att["check_in_time"], "%Y-%m-%d %H:%M:%S")
+        out_t = datetime.strptime(now_time_str, "%Y-%m-%d %H:%M:%S")
+        diff = int((out_t - in_t).total_seconds() / 60)
+        hours = diff // 60
+        mins = diff % 60
+        duration_str = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"
+        
+        fullname = f"{mbr['first_name']} {mbr['last_name']}"
+        broadcast_event("CHECKOUT_SUCCESS", {
+            "member_id": m_id,
+            "name": fullname,
+            "check_in": active_att["check_in_time"],
+            "check_out": now_time_str,
+            "duration": duration_str
+        }, gym_id)
+        
+        return jsonify({
+            "success": True,
+            "type": "checkout",
+            "check_in_time": active_att["check_in_time"],
+            "check_out_time": now_time_str,
+            "duration": duration_str,
+            "message": f"Great job today, {mbr['first_name']}!"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route("/api/member/check-in", methods=["POST"])
 @app.route("/api/member/attendance/scan", methods=["POST"])
@@ -3025,9 +3507,20 @@ def member_check_in():
         conn.close()
         return jsonify({"error": "Check-in failed. Membership has expired."}), 403
         
-    # Members can check in/out multiple times per day (e.g. a morning and an
-    # evening session) — only an *open* session (no check-out yet) blocks a
-    # fresh check-in and instead asks whether to check out.
+    # Check if they already completed a session today
+    cursor.execute("""
+        SELECT id FROM attendance
+        WHERE member_id = ? AND status = 'success' AND check_in_time::date = ? AND check_out_time IS NOT NULL
+        LIMIT 1
+    """, (m_id, today_str))
+    completed_today = cursor.fetchone()
+    if completed_today:
+        conn.close()
+        return jsonify({
+            "completed_today": True,
+            "message": "You have already completed your workout for today."
+        }), 409
+
     cursor.execute("""
         SELECT id, check_in_time, check_out_time, attendance_state FROM attendance
         WHERE member_id = ? AND status = 'success' AND check_in_time::date = ? AND check_out_time IS NULL
@@ -3107,12 +3600,150 @@ def member_check_in():
     finally:
         conn.close()
 
+@app.route("/api/member/emergency-contacts", methods=["GET", "POST"])
+@login_required("member")
+def member_emergency_contacts():
+    member_id, gym_id = session.get("member_id"), session.get("gym_id")
+    if not member_id or not gym_id:
+        return jsonify({"error": "Member session not found"}), 401
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if request.method == "GET":
+            # 1. Fetch Primary Contact from member profile
+            cursor.execute("SELECT emergency_contact_name, emergency_contact_number, emergency_contact_relation FROM members WHERE id = ? AND gym_id = ?", (member_id, gym_id))
+            m_row = cursor.fetchone()
+            contacts = []
+            if m_row and m_row["emergency_contact_name"] and m_row["emergency_contact_number"]:
+                contacts.append({
+                    "id": "primary",
+                    "name": m_row["emergency_contact_name"],
+                    "phone": m_row["emergency_contact_number"],
+                    "relationship": m_row["emergency_contact_relation"] or "",
+                    "contact_type": "primary"
+                })
+            # 2. Fetch Secondary Contact(s) from emergency_contacts table
+            cursor.execute("SELECT id, name, phone, relationship FROM emergency_contacts WHERE member_id = ? AND gym_id = ? AND contact_type = 'secondary' ORDER BY id ASC", (member_id, gym_id))
+            for row in cursor.fetchall():
+                contacts.append({
+                    "id": row["id"],
+                    "name": row["name"],
+                    "phone": row["phone"],
+                    "relationship": row["relationship"] or "",
+                    "contact_type": "secondary"
+                })
+            return jsonify({"success": True, "contacts": contacts})
+
+        data = request.get_json() or {}
+        name, phone = (data.get("name") or "").strip(), (data.get("phone") or "").strip()
+        relationship = (data.get("relationship") or "").strip() or None
+        if not name or not phone:
+            return jsonify({"error": "Contact name and phone number are required"}), 400
+
+        # Enforce max 2 contacts limit
+        cursor.execute("SELECT COUNT(*) FROM emergency_contacts WHERE member_id = ? AND gym_id = ? AND contact_type = 'secondary'", (member_id, gym_id))
+        sec_count = cursor.fetchone()[0]
+        if sec_count >= 1:
+            return jsonify({"error": "You can add a maximum of 2 emergency contacts."}), 400
+
+        cursor.execute("INSERT INTO emergency_contacts (member_id, gym_id, name, phone, relationship, contact_type) VALUES (?, ?, ?, ?, ?, 'secondary')", (member_id, gym_id, name, phone, relationship))
+        contact_id = cursor.lastrowid
+        log_action(cursor, "emergency_contact_added", "emergency_contact", contact_id, {"member_id": member_id}, gym_id)
+        conn.commit()
+        return jsonify({"success": True, "id": contact_id}), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": f"Unable to save emergency contact: {str(e)}"}), 500
+    finally:
+        conn.close()
+
+@app.route("/api/member/emergency-contacts/<contact_id>", methods=["PUT", "DELETE"])
+@login_required("member")
+def member_emergency_contact_detail(contact_id):
+    member_id, gym_id = session.get("member_id"), session.get("gym_id")
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if contact_id == "primary":
+            if request.method == "DELETE":
+                return jsonify({"error": "The primary contact cannot be deleted directly. Please replace it or promote the secondary contact."}), 400
+            
+            data = request.get_json() or {}
+            name, phone = (data.get("name") or "").strip(), (data.get("phone") or "").strip()
+            relationship = (data.get("relationship") or "").strip() or None
+            if not name or not phone:
+                return jsonify({"error": "Contact name and phone number are required"}), 400
+            
+            legacy = f"{name} / {phone}"
+            cursor.execute("""
+                UPDATE members 
+                SET emergency_contact = ?, emergency_contact_name = ?, emergency_contact_number = ?, emergency_contact_relation = ? 
+                WHERE id = ? AND gym_id = ?
+            """, (legacy, name, phone, relationship, member_id, gym_id))
+            action = "emergency_contact_updated"
+            logged_id = 0
+        else:
+            try:
+                c_id = int(contact_id)
+            except ValueError:
+                return jsonify({"error": "Invalid contact ID"}), 400
+            
+            cursor.execute("SELECT id FROM emergency_contacts WHERE id = ? AND member_id = ? AND gym_id = ? AND contact_type = 'secondary'", (c_id, member_id, gym_id))
+            if not cursor.fetchone():
+                return jsonify({"error": "Emergency contact not found"}), 404
+            
+            if request.method == "DELETE":
+                cursor.execute("DELETE FROM emergency_contacts WHERE id = ? AND member_id = ? AND gym_id = ? AND contact_type = 'secondary'", (c_id, member_id, gym_id))
+                action = "emergency_contact_deleted"
+            else:
+                data = request.get_json() or {}
+                name, phone = (data.get("name") or "").strip(), (data.get("phone") or "").strip()
+                relationship = (data.get("relationship") or "").strip() or None
+                if not name or not phone:
+                    return jsonify({"error": "Contact name and phone number are required"}), 400
+                cursor.execute("UPDATE emergency_contacts SET name = ?, phone = ?, relationship = ?, updated_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE id = ? AND member_id = ? AND gym_id = ? AND contact_type = 'secondary'", (name, phone, relationship, c_id, member_id, gym_id))
+                action = "emergency_contact_updated"
+            logged_id = c_id
+            
+        log_action(cursor, action, "emergency_contact", logged_id, {"member_id": member_id}, gym_id)
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": f"Unable to modify emergency contact: {str(e)}"}), 500
+    finally:
+        conn.close()
+
 @app.route("/api/member/profile", methods=["PUT"])
 @login_required("member")
 def member_update_profile():
     data = request.get_json() or {}
     phone = data.get("phone")
-    emergency = data.get("emergency_contact")
+    first_name = (data.get("first_name") or "").strip()
+    last_name = (data.get("last_name") or "").strip()
+    dob = data.get("dob")
+    emergency_name = data.get("emergency_contact_name")
+    emergency_number = data.get("emergency_contact_number")
+    emergency_relation = data.get("emergency_contact_relation")
+    legacy_emergency = data.get("emergency_contact")
+    
+    if (emergency_name is None and emergency_number is None) and legacy_emergency is not None:
+        if "/" in legacy_emergency:
+            parts = legacy_emergency.split("/", 1)
+            emergency_name = parts[0].strip()
+            emergency_number = parts[1].strip()
+        else:
+            emergency_name = ""
+            emergency_number = legacy_emergency.strip()
+            
+    if legacy_emergency is None:
+        if emergency_name and emergency_number:
+            legacy_emergency = f"{emergency_name} / {emergency_number}"
+        elif emergency_number:
+            legacy_emergency = emergency_number
+        else:
+            legacy_emergency = ""
+
     photo = data.get("profile_photo")
     m_id = session.get("member_id")
     
@@ -3125,13 +3756,161 @@ def member_update_profile():
     try:
         cursor.execute("""
             UPDATE members
-            SET phone = ?, emergency_contact = ?, profile_photo = ?
-            WHERE id = ?
-        """, (phone, emergency, photo, m_id))
+            SET first_name = COALESCE(NULLIF(?, ''), first_name),
+                last_name = COALESCE(?, last_name), phone = ?, dob = COALESCE(?, dob), emergency_contact = ?,
+                emergency_contact_name = ?, emergency_contact_number = ?,
+                emergency_contact_relation = COALESCE(?, emergency_contact_relation), profile_photo = ?
+            WHERE id = ? AND gym_id = ?
+        """, (first_name, last_name, phone, dob, legacy_emergency, emergency_name,
+               emergency_number, emergency_relation, photo, m_id, session["gym_id"]))
         log_action(cursor, "member_profile_updated_self", "member", m_id, {"phone": phone})
         conn.commit()
 
-        broadcast_event("MEMBER_PROFILE_UPDATED", {"id": m_id, "phone": phone}, session["gym_id"])
+        broadcast_event("MEMBER_PROFILE_UPDATED", {"id": m_id, "phone": phone, "profile_photo": photo}, session["gym_id"])
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/api/member/preferences", methods=["POST"])
+@login_required("member")
+def member_save_preferences():
+    m_id = session.get("member_id")
+    if not m_id:
+        return jsonify({"error": "Member session not found"}), 401
+        
+    data = request.get_json() or {}
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE members
+            SET preferences_completed = TRUE, dob = ?, gender = ?, height = ?, weight = ?
+            WHERE id = ? AND gym_id = ?
+        """, (data.get("dob"), data.get("gender"), data.get("height"), data.get("weight"), m_id, session["gym_id"]))
+        log_action(cursor, "member_preferences_completed", "member", m_id, data)
+
+        # Create initial body_stats record if height/weight provided
+        weight = data.get("weight")
+        height_val = data.get("height")
+        if weight and height_val:
+            cursor.execute("""
+                INSERT INTO body_stats (member_id, weight, height, goal_weight, gym_id)
+                VALUES (?, ?, ?, NULL, ?)
+            """, (m_id, float(weight), float(height_val), session["gym_id"]))
+
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/api/member/password", methods=["PUT"])
+@login_required("member")
+def member_change_password():
+    data = request.get_json() or {}
+    current_password = data.get("current_password") or ""
+    new_password = data.get("new_password") or ""
+    if len(new_password) < 8:
+        return jsonify({"error": "New password must be at least 8 characters"}), 400
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT password_hash FROM users WHERE id = ? AND gym_id = ?", (session["user_id"], session["gym_id"]))
+        user = cursor.fetchone()
+        if not user or not database.verify_password(user["password_hash"], current_password):
+            return jsonify({"error": "Current password is incorrect"}), 400
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ? AND gym_id = ?", (database.hash_password(new_password), session["user_id"], session["gym_id"]))
+        log_action(cursor, "member_password_changed", "user", session["user_id"], gym_id=session["gym_id"])
+        conn.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": "Unable to update password"}), 500
+    finally:
+        conn.close()
+
+@app.route("/api/member/body-stats", methods=["GET"])
+@login_required("member")
+def get_member_body_stats():
+    m_id = session.get("member_id")
+    if not m_id:
+        return jsonify({"error": "Member session not found"}), 401
+    
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, weight, height, goal_weight, created_at 
+            FROM body_stats 
+            WHERE member_id = ? AND gym_id = ?
+            ORDER BY created_at ASC
+        """, (m_id, session["gym_id"]))
+        rows = cursor.fetchall()
+        
+        # Backfill from audit log details if body_stats is empty
+        if not rows:
+            cursor.execute("""
+                SELECT details, created_at FROM audit_log 
+                WHERE entity_type = 'member' AND entity_id = ? AND action = 'member_preferences_completed'
+                ORDER BY created_at DESC LIMIT 1
+            """, (m_id,))
+            audit_row = cursor.fetchone()
+            if audit_row:
+                import json
+                try:
+                    details = json.loads(audit_row["details"])
+                    weight_val = details.get("weight")
+                    height_val = details.get("height")
+                    if weight_val and height_val:
+                        cursor.execute("""
+                            INSERT INTO body_stats (member_id, weight, height, goal_weight, gym_id, created_at)
+                            VALUES (?, ?, ?, NULL, ?, ?)
+                        """, (m_id, float(weight_val), float(height_val), session["gym_id"], audit_row["created_at"]))
+                        conn.commit()
+                        
+                        cursor.execute("""
+                            SELECT id, weight, height, goal_weight, created_at 
+                            FROM body_stats 
+                            WHERE member_id = ? AND gym_id = ?
+                            ORDER BY created_at ASC
+                        """, (m_id, session["gym_id"]))
+                        rows = cursor.fetchall()
+                except Exception as e:
+                    print("Error parsing audit log for stats backfill:", e)
+        
+        stats_list = [dict(r) for r in rows]
+        return jsonify({"success": True, "stats": stats_list})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route("/api/member/body-stats", methods=["POST"])
+@login_required("member")
+def add_member_body_stats():
+    m_id = session.get("member_id")
+    if not m_id:
+        return jsonify({"error": "Member session not found"}), 401
+        
+    data = request.get_json() or {}
+    weight = data.get("weight") # in kg
+    height = data.get("height") # in cm
+    goal_weight = data.get("goal_weight") # in kg (optional)
+    
+    if weight is None or height is None:
+        return jsonify({"error": "Weight and height are required"}), 400
+        
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO body_stats (member_id, weight, height, goal_weight, gym_id)
+            VALUES (?, ?, ?, ?, ?)
+        """, (m_id, float(weight), float(height), float(goal_weight) if goal_weight is not None else None, session["gym_id"]))
+        conn.commit()
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

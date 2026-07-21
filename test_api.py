@@ -49,15 +49,18 @@ def test_integration():
     print("Starting automated GymOS system integration checks...")
     
     # 1. Register Member
+    unique_ts = int(time.time())
+    unique_email = f"testmember_{unique_ts}@gymos.com"
+    unique_phone = f"+199{unique_ts}"
     status, res, cookie_member = make_request(
         "/api/auth/register",
         "POST",
         {
-            "email": "testmember@gymos.com",
+            "email": unique_email,
             "password": "memberpassword",
             "first_name": "Test",
             "last_name": "Member",
-            "phone": "+199988877",
+            "phone": unique_phone,
             "emergency_contact": "Mom / +199988866"
         }
     )
@@ -97,7 +100,7 @@ def test_integration():
     plan_id = res["plan_id"]
     print("[PASS] Plan tier creation successful.")
     
-    # 4. Owner assigns Plan to Member
+    # 4. Owner assigns Plan to Member (multiple times to test non-duplication)
     status, res, _ = make_request(
         f"/api/admin/members/{member_id}/assign-plan",
         "POST",
@@ -108,13 +111,32 @@ def test_integration():
         headers_owner
     )
     assert status == 200, f"Assign plan failed: {res}"
-    print("[PASS] Plan assignment to member successful.")
+
+    # Re-assign plan to test that multiple active plans do not duplicate member in list query
+    status, res, _ = make_request(
+        f"/api/admin/members/{member_id}/assign-plan",
+        "POST",
+        {
+            "plan_id": plan_id,
+            "record_payment": True
+        },
+        headers_owner
+    )
+    assert status == 200, f"Re-assign plan failed: {res}"
+
+    # Verify Members list row count matches total_members in stats exactly
+    status, m_list_res, _ = make_request("/api/admin/members?limit=all", "GET", headers=headers_owner)
+    status, stats_res, _ = make_request("/api/admin/stats", "GET", headers=headers_owner)
+    members_count = len(m_list_res.get("data", []))
+    total_stat = stats_res.get("stats", {}).get("total_members", 0)
+    assert members_count == total_stat, f"Discrepancy detected! Members table rows: {members_count}, Dashboard total_members: {total_stat}"
+    print("[PASS] Plan assignment to member successful & Dashboard count matches Members table exactly.")
     # 5. Member login to get active session cookie
     status, res, cookie_member = make_request(
         "/api/auth/login",
         "POST",
         {
-            "email": "testmember@gymos.com",
+            "email": unique_email,
             "password": "memberpassword"
         }
     )
@@ -128,11 +150,14 @@ def test_integration():
     assert res["days_remaining"] >= 28
     print("[PASS] Member dashboard active state checked.")
     
-    # 6. Member QR scan (Correct Token - First scan: Check-in)
+    # 6. Member QR scan (Fetch current token)
+    status, token_res, _ = make_request("/api/member/qr-token", "GET", headers=headers_member)
+    current_qr_token = token_res.get("qr_token") or "gymos-token-xyz-123"
+
     status, res, _ = make_request(
         "/api/member/check-in",
         "POST",
-        {"qr_token": "gymos-token-xyz-123", "action": "scan"},
+        {"qr_token": current_qr_token, "action": "scan"},
         headers_member
     )
     assert status == 200, f"QR scan checkin failed: {res}"
@@ -152,7 +177,7 @@ def test_integration():
     status, res_out, _ = make_request(
         "/api/member/check-in",
         "POST",
-        {"qr_token": "gymos-token-xyz-123", "action": "scan"},
+        {"qr_token": current_qr_token, "action": "scan"},
         headers_member
     )
     assert status == 409 and res_out.get("requires_checkout_confirmation"), f"Expected checkout confirmation, got: {res_out}"
@@ -160,7 +185,7 @@ def test_integration():
     status, res_out, _ = make_request(
         "/api/member/check-in",
         "POST",
-        {"qr_token": "gymos-token-xyz-123", "action": "checkout"},
+        {"qr_token": current_qr_token, "action": "checkout"},
         headers_member
     )
     assert status == 200 and res_out.get("type") == "checkout", f"QR scan checkout failed: {res_out}"
@@ -178,7 +203,7 @@ def test_integration():
     status, completed_res, _ = make_request(
         "/api/member/check-in",
         "POST",
-        {"qr_token": "gymos-token-xyz-123", "action": "scan"},
+        {"qr_token": current_qr_token, "action": "scan"},
         headers_member
     )
     assert status == 409 and completed_res.get("completed_today"), f"Expected completed attendance response, got: {completed_res}"
@@ -194,12 +219,33 @@ def test_integration():
     assert status == 400, f"Expected validation block, got {status} {res}"
     print("[PASS] Invalid QR check-in blocked correctly.")
     
-    # 8. Owner suspends Member
-    # First get member details to pass validation details in PUT
+    # 8. Owner Edits Member (Verify In-Place Update & Zero Duplicate Creation)
+    status, m_list_before, _ = make_request("/api/admin/members?limit=all", "GET", headers=headers_owner)
+    count_before = len(m_list_before.get("data", []))
+
     status, m_res, _ = make_request(f"/api/admin/members/{member_id}", "GET", headers=headers_owner)
     member_data = m_res["member"]
+    member_data["first_name"] = "UpdatedFirst"
+    member_data["last_name"] = "UpdatedLast"
+    member_data["phone"] = f"+1998{unique_ts}"
+    member_data["emergency_contact_name"] = "Jane Emergency"
+    member_data["emergency_contact_number"] = "+155544433"
+
+    status, res, _ = make_request(
+         f"/api/admin/members/{member_id}",
+         "PUT",
+         member_data,
+         headers_owner
+    )
+    assert status == 200, f"Member edit request failed: {res}"
+
+    status, m_list_after, _ = make_request("/api/admin/members?limit=all", "GET", headers=headers_owner)
+    count_after = len(m_list_after.get("data", []))
+    assert count_after == count_before, f"Member edit created duplicate record! Count before: {count_before}, count after: {count_after}"
+    print("[PASS] Member edit updated record in-place with zero duplicate creation.")
+
+    # 9. Owner suspends Member
     member_data["status"] = "suspended"
-    
     status, res, _ = make_request(
          f"/api/admin/members/{member_id}",
          "PUT",
@@ -213,7 +259,7 @@ def test_integration():
     status, res, _ = make_request(
         "/api/member/check-in",
         "POST",
-        {"qr_token": "gymos-token-xyz-123"},
+        {"qr_token": current_qr_token},
         headers_member
     )
     assert status == 403, f"Expected 403 for suspended member check-in, got {status} {res}"
@@ -224,6 +270,14 @@ def test_integration():
     assert status == 403, f"Expected 403 for suspended member session, got {status} {res}"
     print("[PASS] Suspended member dashboard access blocked correctly.")
     
+    # 11. Settings & QR Token Regeneration Test
+    status, set_res, _ = make_request("/api/admin/settings", "GET", headers=headers_owner)
+    assert status == 200, f"Failed to fetch settings: {set_res}"
+    
+    status, regen_res, _ = make_request("/api/admin/settings/regenerate-qr-token", "POST", headers=headers_owner)
+    assert status == 200 and regen_res.get("qr_token"), f"QR token regeneration failed: {regen_res}"
+    print("[PASS] QR Token regenerated and settings audit verified.")
+
     # Cleanup: Owner deletes Member
     status, res, _ = make_request(f"/api/admin/members/{member_id}", "DELETE", headers=headers_owner)
     assert status == 200, f"Failed cleanup deletion: {res}"

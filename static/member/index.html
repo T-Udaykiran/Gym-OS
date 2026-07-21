@@ -18,16 +18,12 @@
     <script src="/shared/firebase-init.js"></script>
     <script>
     window.onerror = function(message, source, lineno, colno, error) {
-        var div = document.createElement('div');
-        div.style = "position:fixed;top:0;left:0;right:0;background:red;color:white;z-index:99999;padding:10px;font-size:12px;word-break:break-all;";
-        div.innerText = "Error: " + message + " at " + source + ":" + lineno + ":" + colno;
-        document.body.appendChild(div);
+        console.error('Member app error', { message, source, lineno, colno, error });
+        if (window.showMobileToast) window.showMobileToast('Something went wrong. Please try again.', 'error');
     };
     window.onunhandledrejection = function(event) {
-        var div = document.createElement('div');
-        div.style = "position:fixed;top:0;left:0;right:0;background:orange;color:white;z-index:99999;padding:10px;font-size:12px;word-break:break-all;";
-        div.innerText = "Unhandled Rejection: " + event.reason;
-        document.body.appendChild(div);
+        console.error('Unhandled member app rejection', event.reason);
+        if (window.showMobileToast) window.showMobileToast('Something went wrong. Please try again.', 'error');
     };
     </script>
 </head>
@@ -139,19 +135,23 @@
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
                             <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Email Address</label>
-                            <input type="email" id="regEmailInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
+                            <input type="email" id="regEmailInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter email address" required>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
                             <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Phone Number</label>
-                            <input type="text" id="regPhoneInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
+                            <input type="text" id="regPhoneInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter phone number" required>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
-                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Emergency Contact</label>
-                            <input type="text" id="regEmergencyInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
+                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Emergency Contact Name</label>
+                            <input type="text" id="regEmergencyNameInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter emergency contact name" required>
+                        </div>
+                        <div class="input-block" style="display: flex; flex-direction: column;">
+                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Emergency Contact Number</label>
+                            <input type="tel" id="regEmergencyNumberInput" pattern="[6-9][0-9]{9}" title="Enter a valid 10-digit mobile number" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter emergency contact number" required>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
                             <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Create Password</label>
-                            <input type="password" id="regPasswordInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
+                            <input type="password" id="regPasswordInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter password" required>
                         </div>
                         <button type="submit" style="border-radius: 24px; height: 48px; background: #1c1c1e; border: 1.5px solid rgba(255,255,255,0.15); color: #fff; font-size: 14.5px; font-weight: 800; cursor: pointer; margin-top: 12px; width: 100%; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Join</button>
                     </form>
@@ -255,27 +255,27 @@
                             <!-- DOB field -->
                             <div class="personal-field-row" onclick="openDobDatePicker()">
                                 <span class="personal-field-lbl">Date of Birth</span>
-                                <span class="personal-field-val" id="personalDobVal">Date of Birth</span>
+                                <span class="personal-field-val" id="personalDobVal">Select Date of Birth</span>
                             </div>
                             <!-- Gender field -->
                             <div class="personal-field-row" onclick="openGenderDropdown()">
                                 <span class="personal-field-lbl">Sex</span>
-                                <span class="personal-field-val" id="personalGenderVal">Male</span>
+                                <span class="personal-field-val" id="personalGenderVal">Select Sex</span>
                             </div>
                             <!-- Height field -->
                             <div class="personal-field-row" onclick="openHeightPickerDialog()">
                                 <span class="personal-field-lbl">Height</span>
-                                <span class="personal-field-val" id="personalHeightVal">190 cm</span>
+                                <span class="personal-field-val" id="personalHeightVal">Select Height</span>
                             </div>
                             <!-- Weight field -->
                             <div class="personal-field-row" onclick="openWeightPickerDialog()">
                                 <span class="personal-field-lbl">Weight</span>
-                                <span class="personal-field-val" id="personalWeightVal">192 lb</span>
+                                <span class="personal-field-val" id="personalWeightVal">Select Weight</span>
                             </div>
                         </div>
                     </div>
 
-                    <button class="auth-capsule-btn primary-btn" onclick="submitPersonalizedDataAndComplete()">Continue</button>
+                    <button class="auth-capsule-btn primary-btn" id="onboardingContinueBtn" disabled style="opacity: 0.5; cursor: not-allowed;" onclick="submitPersonalizedDataAndComplete()">Continue</button>
                 </div>
 
                 <!-- Custom MODAL: Date of Birth Picker -->
@@ -340,13 +340,26 @@
                         <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin: 0 0 4px 0; text-align: center;">Height</h4>
                         <p style="font-size: 11.5px; color: rgba(255,255,255,0.5); text-align: center; margin-bottom: 20px;">Set a height based on your body</p>
 
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 24px; margin: 24px 0;">
-                            <button type="button" class="picker-adjust-btn" onclick="adjustHeightVal(-1)">-</button>
-                            <div style="display: flex; flex-direction: column; align-items: center;">
-                                <span style="font-size: 32px; font-weight: 900; color: #fff;" id="heightPickerVal">180</span>
-                                <span style="font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; margin-top: 2px;">CM</span>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 32px; margin: 24px 0;">
+                            <!-- Feet adjust -->
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <button type="button" class="picker-adjust-btn" onclick="adjustHeightFt(-1)">-</button>
+                                <div style="display: flex; flex-direction: column; align-items: center; min-width: 40px;">
+                                    <span style="font-size: 28px; font-weight: 900; color: #fff;" id="heightFtPickerVal">5</span>
+                                    <span style="font-size: 10px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; margin-top: 2px;">FT</span>
+                                </div>
+                                <button type="button" class="picker-adjust-btn" onclick="adjustHeightFt(1)">+</button>
                             </div>
-                            <button type="button" class="picker-adjust-btn" onclick="adjustHeightVal(1)">+</button>
+                            
+                            <!-- Inches adjust -->
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <button type="button" class="picker-adjust-btn" onclick="adjustHeightIn(-1)">-</button>
+                                <div style="display: flex; flex-direction: column; align-items: center; min-width: 40px;">
+                                    <span style="font-size: 28px; font-weight: 900; color: #fff;" id="heightInPickerVal">6</span>
+                                    <span style="font-size: 10px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; margin-top: 2px;">IN</span>
+                                </div>
+                                <button type="button" class="picker-adjust-btn" onclick="adjustHeightIn(1)">+</button>
+                            </div>
                         </div>
 
                         <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 12px;">
@@ -365,8 +378,8 @@
                         <div style="display: flex; align-items: center; justify-content: center; gap: 24px; margin: 24px 0;">
                             <button type="button" class="picker-adjust-btn" onclick="adjustWeightVal(-1)">-</button>
                             <div style="display: flex; flex-direction: column; align-items: center;">
-                                <span style="font-size: 32px; font-weight: 900; color: #fff;" id="weightPickerVal">192</span>
-                                <span style="font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; margin-top: 2px;">LB</span>
+                                <span style="font-size: 32px; font-weight: 900; color: #fff;" id="weightPickerVal">70</span>
+                                <span style="font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; margin-top: 2px;">KG</span>
                             </div>
                             <button type="button" class="picker-adjust-btn" onclick="adjustWeightVal(1)">+</button>
                         </div>
@@ -382,12 +395,12 @@
 
             <!-- ================= PORTAL SHELL APP ================= -->
             <div id="memberAppWrapper" style="display: none; flex-direction: column; height: 100%; overflow: hidden;">
-                <header class="app-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: #0b0b0b; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;">
-                    <div class="app-identity" style="display: flex; align-items: center; gap: 8px;">
-                        <div class="app-logo" style="background: var(--accent); color: #111; font-weight: 900; font-size: 16px; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">G</div>
+                <header class="app-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: #0b0b0b; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center;">
+                        <p style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.7); margin: 0;">Hi, <span id="homeMemberFirstName">User</span>! 👋</p>
                     </div>
 
-                    <div class="notif-bell" style="background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;" onclick="toggleNotificationsPanel()">
+                    <div class="notif-bell" style="background-color: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;" onclick="openNotificationsScreen()" aria-label="Open notifications" role="button" tabindex="0">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24"
                             stroke="var(--text-primary)" stroke-width="2.5">
                             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
@@ -397,30 +410,27 @@
                     </div>
                 </header>
 
-                <!-- Notification Panel Overlay Inside Screen -->
-                <div id="notifOverlayPanel"
-                    style="display:none; position:absolute; top:74px; right:20px; left:20px; max-height:350px; background: rgba(17, 17, 17, 0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); z-index: 1900; overflow-y:auto; padding:16px;">
-                    <div
-                        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:8px;">
-                        <h4 style="font-size:14px; font-weight:800; color: var(--text-primary);">Notifications</h4>
-                        <button class="btn btn-ghost" style="padding:2px 8px; font-size:11px; color: var(--accent); min-height: unset; font-weight: 700;"
-                            onclick="markMemberNotificationsRead()">Mark Read</button>
-                    </div>
-                    <div id="notifPanelList" style="display:flex; flex-direction:column; gap:8px;">
-                        <!-- Dynamic notifications listings -->
-                    </div>
-                </div>
-
                 <!-- Simulated App Screen Views -->
                 <div class="screen-content" id="scrollContentArea">
 
+                    <!-- SCREEN: NOTIFICATIONS (secondary navigation destination) -->
+                    <div id="notificationsScreen" class="mobile-screen secondary-screen" style="gap: 18px;">
+                        <div class="secondary-screen-header">
+                            <button class="profile-back-btn" onclick="closeNotificationsScreen()" aria-label="Back to previous screen">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            </button>
+                            <h2>Notifications</h2>
+                            <button class="notifications-mark-read" onclick="markMemberNotificationsRead()">Mark all read</button>
+                        </div>
+                        <div id="notificationsList" class="notifications-list" aria-live="polite"></div>
+                    </div>
+
                     <!-- SCREEN 1: HOME/DASHBOARD -->
-                    <div id="homeScreen" class="mobile-screen active" style="gap: 20px;">
+                    <div id="homeScreen" class="mobile-screen active" style="gap: 18px;">
                         
-                        <!-- Top Profile Greeting header -->
-                        <div style="margin-top: 4px;">
-                            <p style="font-size: 15px; font-weight: 500; color: rgba(255,255,255,0.6); margin: 0;">Hi, <span id="homeMemberFirstName">User</span>!</p>
-                            <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin: 4px 0 0 0; letter-spacing: -0.02em;">Ready for your fitness routine today?</h2>
+                        <!-- Headline -->
+                        <div>
+                            <h2 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0; letter-spacing: -0.02em;">Ready for your fitness routine today?</h2>
                         </div>
 
                         <!-- Gym Photo Banner -->
@@ -539,7 +549,13 @@
                     </div>
 
                     <!-- SCREEN 2: SCAN QR -->
-                    <div id="scanScreen" class="mobile-screen" style="gap: 16px; background: #000;">
+                    <div id="scanScreen" class="mobile-screen secondary-screen" style="gap: 16px; background: #000;">
+                        <div class="secondary-screen-header">
+                            <button class="profile-back-btn" onclick="switchMobileNav('home')" aria-label="Back to home">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                            </button>
+                            <h2>Scan QR</h2>
+                        </div>
                         <div>
                             <h3 style="font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 4px 0;">Entrance Scanner</h3>
                             <p style="font-size: 13px; color: rgba(255,255,255,0.4); margin: 0;">Point your camera at the gym entrance QR code.</p>
@@ -585,7 +601,7 @@
                             <!-- Success Animation viewport checkin -->
                             <div id="scannerSuccessAnimationBox" class="success-checkin-wrapper" style="display: none; padding: 12px 0; width: 100%; text-align: center; flex-direction: column; align-items: center;">
                                 
-                                <!-- State 1: Check-in Success -->
+                                <!-- State 1: Check-in Success (Active Workout) -->
                                 <div id="checkinSuccessState" style="display: none; width: 100%;">
                                     <div style="display: flex; justify-content: center; margin-bottom: 20px;">
                                         <div style="width: 72px; height: 72px; border-radius: 50%; border: 3px solid var(--accent); display: flex; align-items: center; justify-content: center; background: rgba(199, 255, 36, 0.05);">
@@ -594,10 +610,16 @@
                                             </svg>
                                         </div>
                                     </div>
-                                    <h3 style="color: #fff; font-weight: 800; font-size: 22px; margin: 0 0 10px 0;">Check-In Sucessful</h3>
-                                    <p style="font-size: 13.5px; color: rgba(255,255,255,0.5); line-height: 1.5; margin: 0 0 24px 0;">Checked in at <strong style="color: #fff;" id="checkinTimeVal">7:15 PM</strong>, Have a great workout! Don't forget to check out before leaving.</p>
+                                    <h3 style="color: #fff; font-weight: 800; font-size: 22px; margin: 0 0 8px 0;">Check-In Successful</h3>
+                                    <p style="font-size: 13.5px; color: rgba(255,255,255,0.6); line-height: 1.5; margin: 0 0 20px 0;">Checked in at <strong style="color: #fff;" id="checkinTimeVal">--:--</strong>.<br>Have a great workout! Don't forget to check out before leaving.</p>
                                     
-                                    <button class="auth-capsule-btn secondary-btn" style="width: 100%; border-color: rgba(255,255,255,0.15);" onclick="finishAttendanceFlow()">Check-Out Now</button>
+                                    <!-- Workout Live Timer Card -->
+                                    <div style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; margin-bottom: 24px; text-align: center;">
+                                        <span style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.05em;">Workout Duration</span>
+                                        <h2 id="liveWorkoutDurationTimer" style="font-size: 32px; font-weight: 900; color: var(--accent); margin: 6px 0 0 0; font-family: monospace;">00:00:00</h2>
+                                    </div>
+
+                                    <button class="auth-capsule-btn primary-btn" style="width: 100%; background: #fff; color: #000; border: none; font-weight: 800; height: 48px; border-radius: 24px;" onclick="promptCheckoutFromActiveState()">Check Out</button>
                                 </div>
 
                                 <!-- State 2: Check-out Success (Attendance Logged) -->
@@ -1023,7 +1045,58 @@
                         </div>
                     </div>
 
-                    <!-- SCREEN 7: LEADERBOARD -->
+                    <!-- SCREEN 2: ATTENDANCE HISTORY (TOP-LEVEL MOBILE SCREEN) -->
+                    <div id="attendanceHistoryScreen" class="mobile-screen" style="flex-direction: column; background: #000; box-sizing: border-box; height: 100%; width: 100%;">
+                        <div class="activity-sub-header" style="padding: 16px 20px; display: flex; align-items: center; gap: 12px; background: #0b0b0b; border-bottom: 1px solid rgba(255,255,255,0.05); z-index: 10;">
+                            <button class="round-back-btn" type="button" onclick="switchMobileNav('activity')" aria-label="Back to Activity">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                            </button>
+                            <span style="font-size: 17px; font-weight: 800; color: #fff;">Attendance History</span>
+                        </div>
+                        <div class="activity-sub-content" style="flex: 1; overflow-y: auto; padding: 16px 20px 98px; box-sizing: border-box;">
+                            <div class="search-filter-row" style="margin-bottom: 12px;">
+                                <div class="search-control-wrapper" style="position: relative; display: flex; align-items: center; width: 100%;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.4)" stroke-width="2.5" style="position: absolute; left: 14px; width: 16px; height: 16px;"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    <input type="text" id="historySearchField" class="custom-input" placeholder="Search date or branch..." oninput="filterHistoryList()" style="padding-left: 40px; margin-bottom: 0; width: 100%; border-radius: 20px;">
+                                </div>
+                            </div>
+                            <div class="filter-tabs-wrapper" style="display: flex; background: #1c1c1e; border-radius: 20px; padding: 3px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 16px;">
+                                <button id="tabFilterAll" class="filter-tab-btn active" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s;" onclick="setHistoryFilter('all')">All</button>
+                                <button id="tabFilterWeekly" class="filter-tab-btn" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setHistoryFilter('weekly')">Weekly</button>
+                                <button id="tabFilterMonthly" class="filter-tab-btn" style="flex: 1; border: none; outline: none; border-radius: 18px; font-size: 11.5px; font-weight: 700; padding: 6px 0; cursor: pointer; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4);" onclick="setHistoryFilter('monthly')">Monthly</button>
+                            </div>
+
+                            <!-- Loading State -->
+                            <div id="subHistoryLoadingState" style="display: none; text-align: center; padding: 40px 0; color: rgba(255,255,255,0.5);">
+                                <div class="spinner" style="margin: 0 auto 12px auto; width: 24px; height: 24px; border: 2.5px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                                <p style="font-size: 13px; margin: 0;">Loading attendance history...</p>
+                            </div>
+
+                            <!-- Empty State -->
+                            <div id="subHistoryEmptyState" class="empty-state-container" style="display: none; text-align: center; padding: 40px 20px;">
+                                <div class="empty-state-illustration" style="margin-bottom: 12px;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="80" height="80" fill="none">
+                                        <circle cx="60" cy="60" r="50" fill="rgba(199, 255, 36, 0.03)" stroke="var(--border-color)" stroke-width="2"/>
+                                        <path d="M60 40v30m0 10h.01" stroke="var(--accent)" stroke-width="4" stroke-linecap="round"/>
+                                    </svg>
+                                </div>
+                                <h4 style="font-size: 17px; font-weight: 800; color: var(--text-primary); margin: 0 0 6px 0;">No Activity Yet</h4>
+                                <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.4;">Your attendance history will appear here after your first check-in.</p>
+                            </div>
+
+                            <!-- Error State -->
+                            <div id="subHistoryErrorState" style="display: none; text-align: center; padding: 40px 20px;">
+                                <p style="font-size: 14px; color: #ef4444; font-weight: 600; margin-bottom: 12px;">Unable to load activity history.</p>
+                                <button class="btn btn-secondary" style="padding: 8px 20px; font-size: 12.5px;" onclick="fetchActivityData(); renderHistorySubScreen();">Retry</button>
+                            </div>
+
+                            <!-- Dynamic list container -->
+                            <div id="subHistoryListContainer" style="display: flex; flex-direction: column; gap: 10px;">
+                                <!-- Dynamic list of visits -->
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- SCREEN 7: LEADERBOARD -->
                     <div id="leadersScreen" class="mobile-screen" style="background: #0b0b0c; padding: 24px 20px 100px;">
                         <!-- Header -->
@@ -1102,8 +1175,8 @@
                             <div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(255, 255, 255, 0.03); border: 1.5px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="rgba(255, 255, 255, 0.4)" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                             </div>
-                            <h2 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 8px 0;">No Leaderboard Yet</h2>
-                            <p style="font-size: 14px; color: rgba(255, 255, 255, 0.5); line-height: 1.5; margin: 0 0 32px 0; max-width: 260px;">The leaderboard will appear once members start checking in.</p>
+                            <h2 style="font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 8px 0;" id="leaderboardEmptyStateTitle">No Rankings Yet</h2>
+                            <p style="font-size: 14px; color: rgba(255, 255, 255, 0.5); line-height: 1.5; margin: 0 0 32px 0; max-width: 260px;" id="leaderboardEmptyStateDesc">Complete your first workout or check-in to become the first member on the leaderboard.</p>
                             <button class="auth-capsule-btn primary-btn" style="width: 200px; background: #dfff00; color: #000; font-weight: 800; border: none; height: 44px; border-radius: 22px; cursor: pointer;" onclick="switchMobileNav('scan')">Scan QR</button>
                         </div>
 
@@ -1164,9 +1237,6 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
                             </button>
                             <h3>Payments</h3>
-                            <button class="emergency-action-btn" onclick="openUploadPaymentModal()" style="margin-left: auto; color: var(--text-primary);">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.2 15v3.8a2 2 0 0 1-2 2H4.8a2 2 0 0 1-2-2V15"></path><polyline points="7.6 8 12 3.6 16.4 8"></polyline><line x1="12" y1="3.6" x2="12" y2="15"></line></svg>
-                            </button>
                         </div>
                         <p class="payments-subtitle" style="margin-top: -16px; margin-bottom: 24px;">Track your membership payments</p>
 
@@ -1208,33 +1278,33 @@
                             <!-- Rank 2 (Left) -->
                             <div id="podiumRank2" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
                                 <div style="position: relative; margin-bottom: 8px;">
-                                    <img id="podiumRank2Img" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #8e8e93; object-fit: cover;">
+                                    <img id="podiumRank2Img" src="" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #8e8e93; object-fit: cover;">
                                     <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #8e8e93; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">2</div>
                                 </div>
-                                <span id="podiumRank2Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Sam Smith</span>
-                                <span id="podiumRank2Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;">38 CHECK-INS</span>
+                                <span id="podiumRank2Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
+                                <span id="podiumRank2Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;"></span>
                                 <div style="width: 58px; height: 48px; background: #1c1c1e; border: 1.5px solid #8e8e93; border-radius: 8px; margin-top: 8px;"></div>
                             </div>
 
                             <!-- Rank 1 (Center - Raised) -->
                             <div id="podiumRank1" style="display: flex; flex-direction: column; align-items: center; width: 95px; transform: translateY(-12px);">
                                 <div style="position: relative; margin-bottom: 8px;">
-                                    <img id="podiumRank1Img" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop" style="width: 66px; height: 66px; border-radius: 50%; border: 4px solid var(--accent); object-fit: cover;">
+                                    <img id="podiumRank1Img" src="" style="width: 66px; height: 66px; border-radius: 50%; border: 4px solid var(--accent); object-fit: cover;">
                                     <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; background: var(--accent); border-radius: 50%; color: #000; font-size: 11px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
                                 </div>
-                                <span id="podiumRank1Name" style="font-size: 12.5px; font-weight: 800; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Alex Chen</span>
-                                <span id="podiumRank1Count" style="font-size: 9.5px; color: var(--accent); text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px;">42 CHECK-INS</span>
+                                <span id="podiumRank1Name" style="font-size: 12.5px; font-weight: 800; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
+                                <span id="podiumRank1Count" style="font-size: 9.5px; color: var(--accent); text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em; margin-top: 2px;"></span>
                                 <div style="width: 66px; height: 72px; background: #1c1c1e; border: 1.5px solid var(--accent); border-radius: 8px; margin-top: 8px;"></div>
                             </div>
 
                             <!-- Rank 3 (Right) -->
                             <div id="podiumRank3" style="display: flex; flex-direction: column; align-items: center; width: 85px;">
                                 <div style="position: relative; margin-bottom: 8px;">
-                                    <img id="podiumRank3Img" src="https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=200&auto=format&fit=crop" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #cd7f32; object-fit: cover;">
+                                    <img id="podiumRank3Img" src="" style="width: 54px; height: 54px; border-radius: 50%; border: 3.5px solid #cd7f32; object-fit: cover;">
                                     <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; background: #cd7f32; border-radius: 50%; color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center;">3</div>
                                 </div>
-                                <span id="podiumRank3Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;">Jo Rodriguez</span>
-                                <span id="podiumRank3Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;">35 CHECK-INS</span>
+                                <span id="podiumRank3Name" style="font-size: 11.5px; font-weight: 700; color: #fff; text-align: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; width: 100%;"></span>
+                                <span id="podiumRank3Count" style="font-size: 9px; color: rgba(255,255,255,0.4); text-transform: uppercase; font-weight: 700; letter-spacing: 0.02em; margin-top: 2px;"></span>
                                 <div style="width: 58px; height: 48px; background: #1c1c1e; border: 1.5px solid #cd7f32; border-radius: 8px; margin-top: 8px;"></div>
                             </div>
                         </div>
@@ -1321,14 +1391,15 @@
                             <!-- Avatar -->
                             <div class="profile-avatar-container" onclick="openPhotoOptionsSheet()" style="cursor: pointer;">
                                 <div class="profile-avatar-ring">
-                                    <img id="profileHomeAvatar" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop" alt="Profile">
+                                    <img id="profileHomeAvatar" src="" alt="Profile photo" style="display: none;">
+                                    <span id="profileHomeInitials" class="profile-avatar-initials">--</span>
                                 </div>
                                 <div class="profile-active-dot"></div>
                             </div>
 
                             <!-- User Details -->
                             <div style="text-align: center; margin-bottom: 20px;">
-                                <h4 id="profileHomeName" style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 4px 0;">David Doni</h4>
+                                <h4 id="profileHomeName" style="font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 4px 0;">--</h4>
                             </div>
 
                             <!-- Streak Row -->
@@ -1337,21 +1408,21 @@
                                     <div class="profile-stat-icon">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7ff24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>
                                     </div>
-                                    <div id="profileHomeStreak" class="profile-stat-val">12d</div>
+                                    <div id="profileHomeStreak" class="profile-stat-val">--</div>
                                     <div class="profile-stat-lbl">Streak</div>
                                 </div>
                                 <div class="profile-stat-col">
                                     <div class="profile-stat-icon">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7ff24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                                     </div>
-                                    <div id="profileHomeTimeSpent" class="profile-stat-val">47hrs</div>
+                                    <div id="profileHomeTimeSpent" class="profile-stat-val">--</div>
                                     <div class="profile-stat-lbl">Time Spent</div>
                                 </div>
                                 <div class="profile-stat-col">
                                     <div class="profile-stat-icon">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c7ff24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"></path><path d="M12 2a6 6 0 0 1 6 6v3.5a6 6 0 0 1-6 6 6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z"></path></svg>
                                     </div>
-                                    <div id="profileHomeRank" class="profile-stat-val">#3</div>
+                                    <div id="profileHomeRank" class="profile-stat-val">--</div>
                                     <div class="profile-stat-lbl">Rank</div>
                                 </div>
                             </div>
@@ -1403,6 +1474,24 @@
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
                                     </div>
                                 </div>
+                                <div class="profile-menu-item" onclick="switchMobileNav('scan')">
+                                    <div class="profile-menu-item-left">
+                                        <svg class="profile-menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg>
+                                        <span class="profile-menu-item-label">Scan Gym QR</span>
+                                    </div>
+                                    <div class="profile-menu-item-arrow">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                </div>
+                                <div class="profile-menu-item" id="pwaInstallMenuItem" onclick="triggerPwaInstallFromMenu()">
+                                    <div class="profile-menu-item-left">
+                                        <svg class="profile-menu-item-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                        <span class="profile-menu-item-label" id="pwaInstallMenuLabel">Install GymOS</span>
+                                    </div>
+                                    <div class="profile-menu-item-arrow" id="pwaInstallMenuArrow">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </div>
+                                </div>
                                 <div class="profile-menu-item" onclick="logoutMemberApp()" style="color: var(--danger);">
                                     <div class="profile-menu-item-left">
                                         <svg class="profile-menu-item-icon" style="color: var(--danger);" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
@@ -1424,9 +1513,9 @@
                                 <h3>Edit Profile</h3>
                             </div>
 
-                            <form id="memberProfileForm" onsubmit="saveProfileChangesRedesigned(event)">
+                            <form id="memberProfileForm" onsubmit="saveProfileChangesRedesigned(event)" oninput="enableProfileSave()">
                                 <label class="profile-avatar-edit" for="profilePhotoInput">
-                                    <img id="profileAvatarImg" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=200&auto=format&fit=crop" alt="Avatar">
+                                    <img id="profileAvatarImg" src="" alt="Profile photo">
                                     <input type="hidden" id="profileAvatarBase64">
                                     <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" hidden>
                                     <div class="profile-avatar-edit-overlay">
@@ -1435,23 +1524,23 @@
                                 </label>
 
                                 <div class="profile-input-group">
-                                    <label>Input Title</label>
-                                    <input type="text" id="profFirst" class="profile-input-control" placeholder="Full Name" required>
+                                    <label>Full name</label>
+                                    <input type="text" id="profFirst" class="profile-input-control" placeholder="Enter your full name" required>
                                 </div>
                                 <div class="profile-input-group">
-                                    <label>Input Title</label>
-                                    <input type="text" id="profPhone" class="profile-input-control" placeholder="Phone Number" required>
+                                    <label>Phone number</label>
+                                    <input type="tel" id="profPhone" class="profile-input-control" placeholder="Enter your 10-digit mobile number" pattern="[6-9][0-9]{9}" required>
                                 </div>
                                 <div class="profile-input-group">
-                                    <label>Input Title</label>
-                                    <input type="email" id="profEmail" class="profile-input-control" placeholder="Email" readonly style="background: rgba(255,255,255,0.01); color: var(--text-secondary);">
+                                    <label>Email address</label>
+                                    <input type="email" id="profEmail" class="profile-input-control" placeholder="Email address" readonly style="background: rgba(255,255,255,0.01); color: var(--text-secondary);">
                                 </div>
                                 <div class="profile-input-group">
-                                    <label>Input Title</label>
-                                    <input type="text" id="profDob" class="profile-input-control" placeholder="Date of Birth (e.g. 12 May, 1994)">
+                                    <label>Date of birth</label>
+                                    <input type="text" id="profDob" class="profile-input-control" placeholder="e.g. 12 May 1994">
                                 </div>
 
-                                <button type="submit" class="profile-btn-primary">Save Changes</button>
+                                <button id="profileSaveButton" type="submit" class="profile-btn-primary" disabled>Save Changes</button>
                             </form>
                         </div>
 
@@ -1482,28 +1571,52 @@
                                 <h3>Body Stats</h3>
                             </div>
 
-                            <div class="body-stats-grid">
-                                <div class="body-stat-card">
-                                    <div class="body-stat-card-title">Weight</div>
-                                    <div class="body-stat-card-value"><span id="statWeightVal">192</span><span>lb</span></div>
+                            <div class="body-stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                                <div class="body-stat-card" style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px; text-align: left;">
+                                    <div class="body-stat-card-title" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); margin-bottom: 4px;">Weight</div>
+                                    <div class="body-stat-card-value" id="statWeightVal" style="font-size: 20px; font-weight: 800; color: #fff;">--</div>
                                 </div>
-                                <div class="body-stat-card">
-                                    <div class="body-stat-card-title">Height</div>
-                                    <div class="body-stat-card-value"><span id="statHeightVal">190</span><span>cm</span></div>
+                                <div class="body-stat-card" style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px; text-align: left;">
+                                    <div class="body-stat-card-title" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); margin-bottom: 4px;">Height</div>
+                                    <div class="body-stat-card-value" id="statHeightVal" style="font-size: 20px; font-weight: 800; color: #fff;">--</div>
                                 </div>
-                                <div class="body-stat-card">
-                                    <div class="body-stat-card-title">BMI</div>
-                                    <div class="body-stat-card-value" id="statBmiVal">24.3</div>
+                                <div class="body-stat-card" style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px; text-align: left;">
+                                    <div class="body-stat-card-title" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); margin-bottom: 4px;">BMI</div>
+                                    <div class="body-stat-card-value" id="statBmiVal" style="font-size: 20px; font-weight: 800; color: #fff;">--</div>
+                                    <div id="statBmiCategory" style="font-size: 11px; color: var(--accent); margin-top: 2px; font-weight: 600;">--</div>
+                                </div>
+                                <div class="body-stat-card" style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 14px; text-align: left;">
+                                    <div class="body-stat-card-title" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4); margin-bottom: 4px;">Goal Weight</div>
+                                    <div class="body-stat-card-value" id="statGoalWeightVal" style="font-size: 20px; font-weight: 800; color: #fff;">--</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Weight Progress Card -->
+                            <div class="body-stat-card" style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 16px; text-align: left; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;">
+                                <div class="body-stat-card-title" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.4);">Weight Progress</div>
+                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                                    <div style="font-size: 13px; color: rgba(255,255,255,0.6);" id="progressStatsText">Current: -- &bull; Goal: --</div>
+                                    <div style="font-size: 15px; font-weight: 800; color: var(--accent);" id="progressRemainingText">--</div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(255,255,255,0.4);">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    <span id="statsLastUpdatedVal">Updated --</span>
                                 </div>
                             </div>
 
+                            <!-- Weight Journey Empty State -->
+                            <div id="statsEmptyState" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; margin-bottom: 20px;">
+                                <span style="font-size: 32px; margin-bottom: 12px;">📈</span>
+                                <h4 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0 0 6px 0;">Weight Journey Starts Here</h4>
+                                <p style="font-size: 12.5px; color: rgba(255,255,255,0.5); margin: 0; line-height: 1.5;">Keep updating your weight regularly to see your progress over time.</p>
+                            </div>
+
                             <!-- Weight Trend Card -->
-                            <div class="weight-trend-card">
-                                <div class="weight-trend-header">
-                                    <span class="weight-trend-title">Weight Trend</span>
-                                    <span class="weight-trend-diff">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
-                                        <span>2.4 lb</span>
+                            <div class="weight-trend-card" id="weightTrendCard" style="background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 16px; margin-bottom: 20px;">
+                                <div class="weight-trend-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span class="weight-trend-title" style="font-size: 13px; font-weight: 700; color: #fff;">Weight Trend</span>
+                                    <span class="weight-trend-diff" id="weightTrendDiffBadge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;">
+                                        <span id="weightTrendDiffText">No trend available yet</span>
                                     </span>
                                 </div>
                                 <div id="weightTrendChartContainer" style="width: 100%; height: 160px; margin-top: 10px;">
@@ -1550,15 +1663,15 @@
                                 <input type="hidden" id="emergencyContactId">
                                 <div class="input-group" style="margin-bottom: 12px;">
                                     <label for="emergencyName">Full Name</label>
-                                    <input type="text" id="emergencyName" class="input-control" placeholder="John Doni" required>
+                                    <input type="text" id="emergencyName" class="input-control" placeholder="Enter contact name" required>
                                 </div>
                                 <div class="input-group" style="margin-bottom: 12px;">
                                     <label for="emergencyRelation">Relation</label>
-                                    <input type="text" id="emergencyRelation" class="input-control" placeholder="Brother" required>
+                                    <input type="text" id="emergencyRelation" class="input-control" placeholder="e.g. Parent or sibling">
                                 </div>
                                 <div class="input-group" style="margin-bottom: 20px;">
                                     <label for="emergencyPhone">Phone Number</label>
-                                    <input type="text" id="emergencyPhone" class="input-control" placeholder="+1 (555) 987-6543" required>
+                                    <input type="tel" id="emergencyPhone" class="input-control" placeholder="Enter 10-digit mobile number" pattern="[6-9][0-9]{9}" required>
                                 </div>
                                 <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%;">
                                     <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closeEmergencyContactModal()">Cancel</button>
@@ -1574,16 +1687,46 @@
                             <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary);">Update Body Stats</h3>
                             <form id="updateStatsForm" onsubmit="saveStatsSubmit(event)">
                                 <div class="input-group" style="margin-bottom: 12px;">
-                                    <label for="statsWeightInput">Weight (lb)</label>
-                                    <input type="number" id="statsWeightInput" class="input-control" placeholder="192" required>
+                                    <label for="statsWeightInput">Weight (kg)</label>
+                                    <input type="number" step="0.1" id="statsWeightInput" class="input-control" placeholder="70" required min="1" max="300" style="background:#2c2c2e; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:8px; height:40px; width:100%; padding:0 10px; box-sizing:border-box;">
                                 </div>
-                                <div class="input-group" style="margin-bottom: 12px;">
-                                    <label for="statsHeightInput">Height (cm)</label>
-                                    <input type="number" id="statsHeightInput" class="input-control" placeholder="190" required>
+                                <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="statsHeightFt">Height (Feet)</label>
+                                        <select id="statsHeightFt" class="input-control" required style="background:#2c2c2e; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:8px; height:40px; width:100%; padding:0 10px; box-sizing:border-box;">
+                                            <option value="" disabled>Select</option>
+                                            <option value="4">4 ft</option>
+                                            <option value="5">5 ft</option>
+                                            <option value="6">6 ft</option>
+                                            <option value="7">7 ft</option>
+                                        </select>
+                                    </div>
+                                    <div class="input-group" style="flex: 1;">
+                                        <label for="statsHeightIn">Height (Inches)</label>
+                                        <select id="statsHeightIn" class="input-control" required style="background:#2c2c2e; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:8px; height:40px; width:100%; padding:0 10px; box-sizing:border-box;">
+                                            <option value="" disabled>Select</option>
+                                            <option value="0">0 in</option>
+                                            <option value="1">1 in</option>
+                                            <option value="2">2 in</option>
+                                            <option value="3">3 in</option>
+                                            <option value="4">4 in</option>
+                                            <option value="5">5 in</option>
+                                            <option value="6">6 in</option>
+                                            <option value="7">7 in</option>
+                                            <option value="8">8 in</option>
+                                            <option value="9">9 in</option>
+                                            <option value="10">10 in</option>
+                                            <option value="11">11 in</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div class="input-group" style="margin-bottom: 20px;">
-                                    <label for="statsBmiInput">BMI</label>
-                                    <input type="number" step="0.1" id="statsBmiInput" class="input-control" placeholder="24.3" required>
+                                <div class="input-group" style="margin-bottom: 16px;">
+                                    <label for="statsGoalWeightInput">Goal Weight (kg) - Optional</label>
+                                    <input type="number" step="0.1" id="statsGoalWeightInput" class="input-control" placeholder="65" min="1" max="300" style="background:#2c2c2e; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:8px; height:40px; width:100%; padding:0 10px; box-sizing:border-box;">
+                                </div>
+                                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 13px; color: rgba(255,255,255,0.6);">Calculated BMI</span>
+                                    <strong id="modalBmiVal" style="font-size: 16px; color: var(--accent);">--</strong>
                                 </div>
                                 <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%;">
                                     <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closeUpdateStatsModal()">Cancel</button>
@@ -1593,88 +1736,17 @@
                         </div>
                     </div>
 
-                    <!-- Upload Your Payment Modal -->
-                    <div id="uploadPaymentModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
-                        <div class="member-modal-card" style="text-align: left; max-width: 360px;">
-                            <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 4px; color: var(--text-primary);">Upload Your Payment</h3>
-                            <p style="font-size: 11px; color: var(--text-tertiary); margin-bottom: 16px;">Method Of Payment</p>
-                            
-                            <div class="input-group" style="margin-bottom: 16px;">
-                                <select id="paymentMethodSelect" class="input-control" style="background-color: rgba(255,255,255,0.02); color: var(--text-primary); border-color: var(--border-color);">
-                                    <option value="online">Online</option>
-                                    <option value="cash">Cash</option>
-                                    <option value="card">Card</option>
-                                </select>
-                            </div>
 
-                            <div class="input-group" style="margin-bottom: 16px;">
-                                <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 8px;">Date</label>
-                                <input type="text" id="paymentSenderName" class="input-control" placeholder="Enter Your Full Name" required>
-                            </div>
 
-                            <div id="fileUploadDottedZone" class="file-upload-dotted-zone" onclick="triggerFileInput()">
-                                <div class="file-upload-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                                </div>
-                                <div class="file-upload-title">Upload Your Payment Screenshot</div>
-                                <div class="file-upload-subtitle">JPEG, PNG, PDF, and MP4 formats, up to 1 MB.</div>
-                                <button type="button" class="file-upload-browse-btn">Browse File</button>
-                                <input type="file" id="paymentScreenshotInput" accept="image/*,application/pdf,video/mp4" style="display:none;" onchange="handleFileSelection(event)">
-                            </div>
-
-                            <!-- Progress file card -->
-                            <div id="fileUploadProgressCard" class="uploaded-file-card" style="display:none;">
-                                <div class="uploaded-file-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                                </div>
-                                <div class="uploaded-file-info">
-                                    <div id="progressFileName" class="uploaded-file-name">my-Invoice.pdf</div>
-                                    <div id="progressFileMeta" class="uploaded-file-meta">0 KB of 120 KB · Uploading...</div>
-                                    <div style="width: 100%; height: 4px; background-color: var(--border-color); border-radius: 2px; margin-top: 6px; overflow: hidden;">
-                                        <div id="progressFillBar" style="width: 0%; height: 100%; background-color: var(--accent); transition: width 0.2s;"></div>
-                                    </div>
-                                </div>
-                                <button type="button" class="uploaded-file-close" onclick="cancelUploadSimulator()">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                </button>
-                            </div>
-
-                            <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%; margin-top: 24px;">
-                                <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closeUploadPaymentModal()">Cancel</button>
-                                <button type="button" id="uploadPaymentSubmitBtn" class="btn btn-primary" style="flex: 1; font-weight: 600;" disabled onclick="startSimulatedUpload()">Upload</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Payment Uploaded Successfully Success Dialog -->
-                    <div id="paymentSuccessModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
-                        <div class="member-modal-card" style="text-align: center; max-width: 320px; padding: 24px;">
-                            <div class="success-modal-check">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                            </div>
-                            <h3 style="font-size: 16px; font-weight: 800; margin-bottom: 8px; color: var(--text-primary);">Payment Uploaded Successfully</h3>
-                            <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 24px;">
-                                Your payment receipt has been uploaded and is awaiting verification.
-                            </p>
-                            <button class="profile-btn-primary" style="margin: 0; width: 100%;" onclick="closeSuccessPaymentModal()">Okay</button>
-                        </div>
-                    </div>
-
-                <div id="checkoutConfirmModal" class="member-modal" role="dialog" aria-modal="true" aria-labelledby="checkoutConfirmTitle" style="display:none;">
-                    <div class="member-modal-card">
-                        <div class="member-modal-icon" style="background-color: var(--accent); color: white;">↗</div>
-                        <h3 id="checkoutConfirmTitle" style="font-size: 17px; font-weight: 700; color: var(--text-primary);">You already checked in today.</h3>
+                <div id="checkoutConfirmModal" class="member-modal" role="dialog" aria-modal="true" aria-labelledby="checkoutConfirmTitle" style="display:none; z-index: 2000;">
+                    <div class="member-modal-card" style="text-align: center; max-width: 320px; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 24px 20px;">
+                        <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); border: 1.5px solid rgba(239, 68, 68, 0.25); color: #ef4444; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🏃</div>
+                        <h3 id="checkoutConfirmTitle" style="font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 8px 0;">End Workout?</h3>
+                        <p style="font-size: 13.5px; color: rgba(255, 255, 255, 0.6); margin: 0 0 24px 0; line-height: 1.5;">Are you sure you want to check out?</p>
                         
-                        <div style="margin: 16px 0; padding: 12px; background-color: var(--bg-raised); border-radius: var(--radius-md); text-align: left; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 13px; color: var(--text-secondary);">Check-in</span>
-                            <strong id="confirmCheckinTime" style="font-size: 15px; color: var(--text-primary); font-weight: 700;">7:15 AM</strong>
-                        </div>
-                        
-                        <p style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 20px;">Do you want to Check-out now?</p>
-                        
-                        <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%;">
-                            <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closeCheckoutConfirmation()">Cancel</button>
-                            <button type="button" class="btn btn-primary" style="flex: 1; font-weight: 600;" onclick="confirmCheckout()">Check Out</button>
+                        <div class="member-modal-actions" style="display: flex; gap: 12px; width: 100%;">
+                            <button type="button" class="auth-capsule-btn secondary-btn" style="flex: 1; font-weight: 700; height: 44px; border-radius: 22px;" onclick="closeCheckoutConfirmation()">Cancel</button>
+                            <button type="button" class="auth-capsule-btn primary-btn" style="flex: 1; font-weight: 700; height: 44px; border-radius: 22px; background: #ef4444; color: #fff; border: none;" onclick="confirmCheckout()">Check Out</button>
                         </div>
                     </div>
                 </div>
@@ -1695,33 +1767,71 @@
 
                 <!-- Simulated Payment Modal -->
                 <div id="memberPaymentModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
-                    <div class="member-modal-card" style="text-align: left; max-width: 340px;">
+                    <div class="member-modal-card" style="text-align: left; max-width: 360px;">
                         <div class="member-modal-icon" style="background-color: var(--success-light); color: var(--success-dark); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; width: 56px; height: 56px; border-radius: 50%;">₹</div>
                         <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); text-align: center;">Confirm Payment Request</h3>
                         <p style="font-size: 13px; color: var(--text-secondary); text-align: center; margin-bottom: 16px;">
-                            To initiate your payment of <strong id="modalPaymentAmount">₹0.00</strong>, please transfer the amount and enter your transaction reference below.
+                            To initiate your payment of <strong id="modalPaymentAmount">₹0.00</strong>, please select payment options and enter your details below.
                         </p>
                         <form id="memberSubmitPaymentForm" onsubmit="submitPaymentRequest(event)">
                             <input type="hidden" id="modalPaymentId">
                             <input type="hidden" id="modalPlanId">
-                            <div class="input-group" style="margin-bottom: 16px;">
+                            
+                            <div class="input-group" style="margin-bottom: 12px;">
+                                <label for="modalPaymentMethod">Payment Method</label>
+                                <select id="modalPaymentMethod" class="input-control" style="background-color: rgba(255,255,255,0.02); color: var(--text-primary); border-color: var(--border-color);" required>
+                                    <option value="online">Online Transfer / UPI</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="card">Card Payment</option>
+                                </select>
+                            </div>
+
+                            <div class="input-group" style="margin-bottom: 12px;">
+                                <label for="modalPaymentDate">Payment Date</label>
+                                <input type="date" id="modalPaymentDate" class="input-control" required style="background-color: rgba(255,255,255,0.02); color: var(--text-primary); border-color: var(--border-color);">
+                            </div>
+
+                            <div class="input-group" style="margin-bottom: 12px;">
                                 <label for="modalPaymentRef">Transaction Reference ID (e.g. UPI Ref / Cashier code)</label>
                                 <input type="text" id="modalPaymentRef" class="input-control" placeholder="UPI Ref ID or Cashier Code" required>
                             </div>
+
+                            <div class="input-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 6px; display: block;">Upload Payment Proof (JPG, PNG, PDF - Max 1MB)</label>
+                                <div id="fileUploadDottedZone" class="file-upload-dotted-zone" onclick="triggerFileInput()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.02);">
+                                    <div class="file-upload-icon" style="margin-bottom: 6px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                    </div>
+                                    <div class="file-upload-title" id="fileUploadTitle" style="font-size: 12.5px; font-weight: 700; color: #fff;">Choose Receipt File...</div>
+                                    <input type="file" id="paymentScreenshotInput" accept="image/jpeg,image/png,application/pdf" style="display:none;" onchange="handleFileSelection(event)">
+                                </div>
+                            </div>
+
+                            <!-- Progress file card -->
+                            <div id="fileUploadProgressCard" class="uploaded-file-card" style="display:none; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; align-items: center; gap: 10px; margin-bottom: 16px;">
+                                <div class="uploaded-file-info" style="flex: 1;">
+                                    <div id="progressFileName" class="uploaded-file-name" style="font-size: 12.5px; font-weight: 600; color: #fff; margin-bottom: 4px;">File.png</div>
+                                    <div style="width: 100%; height: 4px; background-color: var(--border-color); border-radius: 2px; overflow: hidden;">
+                                        <div id="progressFillBar" style="width: 0%; height: 100%; background-color: var(--accent); transition: width 0.2s;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="member-modal-actions" style="display: flex; gap: 10px; width: 100%;">
                                 <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="closePaymentModal()">Cancel</button>
-                                <button type="submit" class="btn btn-primary" style="flex: 1; font-weight: 600;">Submit Request</button>
+                                <button type="submit" id="uploadPaymentSubmitBtn" class="btn btn-primary" style="flex: 1; font-weight: 600;">Submit Request</button>
                             </div>
                         </form>
                     </div>
                 </div>
 
-                <!-- Custom MODAL: Profile Photo View/Update Sheet -->
                 <div id="photoOptionsSheet" class="personal-modal-overlay" style="display: none; align-items: flex-end; z-index: 2600;" onclick="closePhotoOptionsSheet()">
                     <div class="personal-bottom-sheet" onclick="event.stopPropagation();">
                         <div style="width: 36px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin: 0 auto 16px;"></div>
                         <button type="button" class="sheet-option-btn" onclick="viewProfilePhotoFull()">View Photo</button>
-                        <button type="button" class="sheet-option-btn" onclick="triggerProfilePhotoUpdate()">Update Photo</button>
+                        <button type="button" class="sheet-option-btn" onclick="triggerProfilePhotoUpdate()">Upload New Photo</button>
+                        <button type="button" class="sheet-option-btn" style="color: #ef4444;" onclick="removeProfilePhoto()">Remove Photo</button>
+                        <button type="button" class="sheet-option-btn" style="color: rgba(255,255,255,0.5);" onclick="closePhotoOptionsSheet()">Cancel</button>
                     </div>
                 </div>
 
@@ -1741,11 +1851,6 @@
                     <button class="tab-btn" onclick="switchMobileNav('activity')">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
                         <span>Activity</span>
-                    </button>
-
-                    <!-- Big Scan Circular Button -->
-                    <button class="tab-btn scan-circular-btn" onclick="switchMobileNav('scan')">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><line x1="14" y1="14" x2="14" y2="21"></line><line x1="21" y1="14" x2="21" y2="21"></line><line x1="14" y1="17.5" x2="21" y2="17.5"></line></svg>
                     </button>
 
                     <button class="tab-btn" onclick="switchMobileNav('leaders')">

@@ -346,6 +346,7 @@ async function checkUserSession() {
 
             document.getElementById('profileOwnerName').innerText = ownerDisplayName;
             document.getElementById('greetingUser').innerText = `${ownerFirstName} 👋`;
+            updateTimeBasedGreeting();
 
             const avatarDiv = document.querySelector('.owner-profile-card .owner-avatar');
             if (avatarDiv && data.user.first_name) {
@@ -535,6 +536,13 @@ let rawDashboardStats = null;
 
 // Fetch stats and render dashboard elements
 async function fetchDashboardStats() {
+    // Set loading indicator on KPI values
+    const kpiElements = ['statActiveMembers', 'statNewMembersWeek', 'statTodayCheckins', 'statMonthlyRevenue', 'statPendingPayments', 'statExpiredCount'];
+    kpiElements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = '...';
+    });
+    
     try {
         const res = await fetch('/api/admin/stats');
         const data = await res.json();
@@ -960,13 +968,17 @@ async function fetchMembers() {
             const expiryCell = m.end_date ? m.end_date : 'N/A';
             const isChecked = selectedMembers.has(m.id) ? 'checked' : '';
 
+            const avatarHtml = m.profile_photo
+                ? `<img src="${m.profile_photo}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" />`
+                : `<div class="member-avatar-circle" style="background-color: ${getRandomColorForChar(initial)}">${initial}</div>`;
+
             tr.innerHTML = `
                 <td class="col-checkbox">
                     <input type="checkbox" class="table-checkbox row-checkbox" data-id="${m.id}" ${isChecked} onchange="toggleRowSelection('membersTable', ${m.id}, this)">
                 </td>
                 <td>
                     <div class="member-avatar-cell">
-                        <div class="member-avatar-circle" style="background-color: ${getRandomColorForChar(initial)}">${initial}</div>
+                        ${avatarHtml}
                         <div class="member-profile-desc">
                             <span class="member-fullname-bold">${m.first_name} ${m.last_name}</span>
                             <span class="member-email-dim">${m.email}</span>
@@ -1202,6 +1214,27 @@ async function fetchPayments() {
     paymentLimit = pageSize;
     const tbody = document.getElementById('paymentsTableBody');
 
+    // Show skeleton loader
+    if (tbody) {
+        tbody.innerHTML = '';
+        for (let i = 0; i < 5; i++) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="col-checkbox"><span class="skeleton-loader" style="display: inline-block; width: 16px; height: 16px;"></span></td>
+                <td class="col-receipt"><span class="skeleton-loader" style="display: inline-block; width: 100px; height: 16px;"></span></td>
+                <td>
+                    <span class="skeleton-loader" style="display: inline-block; width: 120px; height: 18px; margin-bottom: 4px;"></span><br>
+                    <span class="skeleton-loader" style="display: inline-block; width: 160px; height: 14px;"></span>
+                </td>
+                <td class="col-amount"><span class="skeleton-loader" style="display: inline-block; width: 60px; height: 16px;"></span></td>
+                <td class="col-status"><span class="skeleton-loader" style="display: inline-block; width: 80px; height: 20px;"></span></td>
+                <td class="col-date"><span class="skeleton-loader" style="display: inline-block; width: 80px; height: 16px;"></span></td>
+                <td style="text-align: right;"><span class="skeleton-loader" style="display: inline-block; width: 24px; height: 24px;"></span></td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
+
     try {
         const res = await fetch(`/api/admin/payments?status=${status}&search=${encodeURIComponent(search)}&page=${paymentPage}&limit=${paymentLimit}&sort_by=${paymentSortBy}&sort_order=${paymentSortOrder}`);
         const result = await res.json();
@@ -1224,16 +1257,17 @@ async function fetchPayments() {
                 tr.classList.add('selected');
             }
 
-            const badge = p.status === 'paid' ? 'badge-active' : (p.status === 'pending_approval' ? 'badge-pending-approval' : (p.status === 'overdue' ? 'badge-suspended' : 'badge-expired'));
+            const badge = p.status === 'Approved' ? 'badge-active' : (p.status === 'Pending Approval' ? 'badge-pending-approval' : (p.status === 'Overdue' ? 'badge-suspended' : 'badge-expired'));
             const isChecked = selectedPayments.has(p.id) ? 'checked' : '';
 
             let actionBtn = '';
-            if (p.status === 'pending_approval') {
+            if (p.status === 'Pending Approval') {
                 actionBtn = `
-                    <button class="dots-dropdown-item" style="color: var(--success-dark); font-weight: 600;" onclick="adminApprovePayment(${p.id})">Approve Payment</button>
+                    <button class="dots-dropdown-item" style="color: var(--accent); font-weight: 600;" onclick="openReviewPaymentModal(${JSON.stringify(p).replace(/"/g, '&quot;')})">Review Payment</button>
+                    <button class="dots-dropdown-item" style="color: var(--success-dark);" onclick="adminApprovePayment(${p.id})">Approve Payment</button>
                     <button class="dots-dropdown-item" style="color: var(--danger-dark);" onclick="adminRejectPayment(${p.id})">Reject Payment</button>
                 `;
-            } else if (p.status !== 'paid') {
+            } else if (p.status !== 'Approved') {
                 actionBtn = `
                     <button class="dots-dropdown-item" onclick="triggerManualPaymentForm(${p.id})">Record Pay</button>
                     <button class="dots-dropdown-item" style="color: var(--warning-dark);" onclick="triggerWhatsAppModal(${p.id})">WhatsApp Alert</button>
@@ -1242,16 +1276,27 @@ async function fetchPayments() {
                 actionBtn = `<button class="dots-dropdown-item" style="color: var(--accent);" onclick="generateMockReceipt(${p.id}, '${p.first_name} ${p.last_name}', '${p.plan_name}', ${p.amount}, '${p.payment_date}')">Print Receipt</button>`;
             }
 
-            const dateVal = p.status === 'paid' ? new Date(p.payment_date).toLocaleDateString() : `Due: ${p.due_date}`;
+            if (p.receipt_file_url && p.receipt_file_url !== '—') {
+                actionBtn += `<button class="dots-dropdown-item" style="color: var(--accent);" onclick="openReviewPaymentModal(${JSON.stringify(p).replace(/"/g, '&quot;')})">View Receipt Proof</button>`;
+            }
+
+            const dateVal = p.status === 'Approved' ? (p.payment_date || '—') : `Due: ${p.due_date || '—'}`;
 
             tr.innerHTML = `
                 <td class="col-checkbox">
                     <input type="checkbox" class="table-checkbox row-checkbox" data-id="${p.id}" ${isChecked} onchange="toggleRowSelection('paymentsTable', ${p.id}, this)">
                 </td>
                 <td class="col-receipt" data-label="Receipt" style="font-family: monospace; font-size:13px; font-weight:600;">${p.receipt_number || 'PENDING'}</td>
-                <td style="font-weight: 500;">${p.first_name} ${p.last_name}</td>
+                <td style="font-weight: 500;">
+                    <div style="font-size: 13.5px; font-weight: 700; color: var(--text-primary);">${p.first_name} ${p.last_name}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Plan: ${p.plan_name || '—'}</div>
+                    <div style="font-size: 11.5px; color: var(--text-tertiary); margin-top: 1px;">ID: ${p.member_id} | Phone: ${p.phone || '—'}</div>
+                </td>
                 <td class="col-amount" data-label="Amount">${formatINRCurrency(p.amount)}</td>
-                <td class="col-status" data-label="Status"><span class="badge ${badge}">${p.status}</span></td>
+                <td class="col-status" data-label="Status">
+                    <span class="badge ${badge}">${p.status}</span>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Method: ${p.payment_method ? p.payment_method.toUpperCase() : '—'}</div>
+                </td>
                 <td class="col-date" data-label="Date/Due">${dateVal}</td>
                 <td style="text-align: right;" class="col-actions">
                     <div class="dots-dropdown">
@@ -1384,14 +1429,20 @@ async function fetchPendingPaymentsDropDown() {
 
 // Triggers
 function triggerAssignModal(mbrId, name) {
+    closeAllDotsMenus();
+    fetchRegisterPlans('assignPlanSelect');
     document.getElementById('assignMemberId').value = mbrId;
     document.getElementById('assignMemberName').innerText = name;
+    if (document.getElementById('assignStartDate')) {
+        document.getElementById('assignStartDate').value = new Date().toISOString().split('T')[0];
+    }
     openModal('assignPlanModal');
 }
 
 let editMemberCurrentStatus = 'active';
 
 async function openEditMemberModal(mbrId) {
+    closeAllDotsMenus();
     try {
         const res = await fetch(`/api/admin/members/${mbrId}`);
         const data = await res.json();
@@ -1407,7 +1458,8 @@ async function openEditMemberModal(mbrId) {
         document.getElementById('emLastName').value = m.last_name || '';
         document.getElementById('emEmail').value = m.email || '';
         document.getElementById('emPhone').value = m.phone || '';
-        document.getElementById('emEmergency').value = m.emergency_contact || '';
+        document.getElementById('emEmergencyName').value = m.emergency_contact_name || '';
+        document.getElementById('emEmergencyNumber').value = m.emergency_contact_number || '';
         document.getElementById('emPassword').value = '';
         document.getElementById('emPlan').value = data.membership ? data.membership.plan_name : 'No Plan';
 
@@ -1633,16 +1685,79 @@ async function fetchGymSettings() {
         if (phoneInput) phoneInput.value = gymSettings.gym_phone || '';
         if (addressInput) addressInput.value = gymSettings.gym_address || '';
         if (tokenInput) tokenInput.value = gymSettings.qr_token || '';
-        if (imageInput) imageInput.value = gymSettings.gym_image_url || '';
-
-        document.getElementById('headerGymName').innerText = gymSettings.gym_name || 'GymOS';
-        const brandNameEl = document.querySelector('.brand-title-fitzone .brand-main');
-        if (brandNameEl) brandNameEl.innerText = gymSettings.gym_name || 'GymOS';
-
-        renderDashboardGymImage(gymSettings.gym_image_url);
+        
+        const logoUrl = gymSettings.gym_logo || gymSettings.gym_image_url || '';
+        updateGymLogoPreviewUI(logoUrl);
+        renderGymBranding(logoUrl, gymSettings.gym_name);
+        renderDashboardGymImage(logoUrl);
     } catch (err) {
         console.error('Gym settings loading error', err);
     }
+}
+
+let currentSelectedGymLogo = null; // null = unchanged, "" = removed, base64/url = new
+
+function handleGymLogoSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        showToast('Unsupported format. Please upload PNG, JPG, or WEBP image.', 'error');
+        event.target.value = '';
+        return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        showToast('File size exceeds 2MB limit. Please choose a smaller image.', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        currentSelectedGymLogo = e.target.result;
+        updateGymLogoPreviewUI(currentSelectedGymLogo);
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeGymLogo() {
+    currentSelectedGymLogo = "";
+    const fileInput = document.getElementById('gymLogoFileInput');
+    if (fileInput) fileInput.value = '';
+    updateGymLogoPreviewUI("");
+}
+
+function updateGymLogoPreviewUI(logoSrc) {
+    const previewImg = document.getElementById('gymLogoPreview');
+    const fallbackSpan = document.getElementById('gymLogoFallback');
+    const removeBtn = document.getElementById('btnRemoveGymLogo');
+
+    if (logoSrc) {
+        previewImg.src = logoSrc;
+        previewImg.style.display = 'block';
+        fallbackSpan.style.display = 'none';
+        if (removeBtn) removeBtn.style.display = 'inline-block';
+    } else {
+        previewImg.src = '';
+        previewImg.style.display = 'none';
+        fallbackSpan.style.display = 'block';
+        if (removeBtn) removeBtn.style.display = 'none';
+    }
+}
+
+function renderGymBranding(logoUrl, gymName) {
+    const sidebarLogoEl = document.querySelector('.brand-logo-fitzone');
+    if (sidebarLogoEl) {
+        if (logoUrl) {
+            sidebarLogoEl.innerHTML = `<img src="${logoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius: 8px;" alt="Gym Logo">`;
+        } else {
+            sidebarLogoEl.innerHTML = `⚡`;
+        }
+    }
+    const brandNameEl = document.querySelector('.brand-title-fitzone .brand-main');
+    if (brandNameEl) brandNameEl.innerText = gymName || 'GymOS';
+    const headerNameEl = document.getElementById('headerGymName');
+    if (headerNameEl) headerNameEl.innerText = gymName || 'GymOS';
 }
 
 function copyGymCode() {
@@ -1658,14 +1773,62 @@ function copyGymCode() {
     });
 }
 
+function copyQRToken() {
+    const tokenInput = document.getElementById('settingsQRToken');
+    if (!tokenInput || !tokenInput.value) {
+        showToast('No QR Token available', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(tokenInput.value).then(() => {
+        showToast('Universal QR Token copied to clipboard.');
+    }).catch(() => {
+        showToast('Could not copy automatically - copy manually.', 'error');
+    });
+}
+
+async function regenerateQRToken() {
+    if (!confirm("Regenerating will invalidate all existing QR codes. Members will need to refresh scan codes. Are you sure you want to generate a new QR token?")) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/settings/regenerate-qr-token', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            showToast('New QR Token generated successfully.');
+            document.getElementById('settingsQRToken').value = data.qr_token;
+            gymSettings.qr_token = data.qr_token;
+        } else {
+            showToast(data.error || 'Failed to regenerate token', 'error');
+        }
+    } catch (err) {
+        showToast('Failed to regenerate QR token.', 'error');
+    }
+}
+
+function updateTimeBasedGreeting() {
+    const timeEl = document.getElementById('greetingTimePrefix');
+    if (!timeEl) return;
+    const hour = new Date().getHours();
+    let prefix = 'Good Morning';
+    if (hour >= 12 && hour < 17) {
+        prefix = 'Good Afternoon';
+    } else if (hour >= 17 || hour < 5) {
+        prefix = 'Good Evening';
+    }
+    timeEl.innerText = prefix;
+}
+
 function renderDashboardGymImage(imageUrl) {
-    const el = document.getElementById('dashboardGymImage');
-    if (!el) return;
+    const imgEl = document.getElementById('dashboardGymImage');
+    const fallbackEl = document.getElementById('dashboardGymLogoFallback');
+    if (!imgEl) return;
     if (imageUrl) {
-        el.src = imageUrl;
-        el.style.display = 'block';
+        imgEl.src = imageUrl;
+        imgEl.style.display = 'block';
+        if (fallbackEl) fallbackEl.style.display = 'none';
     } else {
-        el.style.display = 'none';
+        imgEl.style.display = 'none';
+        if (fallbackEl) fallbackEl.style.display = 'inline-block';
     }
 }
 
@@ -1700,7 +1863,7 @@ function setupFormHandlers() {
                 loginError.style.display = 'block';
             }
         } catch (err) {
-            loginError.innerText = 'Failed request: server offline';
+            loginError.innerText = 'Unable to connect to server. If using HTTPS, accept the browser security prompt or check server status.';
             loginError.style.display = 'block';
         }
     });
@@ -1728,13 +1891,15 @@ function setupFormHandlers() {
     // Settings Update
     document.getElementById('settingsForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const logoPayload = currentSelectedGymLogo !== null ? currentSelectedGymLogo : (gymSettings.gym_logo || gymSettings.gym_image_url || '');
         const data = {
             gym_code: document.getElementById('settingsGymCode').value,
             gym_name: document.getElementById('settingsGymName').value,
             gym_phone: document.getElementById('settingsGymPhone').value,
             gym_address: document.getElementById('settingsGymAddress').value,
             qr_token: document.getElementById('settingsQRToken').value,
-            gym_image_url: document.getElementById('settingsGymImageUrl').value
+            gym_logo: logoPayload,
+            gym_image_url: logoPayload
         };
 
         try {
@@ -1746,6 +1911,7 @@ function setupFormHandlers() {
             const resData = await res.json();
             if (resData.success) {
                 showToast('Configuration updated');
+                currentSelectedGymLogo = null;
                 fetchGymSettings();
             } else {
                 showToast(resData.error, 'error');
@@ -1766,16 +1932,25 @@ function setupFormHandlers() {
     // Add Member
     document.getElementById('addMemberForm').addEventListener('submit', async (e) => {
         e.preventDefault();
+        const planId = document.getElementById('mPlanSelect').value;
+        const isCustomPlan = document.getElementById('mCustomPlanToggle').checked;
         const data = {
             first_name: document.getElementById('mFirstName').value,
             last_name: document.getElementById('mLastName').value,
             email: document.getElementById('mEmail').value,
             phone: document.getElementById('mPhone').value,
-            emergency_contact: document.getElementById('mEmergency').value,
-            password: document.getElementById('mPassword').value || undefined
+            emergency_contact_name: document.getElementById('mEmergencyName').value,
+            emergency_contact_number: document.getElementById('mEmergencyNumber').value,
+            password: document.getElementById('mPassword').value,
+            plan_id: planId,
+            record_payment: document.getElementById('mRecordPayment').checked
         };
-        const planId = document.getElementById('mPlanSelect').value;
-        const isCustomPlan = document.getElementById('mCustomPlanToggle').checked;
+        if (isCustomPlan) {
+            const customStart = document.getElementById('mCustomStartDate').value;
+            const customEnd = document.getElementById('mCustomEndDate').value;
+            if (customStart) data.start_date = customStart;
+            if (customEnd) data.end_date = customEnd;
+        }
 
         try {
             const res = await fetch('/api/admin/members', {
@@ -1789,36 +1964,9 @@ function setupFormHandlers() {
                 return;
             }
 
-            if (planId) {
-                const planData = {
-                    plan_id: planId,
-                    record_payment: document.getElementById('mRecordPayment').checked
-                };
-                if (isCustomPlan) {
-                    const customStart = document.getElementById('mCustomStartDate').value;
-                    const customEnd = document.getElementById('mCustomEndDate').value;
-                    if (customStart) planData.start_date = customStart;
-                    if (customEnd) planData.end_date = customEnd;
-                }
-                const planRes = await fetch(`/api/admin/members/${resData.member_id}/assign-plan`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(planData)
-                });
-                const planResData = await planRes.json();
-                if (!planResData.success) {
-                    showToast(`Member created, but plan assignment failed: ${planResData.error}`, 'error');
-                    closeModal('addMemberModal');
-                    document.getElementById('addMemberForm').reset();
-                    fetchMembers();
-                    fetchDashboardStats();
-                    return;
-                }
-            }
-
             closeModal('addMemberModal');
             document.getElementById('addMemberForm').reset();
-            showToast(planId ? 'Member created and plan assigned successfully.' : 'Member created successfully.');
+            showToast('Member created and plan assigned successfully.');
             fetchMembers();
             fetchDashboardStats();
         } catch (err) {
@@ -1835,7 +1983,8 @@ function setupFormHandlers() {
             last_name: document.getElementById('emLastName').value,
             email: document.getElementById('emEmail').value,
             phone: document.getElementById('emPhone').value,
-            emergency_contact: document.getElementById('emEmergency').value,
+            emergency_contact_name: document.getElementById('emEmergencyName').value,
+            emergency_contact_number: document.getElementById('emEmergencyNumber').value,
             status: editMemberCurrentStatus,
             password: document.getElementById('emPassword').value || undefined,
             fee_pending: document.getElementById('emFeePending').value === 'true'
@@ -1969,9 +2118,10 @@ async function logoutOwner() {
 
 // Inline toggle suspend
 async function toggleSuspendMember(id, currentStatus) {
+    closeAllDotsMenus();
     const target = (currentStatus === 'suspended' || currentStatus === 'pending') ? 'active' : 'suspended';
-    const actionLabel = currentStatus === 'pending' ? 'approve' : (currentStatus === 'suspended' ? 'activate' : 'suspend');
-    if (!confirm(`Are you sure you want to ${actionLabel} this member?`)) return;
+    const confirmMsg = target === 'suspended' ? 'Suspend this member?' : (currentStatus === 'pending' ? 'Approve this member?' : 'Activate this member?');
+    if (!confirm(confirmMsg)) return;
 
     try {
         const detailRes = await fetch(`/api/admin/members/${id}`);
@@ -1990,7 +2140,7 @@ async function toggleSuspendMember(id, currentStatus) {
             fetchMembers();
             fetchDashboardStats();
         } else {
-            showToast(resData.error, 'error');
+            showToast(resData.error || 'Failed modifying member status', 'error');
         }
     } catch (err) {
         showToast('Failed to modify status', 'error');
@@ -1998,17 +2148,18 @@ async function toggleSuspendMember(id, currentStatus) {
 }
 
 async function deleteMember(id) {
+    closeAllDotsMenus();
     if (!confirm('Are you sure you want to permanently delete this member?')) return;
 
     try {
         const res = await fetch(`/api/admin/members/${id}`, { method: 'DELETE' });
         const data = await res.json();
         if (data.success) {
-            showToast('Member profile purged.');
+            showToast('Member profile permanently deleted.');
             fetchMembers();
             fetchDashboardStats();
         } else {
-            showToast(data.error, 'error');
+            showToast(data.error || 'Failed deleting member profile', 'error');
         }
     } catch (err) {
         showToast('Failed deleting member profile', 'error');
@@ -2767,9 +2918,15 @@ async function adminApprovePayment(id) {
 }
 
 async function adminRejectPayment(id) {
-    if (!confirm('Reject this payment request?')) return;
+    const reason = prompt('Enter rejection reason:', 'Receipt details are unclear. Please upload a clearer receipt.');
+    if (reason === null) return; // user cancelled prompt
+    
     try {
-        const res = await fetch(`/api/admin/payments/${id}/reject`, { method: 'POST' });
+        const res = await fetch(`/api/admin/payments/${id}/reject`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rejection_reason: reason })
+        });
         const data = await res.json();
         if (data.success) {
             showToast('Payment request rejected.');
@@ -2784,16 +2941,76 @@ async function adminRejectPayment(id) {
     }
 }
 
+function openReviewPaymentModal(p) {
+    document.getElementById('reviewPaymentId').value = p.id;
+    document.getElementById('reviewMemberName').textContent = `${p.first_name} ${p.last_name || ''}`;
+    document.getElementById('reviewPlanName').textContent = p.plan_name || 'Membership Plan';
+    document.getElementById('reviewAmount').textContent = formatINRCurrency(p.amount);
+    document.getElementById('reviewPaymentDate').textContent = p.payment_date || '-';
+    document.getElementById('reviewPaymentMethod').textContent = p.payment_method ? p.payment_method.toUpperCase() : 'ONLINE';
+    document.getElementById('reviewSubmittedTime').textContent = p.created_at || '-';
+
+    const container = document.getElementById('reviewReceiptContainer');
+    container.innerHTML = '';
+
+    if (p.receipt_file_url && p.receipt_file_url !== '—') {
+        if (p.receipt_file_type === 'application/pdf') {
+            container.innerHTML = `<iframe src="${p.receipt_file_url}" style="width: 100%; height: 320px; border: none; border-radius: var(--radius-sm);"></iframe>`;
+        } else {
+            container.innerHTML = `<img src="${p.receipt_file_url}" style="max-width: 100%; max-height: 320px; object-fit: contain; cursor: zoom-in;" onclick="window.open('${p.receipt_file_url}', '_blank')">`;
+        }
+    } else {
+        container.innerHTML = '<span style="color: var(--text-tertiary); font-size: 13px;">No receipt document uploaded.</span>';
+    }
+
+    // Toggle download button
+    const downloadBtn = document.getElementById('reviewDownloadBtn');
+    if (p.receipt_file_url && p.receipt_file_url !== '—') {
+        downloadBtn.style.display = 'inline-block';
+        downloadBtn.href = p.receipt_file_url;
+        downloadBtn.download = `GymOS-Receipt-${p.receipt_number || p.id}.${p.receipt_file_type === 'application/pdf' ? 'pdf' : 'png'}`;
+    } else {
+        downloadBtn.style.display = 'none';
+    }
+
+    // Toggle Action Buttons based on status
+    const approveBtn = document.querySelector('#reviewPaymentModal .btn-primary[onclick="triggerReviewApprove()"]');
+    const rejectBtn = document.querySelector('#reviewPaymentModal .btn-primary[onclick="triggerReviewReject()"]');
+    if (p.status === 'Pending Approval') {
+        approveBtn.style.display = 'inline-block';
+        rejectBtn.style.display = 'inline-block';
+    } else {
+        approveBtn.style.display = 'none';
+        rejectBtn.style.display = 'none';
+    }
+
+    openModal('reviewPaymentModal');
+}
+
+function triggerReviewApprove() {
+    const id = document.getElementById('reviewPaymentId').value;
+    closeModal('reviewPaymentModal');
+    adminApprovePayment(parseInt(id));
+}
+
+function triggerReviewReject() {
+    const id = document.getElementById('reviewPaymentId').value;
+    closeModal('reviewPaymentModal');
+    adminRejectPayment(parseInt(id));
+}
+
 async function adminManualCheckIn(id) {
+    closeAllDotsMenus();
     try {
         const res = await fetch(`/api/admin/members/${id}/check-in`, { method: 'POST' });
         const data = await res.json();
-        if (res.status === 200 || data.success) {
+        if (res.ok || data.success) {
             showToast('Manual check-in completed successfully!');
             fetchMembers();
             fetchDashboardStats();
+            if (typeof fetchAttendanceTable === 'function') fetchAttendanceTable();
         } else {
-            showToast(data.error || 'Check-in failed.', 'error');
+            showToast(data.error || 'This member is already checked in.', 'error');
         }
     } catch (err) {
         console.error('Manual check-in error', err);
@@ -2802,15 +3019,17 @@ async function adminManualCheckIn(id) {
 }
 
 async function adminManualCheckOut(id) {
+    closeAllDotsMenus();
     try {
         const res = await fetch(`/api/admin/members/${id}/check-out`, { method: 'POST' });
         const data = await res.json();
-        if (res.status === 200 || data.success) {
+        if (res.ok || data.success) {
             showToast(`Manual check-out logged! Duration: ${data.duration}`);
             fetchMembers();
             fetchDashboardStats();
+            if (typeof fetchAttendanceTable === 'function') fetchAttendanceTable();
         } else {
-            showToast(data.error || 'Check-out failed.', 'error');
+            showToast(data.error || 'This member is not currently checked in.', 'error');
         }
     } catch (err) {
         console.error('Manual check-out error', err);
