@@ -2961,3 +2961,118 @@
     font-weight: normal !important;
     margin: 0 !important;
 }
+
+/* ================= CRM WIN BACK MODULE STYLES ================= */
+.winback-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.winback-stat-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.winback-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.winback-stat-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.winback-stat-val {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.winback-stat-sub {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+/* Status tags for Win Back */
+.status-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.status-tag-followup {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.status-tag-highrisk {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.status-tag-lost {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Toolbars */
+.bulk-actions-toolbar {
+    background-color: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 72px;
+    z-index: 100;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-premium);
+    backdrop-filter: blur(8px);
+}
+
+.bulk-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #fff;
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.bulk-actions-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-bulk-whatsapp {
+    background-color: #22c55e !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+.btn-bulk-whatsapp:hover {
+    background-color: #16a34a !important;
+}
+

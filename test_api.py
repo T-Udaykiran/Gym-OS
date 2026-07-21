@@ -6,7 +6,7 @@ import json
 import os
 import sys
 
-PORT = 8000
+PORT = int(os.environ.get("TEST_PORT", 8081))
 SERVER_URL = f"http://127.0.0.1:{PORT}"
 
 def wait_for_server(timeout=30):

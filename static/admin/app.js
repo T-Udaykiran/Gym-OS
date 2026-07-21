@@ -106,7 +106,10 @@ function setHeaderDates() {
     const today = new Date();
     const optionsLong = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
     const dateStrLong = today.toLocaleDateString('en-IN', optionsLong);
-    document.getElementById('realTimeHeaderDate').innerText = dateStrLong;
+    const headerDateEl = document.getElementById('realTimeHeaderDate');
+    if (headerDateEl) {
+        headerDateEl.innerText = dateStrLong;
+    }
 
     const optionsShort = { day: 'numeric', month: 'short', year: 'numeric' };
     const dateStrShort = today.toLocaleDateString('en-IN', optionsShort);
@@ -520,6 +523,8 @@ function showTab(tabName) {
     if (tabName === 'pending-approvals') fetchPendingApprovals();
     if (tabName === 'pending-dues') fetchPendingDuesPage();
     if (tabName === 'expiring-soon') fetchExpiringSoonPage();
+    if (tabName === 'win-back') { fetchWinBackMembers(); fetchWinBackAnalytics(); }
+    if (tabName === 'revenue-analytics') { fetchRevenueAnalyticsOverview(); }
     if (tabName === 'notifications' && typeof filterNotificationHistory === 'function') filterNotificationHistory();
 }
 
@@ -537,7 +542,7 @@ let rawDashboardStats = null;
 // Fetch stats and render dashboard elements
 async function fetchDashboardStats() {
     // Set loading indicator on KPI values
-    const kpiElements = ['statActiveMembers', 'statNewMembersWeek', 'statTodayCheckins', 'statMonthlyRevenue', 'statPendingPayments', 'statExpiredCount'];
+    const kpiElements = ['statActiveMembers', 'statNewMembersWeek', 'statTodayCheckins', 'statMonthlyRevenue', 'statPendingPayments', 'statExpiredCount', 'statWinBackCount'];
     kpiElements.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerText = '...';
@@ -599,10 +604,25 @@ function renderDashboardData() {
     document.getElementById('statActiveMembers').innerText = stats.total_members;
     document.getElementById('statNewMembersWeek').innerText = stats.new_members_week;
     document.getElementById('statTodayCheckins').innerText = stats.today_checkins;
-    document.getElementById('statMonthlyRevenue').innerText = formatINRCurrency(stats.monthly_revenue);
+    document.getElementById('statLifetimeRevenue').innerText = formatINRCurrency(stats.lifetime_revenue || 0);
+    const growthTrend = document.getElementById('statRevenueGrowthTrend');
+    const growthVal = document.getElementById('statRevenueGrowthVal');
+    const growthArrow = document.getElementById('statRevenueGrowthArrow');
+    if (growthTrend && growthVal && growthArrow) {
+        const rate = stats.growth_rate || 0;
+        growthVal.innerText = `${Math.abs(rate)}%`;
+        if (rate >= 0) {
+            growthArrow.innerText = '↑';
+            growthTrend.style.color = '#22c55e';
+        } else {
+            growthArrow.innerText = '↓';
+            growthTrend.style.color = '#ef4444';
+        }
+    }
     document.getElementById('statPendingPayments').innerText = stats.pending_payments;
     document.getElementById('statPendingAmountVal').innerText = `${formatINRCurrency(stats.pending_amount)} total`;
     document.getElementById('statExpiredCount').innerText = stats.expiring_members;
+    document.getElementById('statWinBackCount').innerText = stats.win_back_members_count || 0;
 
     // Donut Chart & ratios
     renderAttendanceDonut(stats.today_checkins, stats.active_members);
@@ -1483,8 +1503,22 @@ async function triggerWhatsAppModal(paymentId) {
         const res = await fetch(`/api/admin/payments/${paymentId}/reminder`, { method: 'POST' });
         const data = await res.json();
 
-        document.getElementById('whatsappPreviewTxt').innerText = data.message || '';
-        document.getElementById('whatsappTriggerLink').href = data.whatsapp_url || '';
+        const cleanMsg = data.message || '';
+        const cleanPhone = data.phone || '';
+        const waUrl = WhatsAppUtility.buildWhatsAppUrl(cleanPhone, cleanMsg);
+
+        document.getElementById('whatsappPreviewTxt').innerText = cleanMsg;
+        document.getElementById('whatsappTriggerLink').href = waUrl || '#';
+        
+        document.getElementById('whatsappTriggerLink').onclick = function(e) {
+            if (!waUrl) {
+                e.preventDefault();
+                alert("Member does not have a valid WhatsApp number.");
+                return;
+            }
+            closeModal('whatsappModal');
+        };
+
         openModal('whatsappModal');
     } catch (err) {
         showToast('Failed to generate reminder link', 'error');
@@ -1500,8 +1534,8 @@ async function sendPaymentReminder(paymentId) {
     try {
         const res = await fetch(`/api/admin/payments/${paymentId}/reminder`, { method: 'POST' });
         const data = await res.json();
-        if (data.whatsapp_url) {
-            window.open(data.whatsapp_url, '_blank');
+        if (data.message && data.phone) {
+            WhatsAppUtility.openWhatsApp(data.phone, data.message);
         } else {
             showToast(data.error || 'Failed to generate reminder link', 'error');
         }
@@ -1514,8 +1548,8 @@ async function sendRenewalReminder(memberId) {
     try {
         const res = await fetch(`/api/admin/members/${memberId}/renewal-reminder`);
         const data = await res.json();
-        if (data.whatsapp_url) {
-            window.open(data.whatsapp_url, '_blank');
+        if (data.message && data.phone) {
+            WhatsAppUtility.openWhatsApp(data.phone, data.message);
         } else {
             showToast(data.error || 'Failed to generate reminder link', 'error');
         }
@@ -3559,4 +3593,852 @@ async function triggerOwnerLogout(event) {
         appLayout.style.display = 'none';
     }
 }
+
+// ================= WIN BACK CRM FUNCTIONS =================
+
+let winBackCurrentPage = 1;
+let winBackTotalPages = 1;
+let selectedWinBackMemberIds = new Set();
+let winBackMembersList = [];
+let activeWinBackMember = null;
+
+const WIN_BACK_TEMPLATES = {
+    1: "Hello {name},\n\nWe missed you at {gym_name}! We noticed it's been {days} days since your last visit. We'd love to see you back on track. Keep up the consistency!\n\nBest regards,\n- {gym_name}",
+    2: "Hello {name},\n\nYour fitness journey matters to us. We noticed you haven't visited {gym_name} in the last {days} days. Is everything okay? Let us know if you need help resuming your routine or modifying your active \"{plan}\" plan.\n\nBest regards,\n- {gym_name}",
+    3: "Hello {name},\n\nIt's been {days} days since we last saw you at {gym_name}. We miss your energy! We want to help you get back on track. Pop by this week!\n\nBest regards,\n- {gym_name}",
+    4: "Hello {name},\n\nThis is a friendly reminder from {gym_name}. Your active \"{plan}\" plan is expiring on {expiry_date}. Please renew soon to continue uninterrupted access!\n\nThank you,\n- {gym_name}",
+    5: "Hello {name},\n\nYour membership at {gym_name} has expired. We would love to have you back! You can check our latest plans or renew your membership to continue your fitness journey.\n\nBest regards,\n- {gym_name}",
+    6: "Hello {name},\n\nThis is a reminder from {gym_name}. You have a pending fee/dues payment. Please complete the payment soon to ensure smooth access to the gym.\n\nThank you,\n- {gym_name}",
+    7: "Hello {name},\n\nWe want you back at {gym_name}! Here is a special comeback offer: Renew your active plan \"{plan}\" this week and get an extra 10% discount on your membership!\n\nBest regards,\n- {gym_name}"
+};
+
+async function fetchWinBackAnalytics() {
+    try {
+        const res = await fetch('/api/admin/win-back/analytics');
+        const data = await res.json();
+        
+        document.getElementById('winbackTotalCount').innerText = data.total_win_back;
+        document.getElementById('winbackFollowupCount').innerText = data.inactive_15_30;
+        document.getElementById('winbackHighRiskCount').innerText = data.inactive_30_60;
+        document.getElementById('winbackAlmostLostCount').innerText = data.inactive_60_plus;
+        document.getElementById('winbackRecoveredMonth').innerText = data.recovered_this_month;
+        document.getElementById('winbackRecoveryRate').innerText = `${data.recovery_rate}%`;
+    } catch (err) {
+        console.error('Failed to fetch win back analytics', err);
+    }
+}
+
+async function fetchWinBackMembers() {
+    const search = document.getElementById('winbackSearchInput').value;
+    const days = document.getElementById('winbackDaysFilter').value;
+    const startDate = document.getElementById('winbackStartDate').value;
+    const endDate = document.getElementById('winbackEndDate').value;
+    const limit = 25;
+    
+    let url = `/api/admin/win-back/members?page=${winBackCurrentPage}&limit=${limit}&search=${encodeURIComponent(search)}&days=${days}`;
+    if (startDate && endDate) {
+        url += `&start_date=${startDate}&end_date=${endDate}`;
+    }
+    
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        winBackMembersList = data.data;
+        winBackTotalPages = Math.ceil(data.total / limit) || 1;
+        
+        renderWinBackTable(winBackMembersList);
+        
+        document.getElementById('winbackTotalInfo').innerText = `Showing ${winBackMembersList.length} of ${data.total} members`;
+        document.getElementById('winbackPrevPageBtn').disabled = winBackCurrentPage <= 1;
+        document.getElementById('winbackNextPageBtn').disabled = winBackCurrentPage >= winBackTotalPages;
+        
+        // Reset selection on fetch
+        selectedWinBackMemberIds.clear();
+        updateWinBackBulkToolbar();
+    } catch (err) {
+        console.error('Failed to fetch win back members', err);
+        showToast('Error loading win-back members list', 'error');
+    }
+}
+
+function renderWinBackTable(members) {
+    const tbody = document.getElementById('winbackTableBody');
+    tbody.innerHTML = '';
+    
+    if (members.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 24px; color: var(--text-tertiary);">No win back members found.</td></tr>`;
+        return;
+    }
+    
+    members.forEach(m => {
+        const tr = document.createElement('tr');
+        
+        // Determine status tag
+        let statusTag = '';
+        if (m.days_inactive <= 20) {
+            statusTag = `<span class="status-tag status-tag-followup">Needs Follow-up</span>`;
+        } else if (m.days_inactive <= 30) {
+            statusTag = `<span class="status-tag status-tag-highrisk">High Risk</span>`;
+        } else {
+            statusTag = `<span class="status-tag status-tag-lost">Almost Lost</span>`;
+        }
+        
+        // Last interaction info
+        let interactionInfo = '<span style="font-size: 11px; color: var(--text-tertiary);">Never contacted</span>';
+        if (m.last_interaction_type) {
+            const timeStr = m.last_interaction_time ? new Date(m.last_interaction_time).toLocaleDateString() : '';
+            const typeLabel = m.last_interaction_type.toUpperCase();
+            interactionInfo = `<div style="font-size: 11px; color: var(--text-secondary);"><strong>${typeLabel}</strong>: ${timeStr}</div>`;
+            if (m.last_follow_up_date) {
+                interactionInfo += `<div style="font-size: 10px; color: var(--warning);">Follow-up: ${new Date(m.last_follow_up_date).toLocaleDateString()}</div>`;
+            }
+        }
+        
+        const lastVisitDate = m.last_visit ? new Date(m.last_visit).toLocaleDateString() : 'Never';
+        const expiryDate = m.expiry_date ? new Date(m.expiry_date).toLocaleDateString() : 'No Plan';
+        const isChecked = selectedWinBackMemberIds.has(m.id) ? 'checked' : '';
+        
+        tr.innerHTML = `
+            <td style="text-align: center;"><input type="checkbox" class="winback-row-checkbox" data-id="${m.id}" ${isChecked} onclick="handleWinBackRowSelect(this, ${m.id})"></td>
+            <td>
+                <div style="display:flex; align-items:center; gap: 10px;">
+                    ${MemberAvatar.html(m, { size: 36 })}
+                    <div>
+                        <div style="font-weight: 700; color: var(--text-primary); font-size:13.5px;">${m.first_name} ${m.last_name}</div>
+                        <div style="font-size: 11px; color: var(--text-tertiary);">ID: ${m.id} &bull; ${m.phone}</div>
+                        ${interactionInfo}
+                    </div>
+                </div>
+            </td>
+            <td><span style="font-size:13px; font-weight:600;">${m.plan_name || 'No Active Plan'}</span></td>
+            <td style="font-size:13px;">${lastVisitDate}</td>
+            <td><strong style="color: var(--danger-dark); font-size: 14px;">${m.days_inactive} days</strong></td>
+            <td style="font-size:13px;">${expiryDate}</td>
+            <td>${statusTag}</td>
+            <td style="text-align: right;">
+                <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                    <a href="tel:${m.phone}" class="btn btn-secondary" onclick="logInteraction(${m.id}, 'call')" title="Call Member" style="padding: 6px 10px;">
+                        <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                    </a>
+                    <button class="btn btn-secondary" onclick="openWinBackWhatsappModal(${m.id})" title="Send WhatsApp Message" style="padding: 6px 10px; color: #22c55e;">
+                        <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                    </button>
+                    <button class="btn btn-secondary" onclick="openWinBackFollowUpModal(${m.id})" title="Schedule Follow-up" style="padding: 6px 10px; color: var(--warning);">
+                        <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </button>
+                    <button class="btn btn-secondary" onclick="logInteraction(${m.id}, 'contacted')" style="font-size: 11px; padding: 6px 10px;">Mark Contacted</button>
+                </div>
+            </td>
+        `;
+        
+        tbody.appendChild(tr);
+    });
+}
+
+function handleWinBackRowSelect(checkbox, id) {
+    if (checkbox.checked) {
+        selectedWinBackMemberIds.add(id);
+    } else {
+        selectedWinBackMemberIds.delete(id);
+    }
+    
+    // Update master header checkboxes
+    const allCheckboxes = document.querySelectorAll('.winback-row-checkbox');
+    const checkedCheckboxes = document.querySelectorAll('.winback-row-checkbox:checked');
+    const masterMaster = document.getElementById('winbackSelectAllMaster');
+    const masterHeader = document.getElementById('winbackSelectAllHeader');
+    
+    if (masterMaster) masterMaster.checked = allCheckboxes.length > 0 && allCheckboxes.length === checkedCheckboxes.length;
+    if (masterHeader) masterHeader.checked = allCheckboxes.length > 0 && allCheckboxes.length === checkedCheckboxes.length;
+    
+    updateWinBackBulkToolbar();
+}
+
+function toggleWinBackAllRows(masterCheckbox) {
+    const isChecked = masterCheckbox.checked;
+    
+    // Set checked state of master controls
+    const masterMaster = document.getElementById('winbackSelectAllMaster');
+    const masterHeader = document.getElementById('winbackSelectAllHeader');
+    if (masterMaster) masterMaster.checked = isChecked;
+    if (masterHeader) masterHeader.checked = isChecked;
+    
+    const checkboxes = document.querySelectorAll('.winback-row-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = isChecked;
+        const id = parseInt(cb.getAttribute('data-id'));
+        if (isChecked) {
+            selectedWinBackMemberIds.add(id);
+        } else {
+            selectedWinBackMemberIds.delete(id);
+        }
+    });
+    
+    updateWinBackBulkToolbar();
+}
+
+function updateWinBackBulkToolbar() {
+    const toolbar = document.getElementById('winbackBulkToolbar');
+    const countText = document.getElementById('winbackBulkCountText');
+    const size = selectedWinBackMemberIds.size;
+    
+    if (size > 0) {
+        toolbar.style.display = 'flex';
+        countText.innerText = `${size} member${size === 1 ? '' : 's'} selected`;
+    } else {
+        toolbar.style.display = 'none';
+        
+        const masterMaster = document.getElementById('winbackSelectAllMaster');
+        const masterHeader = document.getElementById('winbackSelectAllHeader');
+        if (masterMaster) masterMaster.checked = false;
+        if (masterHeader) masterHeader.checked = false;
+    }
+}
+
+function clearWinBackDateRange() {
+    document.getElementById('winbackStartDate').value = '';
+    document.getElementById('winbackEndDate').value = '';
+    fetchWinBackMembers();
+}
+
+function changeWinBackPage(delta) {
+    const newPage = winBackCurrentPage + delta;
+    if (newPage >= 1 && newPage <= winBackTotalPages) {
+        winBackCurrentPage = newPage;
+        fetchWinBackMembers();
+    }
+}
+
+async function logInteraction(memberId, type, notes = '', followUpDate = null) {
+    try {
+        const res = await fetch('/api/admin/win-back/interaction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                member_id: memberId,
+                interaction_type: type,
+                notes: notes,
+                follow_up_date: followUpDate
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`Interaction logged: ${type.toUpperCase()}`, 'success');
+            fetchWinBackMembers();
+        } else {
+            showToast('Failed to log interaction', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Network error logging interaction', 'error');
+    }
+}
+
+async function triggerBulkInteractionModal(type) {
+    if (selectedWinBackMemberIds.size === 0) return;
+    
+    const count = selectedWinBackMemberIds.size;
+    if (type === 'whatsapp') {
+        const confirmed = confirm(`Bulk WhatsApp Note\n\nThis will log a WhatsApp follow-up interaction for all ${count} selected members. Proceed?`);
+        if (!confirmed) return;
+        
+        await executeWinBackBulkAction('whatsapp', 'Bulk WhatsApp campaign initiated');
+    } else {
+        const confirmed = confirm(`Mark Contacted\n\nThis will mark all ${count} selected members as contacted/followed up. Proceed?`);
+        if (!confirmed) return;
+        
+        await executeWinBackBulkAction('contacted', 'Bulk follow-up contact recorded');
+    }
+}
+
+async function executeWinBackBulkAction(type, notes) {
+    try {
+        const idsArray = Array.from(selectedWinBackMemberIds);
+        const res = await fetch('/api/admin/win-back/bulk-action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                member_ids: idsArray,
+                interaction_type: type,
+                notes: notes
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`Recorded bulk interaction for ${idsArray.length} members`, 'success');
+            selectedWinBackMemberIds.clear();
+            fetchWinBackMembers();
+            fetchWinBackAnalytics();
+        } else {
+            showToast('Failed to record bulk action', 'error');
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Error executing bulk action', 'error');
+    }
+}
+
+function openWinBackWhatsappModal(memberId) {
+    activeWinBackMember = winBackMembersList.find(m => m.id === memberId);
+    if (!activeWinBackMember) return;
+    
+    document.getElementById('winBackWhatsappTemplateSelect').value = '1';
+    updateWinBackWhatsappPreview();
+    openModal('winBackWhatsappModal');
+}
+
+function updateWinBackWhatsappPreview() {
+    if (!activeWinBackMember) return;
+    
+    const templateId = document.getElementById('winBackWhatsappTemplateSelect').value;
+    const template = WIN_BACK_TEMPLATES[templateId];
+    
+    // Resolve dynamic values
+    const gymName = gymSettings ? gymSettings.gym_name : "our Gym";
+    const name = `${activeWinBackMember.first_name} ${activeWinBackMember.last_name}`;
+    const days = activeWinBackMember.days_inactive;
+    const plan = activeWinBackMember.plan_name || "N/A";
+    const expiry = activeWinBackMember.expiry_date ? new Date(activeWinBackMember.expiry_date).toLocaleDateString() : "N/A";
+    
+    const resolved = WhatsAppUtility.generateWhatsAppMessage(template, {
+        name: name,
+        gym_name: gymName,
+        days: days,
+        plan: plan,
+        expiry_date: expiry
+    });
+        
+    document.getElementById('winBackWhatsappPreviewTxt').value = resolved;
+}
+
+async function triggerSendWinBackWhatsapp() {
+    if (!activeWinBackMember) return;
+    
+    const message = document.getElementById('winBackWhatsappPreviewTxt').value;
+    const phone = activeWinBackMember.phone;
+    
+    // Log WhatsApp interaction in database
+    await logInteraction(activeWinBackMember.id, 'whatsapp', `WhatsApp message sent: Template ${document.getElementById('winBackWhatsappTemplateSelect').value}`);
+    
+    closeModal('winBackWhatsappModal');
+    
+    // Send WhatsApp via utility
+    WhatsAppUtility.openWhatsApp(phone, message);
+}
+
+function openWinBackFollowUpModal(memberId) {
+    activeWinBackMember = winBackMembersList.find(m => m.id === memberId);
+    if (!activeWinBackMember) return;
+    
+    document.getElementById('winBackFollowUpMemberId').value = memberId;
+    document.getElementById('winBackFollowUpDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('winBackFollowUpNotes').value = '';
+    
+    openModal('winBackFollowUpModal');
+}
+
+async function submitWinBackFollowUp(event) {
+    event.preventDefault();
+    const id = parseInt(document.getElementById('winBackFollowUpMemberId').value);
+    const date = document.getElementById('winBackFollowUpDate').value;
+    const notes = document.getElementById('winBackFollowUpNotes').value;
+    
+    closeModal('winBackFollowUpModal');
+    await logInteraction(id, 'follow_up', notes, date);
+}
+
+function exportWinBackCSV() {
+    if (winBackMembersList.length === 0) {
+        showToast('No data to export', 'warning');
+        return;
+    }
+    
+    let csv = 'Member ID,Name,Phone,Plan,Last Visit,Days Inactive,Expiry Date\n';
+    winBackMembersList.forEach(m => {
+        const lastVisit = m.last_visit ? new Date(m.last_visit).toLocaleDateString() : 'Never';
+        const expiry = m.expiry_date ? new Date(m.expiry_date).toLocaleDateString() : 'No Plan';
+        csv += `"${m.id}","${m.first_name} ${m.last_name}","${m.phone}","${m.plan_name || 'No Active Plan'}","${lastVisit}","${m.days_inactive}","${expiry}"\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `win_back_members_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function printWinBackList() {
+    if (winBackMembersList.length === 0) {
+        showToast('No data to print', 'warning');
+        return;
+    }
+    
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+}
+
+// ================= REVENUE ANALYTICS FUNCTIONS =================
+
+let analyticsOverviewData = null;
+let trendChartInstance = null;
+let planChartInstance = null;
+let currentTrendGrouping = 'month';
+
+async function fetchRevenueAnalyticsOverview() {
+    try {
+        const res = await fetch('/api/admin/analytics/overview');
+        const data = await res.json();
+        analyticsOverviewData = data;
+
+        // Data Integrity Validation empty state
+        if (!data || (data.lifetime_revenue === 0 && data.avg_monthly_revenue === 0)) {
+            document.getElementById('revenue-analyticsTab').innerHTML = `
+                <div class="module-page-header">
+                    <h2>Revenue Analytics & Business Insights</h2>
+                    <p>Overview of gym financial health, month-over-month performance comparison, and automated recommendations.</p>
+                </div>
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding: 60px 20px; border: 1px dashed var(--border-color); border-radius: var(--radius-md); text-align:center; background-color: var(--bg-card); margin-top: 24px;">
+                    <svg style="width: 48px; height: 48px; color: var(--text-tertiary); margin-bottom: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <h3 style="font-weight:700; color:var(--text-primary); margin-bottom:8px;">No Financial Data Available Yet</h3>
+                    <p style="color:var(--text-secondary); max-width:400px; font-size:13.5px; line-height:1.5; margin:0 0 20px 0;">Record member payments or assign plans to populate revenue analytics, comparison metrics, and business intelligence insights.</p>
+                    <button class="btn btn-primary" onclick="showTab('payments')">Record a Payment</button>
+                </div>
+            `;
+            return;
+        }
+
+        // 1. Bind KPI Cards
+        document.getElementById('analyticsLifetimeRev').innerText = formatINRCurrency(data.lifetime_revenue);
+        document.getElementById('analyticsThisMonthRev').innerText = formatINRCurrency(data.this_month_revenue);
+        document.getElementById('analyticsLastMonthRev').innerText = formatINRCurrency(data.last_month_revenue);
+        
+        const growthEl = document.getElementById('analyticsGrowthVal');
+        growthEl.innerText = `${data.growth_rate >= 0 ? '+' : ''}${data.growth_rate}%`;
+        growthEl.style.color = data.growth_rate >= 0 ? '#10b981' : '#ef4444';
+
+        document.getElementById('analyticsAvgMonthly').innerText = formatINRCurrency(data.avg_monthly_revenue);
+        document.getElementById('analyticsARPU').innerText = formatINRCurrency(data.arpu);
+        document.getElementById('analyticsCollectionRate').innerText = `${data.collection_rate}%`;
+        document.getElementById('analyticsOutstandingDues').innerText = formatINRCurrency(data.outstanding_dues);
+
+        // 2. Bind Insights Feed
+        const feed = document.getElementById('analyticsInsightsFeed');
+        feed.innerHTML = '';
+        if (data.insights.length === 0) {
+            feed.innerHTML = '<div style="font-size:13px; color:var(--text-tertiary); text-align:center; padding:16px;">No new business insights at this time.</div>';
+        } else {
+            data.insights.forEach(ins => {
+                let badgeColor = 'var(--text-secondary)';
+                if (ins.type === 'success') badgeColor = '#10b981';
+                if (ins.type === 'warning') badgeColor = '#ef4444';
+                if (ins.type === 'info') badgeColor = '#3b82f6';
+
+                const div = document.createElement('div');
+                div.style.cssText = 'padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background-color: var(--bg-card); display:flex; gap:10px;';
+                div.innerHTML = `
+                    <div style="width:8px; height:8px; border-radius:50%; background-color:${badgeColor}; margin-top:6px; flex-shrink:0;"></div>
+                    <div>
+                        <strong style="font-size:13px; display:block; color:var(--text-primary);">${ins.title}</strong>
+                        <span style="font-size:12px; color:var(--text-secondary); line-height:1.4;">${ins.text}</span>
+                    </div>
+                `;
+                feed.appendChild(div);
+            });
+        }
+
+        // 3. Bind AI Recommendations Action Cards
+        const recContainer = document.getElementById('analyticsRecommendationsContainer');
+        recContainer.innerHTML = '';
+        if (data.recommendations.length === 0) {
+            recContainer.innerHTML = '<div style="font-size:13px; color:var(--text-tertiary); text-align:center; grid-column:span 2; padding:16px;">No actionable recommendations.</div>';
+        } else {
+            data.recommendations.forEach(rec => {
+                const card = document.createElement('div');
+                card.className = 'winback-stat-card';
+                card.style.cssText = 'background-color: var(--bg-raised); justify-content:space-between; border-left: 3px solid var(--accent);';
+                card.innerHTML = `
+                    <div>
+                        <strong style="font-size:13.5px; color:var(--text-primary); display:block; margin-bottom:4px;">${rec.title}</strong>
+                        <p style="font-size:11.5px; color:var(--text-secondary); margin:0 0 10px 0; line-height:1.4;">${rec.text}</p>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="showTab('${rec.tab}')" style="width:100%; font-size:11.5px; font-weight:600; padding:6px;">${rec.button_text}</button>
+                `;
+                recContainer.appendChild(card);
+            });
+        }
+
+        // 4. Bind Payment Methods Analytics
+        const paymentList = document.getElementById('analyticsPaymentMethodsSplit');
+        paymentList.innerHTML = '';
+        if (data.payment_methods.length === 0) {
+            paymentList.innerHTML = '<div style="font-size:13px; color:var(--text-tertiary); text-align:center; padding:16px;">No payment records.</div>';
+        } else {
+            data.payment_methods.forEach(pm => {
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;">
+                        <span style="text-transform:uppercase; font-weight:600;">${pm.method}</span>
+                        <span>${pm.percentage}% (${formatINRCurrency(pm.revenue)})</span>
+                    </div>
+                    <div style="height:6px; background-color:var(--border-color); border-radius:3px; overflow:hidden;">
+                        <div style="width:${pm.percentage}%; height:100%; background-color:var(--accent); border-radius:3px;"></div>
+                    </div>
+                `;
+                paymentList.appendChild(div);
+            });
+        }
+
+        // 5. Bind Top Performing Months
+        const topMonths = document.getElementById('analyticsTopMonthsList');
+        topMonths.innerHTML = '';
+        data.top_months.forEach((tm, i) => {
+            const dateObj = new Date(tm.month + '-02'); // Add day to construct valid date
+            const label = dateObj.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+            const div = document.createElement('div');
+            div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); font-size:13px;';
+            div.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-weight:800; color:var(--gold); font-size:15px;">#${i + 1}</span>
+                    <span>${label}</span>
+                </div>
+                <strong style="color:var(--text-primary);">${formatINRCurrency(tm.revenue)}</strong>
+            `;
+            topMonths.appendChild(div);
+        });
+
+        // 6. Populate Comparison Dropdowns (Last 12 Months)
+        const compSelect1 = document.getElementById('compareMonth1');
+        const compSelect2 = document.getElementById('compareMonth2');
+        compSelect1.innerHTML = '';
+        compSelect2.innerHTML = '';
+        
+        data.monthly_trend.forEach((t, i) => {
+            const dateObj = new Date(t.month + '-02');
+            const label = dateObj.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+            
+            const opt1 = document.createElement('option');
+            opt1.value = t.month;
+            opt1.innerText = label;
+            compSelect1.appendChild(opt1);
+
+            const opt2 = document.createElement('option');
+            opt2.value = t.month;
+            opt2.innerText = label;
+            compSelect2.appendChild(opt2);
+        });
+        
+        // Auto-select latest two months
+        if (data.monthly_trend.length >= 2) {
+            compSelect1.value = data.monthly_trend[data.monthly_trend.length - 2].month;
+            compSelect2.value = data.monthly_trend[data.monthly_trend.length - 1].month;
+        } else if (data.monthly_trend.length > 0) {
+            compSelect1.value = data.monthly_trend[0].month;
+            compSelect2.value = data.monthly_trend[0].month;
+        }
+
+        // 7. Render Charts
+        renderTrendChart();
+        renderPlanPieChart();
+        fetchComparisonData();
+
+    } catch (err) {
+        console.error(err);
+        showToast('Error loading revenue analytics overview', 'error');
+    }
+}
+
+function renderTrendChart() {
+    const canvas = document.getElementById('analyticsTrendLineChart');
+    if (!canvas || !analyticsOverviewData) return;
+
+    if (trendChartInstance) trendChartInstance.destroy();
+
+    let chartData = [...analyticsOverviewData.monthly_trend];
+    
+    // Perform grouping if required
+    if (currentTrendGrouping === 'quarter') {
+        const quarters = {};
+        chartData.forEach(d => {
+            const yr = d.month.substring(0, 4);
+            const m = parseInt(d.month.substring(5, 7));
+            const q = Math.ceil(m / 3);
+            const key = `${yr}-Q${q}`;
+            quarters[key] = (quarters[key] || 0) + d.revenue;
+        });
+        chartData = Object.keys(quarters).map(k => ({ month: k, revenue: quarters[k] }));
+    } else if (currentTrendGrouping === 'year') {
+        const years = {};
+        chartData.forEach(d => {
+            const yr = d.month.substring(0, 4);
+            years[yr] = (years[yr] || 0) + d.revenue;
+        });
+        chartData = Object.keys(years).map(k => ({ month: k, revenue: years[k] }));
+    }
+
+    const labels = chartData.map(d => {
+        if (d.month.includes('-Q')) return d.month;
+        if (d.month.length === 4) return d.month;
+        const dateObj = new Date(d.month + '-02');
+        return dateObj.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    });
+    const dataPoints = chartData.map(d => d.revenue);
+
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 220);
+    gradient.addColorStop(0, 'rgba(212, 163, 89, 0.25)'); // matching dashboard gold tint
+    gradient.addColorStop(1, 'rgba(212, 163, 89, 0.0)');
+
+    trendChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Revenue Trend',
+                data: dataPoints,
+                borderColor: 'var(--gold)',
+                borderWidth: 3,
+                pointBackgroundColor: '#ffffff',
+                pointBorderColor: 'var(--gold)',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.25
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(c) { return ' ' + formatINRCurrency(c.raw); }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: {
+                        callback: function(val) { return '₹' + parseInt(val).toLocaleString('en-IN'); },
+                        font: { family: 'Outfit, sans-serif', size: 10 }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { family: 'Outfit, sans-serif', size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+function renderPlanPieChart() {
+    const canvas = document.getElementById('analyticsPlanPieChart');
+    if (!canvas || !analyticsOverviewData) return;
+
+    if (planChartInstance) planChartInstance.destroy();
+
+    const chartData = analyticsOverviewData.plan_breakdown;
+    const labels = chartData.map(d => d.plan_name);
+    const dataPoints = chartData.map(d => d.revenue);
+
+    planChartInstance = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: dataPoints,
+                backgroundColor: [
+                    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6b7280'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { boxWidth: 10, font: { size: 9, family: 'Outfit, sans-serif' } }
+                }
+            }
+        }
+    });
+}
+
+async function fetchComparisonData() {
+    const m1 = document.getElementById('compareMonth1').value;
+    const m2 = document.getElementById('compareMonth2').value;
+    
+    if (!m1 || !m2) return;
+    
+    try {
+        const res = await fetch(`/api/admin/analytics/compare?month1=${m1}&month2=${m2}`);
+        const data = await res.json();
+        
+        // Populate Comparison Metrics
+        const comp = data.comparison;
+        const diffRev = document.getElementById('compRevDiff');
+        const growRev = document.getElementById('compRevGrowth');
+        
+        diffRev.innerText = `${comp.revenue_diff >= 0 ? '+' : ''}${formatINRCurrency(comp.revenue_diff)}`;
+        growRev.innerText = `${comp.revenue_pct >= 0 ? '↑' : '↓'} ${Math.abs(comp.revenue_pct)}%`;
+        growRev.style.color = comp.revenue_pct >= 0 ? '#10b981' : '#ef4444';
+
+        // New Members
+        document.getElementById('compValM1_new').innerText = data.m1.new_members;
+        document.getElementById('compValM2_new').innerText = data.m2.new_members;
+        const diffNew = document.getElementById('compDiff_new');
+        diffNew.innerText = `${comp.new_members_diff >= 0 ? '+' : ''}${comp.new_members_diff} compared`;
+        diffNew.style.color = comp.new_members_diff >= 0 ? '#10b981' : '#ef4444';
+
+        // Renewals
+        document.getElementById('compValM1_renew').innerText = data.m1.renewals;
+        document.getElementById('compValM2_renew').innerText = data.m2.renewals;
+        const diffRen = document.getElementById('compDiff_renew');
+        diffRen.innerText = `${comp.renewals_diff >= 0 ? '+' : ''}${comp.renewals_diff} compared`;
+        diffRen.style.color = comp.renewals_diff >= 0 ? '#10b981' : '#ef4444';
+
+        // Collection Rates
+        document.getElementById('compValM1_col').innerText = `${formatINRCurrency(data.m1.collected)} (${data.m1.recovery_rate}%)`;
+        document.getElementById('compValM2_col').innerText = `${formatINRCurrency(data.m2.collected)} (${data.m2.recovery_rate}%)`;
+        const diffCol = document.getElementById('compDiff_col');
+        const colDelta = Math.round((data.m2.recovery_rate - data.m1.recovery_rate) * 10) / 10;
+        diffCol.innerText = `${colDelta >= 0 ? '+' : ''}${colDelta}% collection rate`;
+        diffCol.style.color = colDelta >= 0 ? '#10b981' : '#ef4444';
+
+        // Attendance
+        document.getElementById('compValM1_att').innerText = data.m1.attendance;
+        document.getElementById('compValM2_att').innerText = data.m2.attendance;
+        document.getElementById('compDiff_att').innerText = `Peak: ${data.m1.peak_day} vs ${data.m2.peak_day}`;
+
+        // Win Backs
+        document.getElementById('compValM1_wb').innerText = data.m1.win_backs;
+        document.getElementById('compValM2_wb').innerText = data.m2.win_backs;
+        const diffWb = document.getElementById('compDiff_wb');
+        diffWb.innerText = `${comp.win_backs_diff >= 0 ? '+' : ''}${comp.win_backs_diff} recovered`;
+        diffWb.style.color = comp.win_backs_diff >= 0 ? '#10b981' : '#ef4444';
+
+    } catch (err) {
+        console.error(err);
+        showToast('Error loading analytics comparison dataset', 'error');
+    }
+}
+
+function toggleTrendGrouping(grouping) {
+    currentTrendGrouping = grouping;
+    
+    document.getElementById('btnTrendMonth').classList.remove('active');
+    document.getElementById('btnTrendQuarter').classList.remove('active');
+    document.getElementById('btnTrendYear').classList.remove('active');
+    
+    const activeBtn = document.getElementById(`btnTrend${grouping.charAt(0).toUpperCase() + grouping.slice(1)}`);
+    if (activeBtn) activeBtn.classList.add('active');
+    
+    renderTrendChart();
+}
+
+function exportAnalytics(format) {
+    if (!analyticsOverviewData) {
+        showToast('No analytics dataset loaded', 'warning');
+        return;
+    }
+
+    if (format === 'csv' || format === 'excel') {
+        let csv = 'Month,Revenue\n';
+        analyticsOverviewData.monthly_trend.forEach(d => {
+            csv += `"${d.month}","${d.revenue}"\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `revenue_trend_${new Date().toISOString().split('T')[0]}.${format === 'csv' ? 'csv' : 'xls'}`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } else if (format === 'pdf') {
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Revenue Analytics Summary Report</title>
+                <style>
+                    body { font-family: -apple-system, sans-serif; padding: 30px; color:#111; }
+                    h1 { margin-bottom: 5px; }
+                    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top:20px; }
+                    .card { border:1px solid #ddd; padding: 15px; border-radius:6px; }
+                    .label { font-size:11px; text-transform:uppercase; color:#666; font-weight:600; }
+                    .val { font-size: 20px; font-weight:bold; margin-top:5px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+                    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                    th { background-color: #f3f4f6; }
+                </style>
+            </head>
+            <body>
+                <h1>Revenue Analytics Summary</h1>
+                <p>Generated on: ${new Date().toLocaleString()}</p>
+                <div class="stats-grid">
+                    <div class="card">
+                        <div class="label">Lifetime Revenue</div>
+                        <div class="val">${formatINRCurrency(analyticsOverviewData.lifetime_revenue)}</div>
+                    </div>
+                    <div class="card">
+                        <div class="label">This Month</div>
+                        <div class="val">${formatINRCurrency(analyticsOverviewData.this_month_revenue)}</div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Monthly Average</div>
+                        <div class="val">${formatINRCurrency(analyticsOverviewData.avg_monthly_revenue)}</div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Outstanding Dues</div>
+                        <div class="val">${formatINRCurrency(analyticsOverviewData.outstanding_dues)}</div>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Revenue Collected</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${analyticsOverviewData.monthly_trend.map(d => `
+                            <tr>
+                                <td>${d.month}</td>
+                                <td>${formatINRCurrency(d.revenue)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    }
+}
+
+
 

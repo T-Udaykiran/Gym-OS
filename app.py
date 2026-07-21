@@ -822,7 +822,11 @@ def sse_stream():
         except GeneratorExit:
             if listener in SSE_LISTENERS:
                 SSE_LISTENERS.remove(listener)
-    return Response(event_generator(), mimetype="text/event-stream")
+    res = Response(event_generator(), mimetype="text/event-stream")
+    res.headers["Cache-Control"] = "no-cache"
+    res.headers["Connection"] = "keep-alive"
+    res.headers["X-Accel-Buffering"] = "no"
+    return res
 
 # ================= ADMIN STATS & ANALYTICS =================
 
@@ -972,7 +976,41 @@ def admin_stats():
     # Count pending registrations
     cursor.execute("SELECT COUNT(*) FROM members WHERE gym_id = ? AND status = 'pending'", (gym_id,))
     pending_regs_count = cursor.fetchone()[0] or 0
+
+    # Win Back Members Count (15+ days absent)
+    cursor.execute("""
+        SELECT COUNT(distinct m.id) FROM members m
+        LEFT JOIN (
+            SELECT member_id, MAX(check_in_time) as max_time
+            FROM attendance
+            WHERE status = 'success' AND gym_id = ?
+            GROUP BY member_id
+        ) a ON m.id = a.member_id
+        WHERE m.gym_id = ? AND m.status = 'active'
+          AND (date_part('day', now() - COALESCE(a.max_time::timestamp, m.joined_at::timestamp)) >= 15)
+    """, (gym_id, gym_id))
+    win_back_count = cursor.fetchone()[0] or 0
     
+    # Replaced Revenue analytics calculations for Total Revenue card
+    cursor.execute("SELECT SUM(amount) FROM payments WHERE status = 'paid' AND gym_id = ?", (gym_id,))
+    lifetime_revenue = cursor.fetchone()[0] or 0.0
+    
+    now_dt = now_ist()
+    this_month_start = now_dt.strftime("%Y-%m-01 00:00:00")
+    if now_dt.month == 1:
+        last_month_start = f"{now_dt.year - 1}-12-01 00:00:00"
+        last_month_end = f"{now_dt.year}-01-01 00:00:00"
+    else:
+        last_month_start = f"{now_dt.year}-{str(now_dt.month - 1).zfill(2)}-01 00:00:00"
+        last_month_end = this_month_start
+    cursor.execute("SELECT SUM(amount) FROM payments WHERE status = 'paid' AND payment_date >= ? AND payment_date < ? AND gym_id = ?", (last_month_start, last_month_end, gym_id))
+    last_month_revenue = cursor.fetchone()[0] or 0.0
+    
+    if last_month_revenue > 0:
+        growth_rate = round(((monthly_revenue - last_month_revenue) / last_month_revenue) * 100, 1)
+    else:
+        growth_rate = 100.0 if monthly_revenue > 0 else 0.0
+        
     conn.close()
     
     return jsonify({
@@ -982,12 +1020,15 @@ def admin_stats():
             "today_checkins": today_checkins,
             "today_revenue": today_revenue,
             "monthly_revenue": monthly_revenue,
+            "lifetime_revenue": lifetime_revenue,
+            "growth_rate": growth_rate,
             "pending_payments": pending_payments,
             "pending_amount": pending_amount,
             "pending_approvals": pending_approvals,
             "expiring_members": expiring_members,
             "new_members_week": new_members_week,
             "pending_registrations_count": pending_regs_count,
+            "win_back_members_count": win_back_count,
         },
         "charts": {
             "revenue": revenue_chart,
@@ -998,6 +1039,214 @@ def admin_stats():
         "new_members_list": new_members_list,
         "recent_activity": recent_activities
     })
+
+# ================= WIN BACK CRM ENDPOINTS =================
+
+@app.route("/api/admin/win-back/members", methods=["GET"])
+@login_required("owner")
+def get_win_back_members():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    gym_id = session["gym_id"]
+    
+    search = request.args.get("search", "").strip()
+    days_filter = request.args.get("days", "15")
+    start_date = request.args.get("start_date", "").strip()
+    end_date = request.args.get("end_date", "").strip()
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 25))
+    offset = (page - 1) * limit
+
+    where_clauses = ["m.gym_id = ?", "m.status = 'active'"]
+    params = [gym_id]
+    
+    if search:
+        where_clauses.append("(m.first_name ILIKE ? OR m.last_name ILIKE ? OR m.phone ILIKE ?)")
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+        
+    sql = f"""
+        SELECT m.id, m.first_name, m.last_name, m.phone, m.profile_photo, m.status, m.joined_at,
+               ms.end_date as expiry_date, pl.name as plan_name,
+               a.max_time as last_visit,
+               date_part('day', now() - COALESCE(a.max_time::timestamp, m.joined_at::timestamp))::integer as days_inactive,
+               wbi.interaction_type as last_interaction_type,
+               wbi.contacted_at as last_interaction_time,
+               wbi.follow_up_date as last_follow_up_date
+        FROM members m
+        LEFT JOIN memberships ms ON ms.member_id = m.id AND ms.status = 'active'
+        LEFT JOIN plans pl ON ms.plan_id = pl.id
+        LEFT JOIN (
+            SELECT member_id, MAX(check_in_time) as max_time
+            FROM attendance
+            WHERE status = 'success' AND gym_id = ?
+            GROUP BY member_id
+        ) a ON m.id = a.member_id
+        LEFT JOIN (
+            SELECT w1.member_id, w1.interaction_type, w1.contacted_at, w1.follow_up_date
+            FROM win_back_interactions w1
+            JOIN (
+                SELECT member_id, MAX(id) as max_id
+                FROM win_back_interactions
+                WHERE gym_id = ?
+                GROUP BY member_id
+            ) w2 ON w1.id = w2.max_id
+        ) wbi ON m.id = wbi.member_id
+        WHERE {' AND '.join(where_clauses)}
+    """
+    params_for_base = [gym_id, gym_id] + params
+    
+    outer_clauses = []
+    outer_params = []
+    
+    if start_date and end_date:
+        outer_clauses.append("COALESCE(last_visit::date, joined_at::date) BETWEEN ?::date AND ?::date")
+        outer_params.extend([start_date, end_date])
+    else:
+        if days_filter == "30":
+            outer_clauses.append("days_inactive >= 30")
+        elif days_filter == "60":
+            outer_clauses.append("days_inactive >= 60")
+        else:
+            outer_clauses.append("days_inactive >= 15")
+            
+    outer_sql = f"SELECT * FROM ({sql}) sub"
+    if outer_clauses:
+        outer_sql += f" WHERE {' AND '.join(outer_clauses)}"
+        
+    count_sql = f"SELECT COUNT(*) FROM ({outer_sql}) sub2"
+    cursor.execute(count_sql, params_for_base + outer_params)
+    total = cursor.fetchone()[0] or 0
+    
+    outer_sql += " ORDER BY days_inactive DESC LIMIT ? OFFSET ?"
+    cursor.execute(outer_sql, params_for_base + outer_params + [limit, offset])
+    rows = cursor.fetchall()
+    conn.close()
+    
+    members = [dict(r) for r in rows]
+    return jsonify({
+        "data": members,
+        "total": total,
+        "page": page,
+        "limit": limit
+    })
+
+@app.route("/api/admin/win-back/analytics", methods=["GET"])
+@login_required("owner")
+def get_win_back_analytics():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    gym_id = session["gym_id"]
+    
+    cursor.execute("""
+        SELECT 
+            COUNT(CASE WHEN days_inactive >= 15 THEN 1 END) as total_win_back,
+            COUNT(CASE WHEN days_inactive >= 15 AND days_inactive <= 30 THEN 1 END) as inactive_15_30,
+            COUNT(CASE WHEN days_inactive > 30 AND days_inactive <= 60 THEN 1 END) as inactive_30_60,
+            COUNT(CASE WHEN days_inactive > 60 THEN 1 END) as inactive_60_plus
+        FROM (
+            SELECT m.id,
+                   date_part('day', now() - COALESCE(a.max_time::timestamp, m.joined_at::timestamp)) as days_inactive
+            FROM members m
+            LEFT JOIN (
+                SELECT member_id, MAX(check_in_time) as max_time
+                FROM attendance
+                WHERE status = 'success' AND gym_id = ?
+                GROUP BY member_id
+            ) a ON m.id = a.member_id
+            WHERE m.gym_id = ? AND m.status = 'active'
+        ) sub
+    """, (gym_id, gym_id))
+    counts = cursor.fetchone()
+    
+    total_win_back = counts["total_win_back"] or 0
+    inactive_15_30 = counts["inactive_15_30"] or 0
+    inactive_30_60 = counts["inactive_30_60"] or 0
+    inactive_60_plus = counts["inactive_60_plus"] or 0
+    
+    month_start = now_ist().strftime("%Y-%m-01 00:00:00")
+    cursor.execute("""
+        SELECT COUNT(*) FROM win_back_recoveries
+        WHERE gym_id = ? AND recovery_date >= ?
+    """, (gym_id, month_start))
+    recovered_this_month = cursor.fetchone()[0] or 0
+    
+    cursor.execute("SELECT COUNT(*) FROM win_back_recoveries WHERE gym_id = ?", (gym_id,))
+    total_recoveries = cursor.fetchone()[0] or 0
+    
+    divider = (total_win_back + total_recoveries)
+    recovery_rate = round((total_recoveries / divider) * 100, 1) if divider > 0 else 0.0
+    
+    conn.close()
+    
+    return jsonify({
+        "total_win_back": total_win_back,
+        "inactive_15_30": inactive_15_30,
+        "inactive_30_60": inactive_30_60,
+        "inactive_60_plus": inactive_60_plus,
+        "recovered_this_month": recovered_this_month,
+        "recovery_rate": recovery_rate
+    })
+
+@app.route("/api/admin/win-back/interaction", methods=["POST"])
+@login_required("owner")
+def log_win_back_interaction():
+    data = request.get_json() or {}
+    member_id = data.get("member_id")
+    interaction_type = data.get("interaction_type")
+    notes = data.get("notes", "")
+    follow_up_date = data.get("follow_up_date")
+    
+    if not member_id or not interaction_type:
+        return jsonify({"error": "Missing required fields"}), 400
+        
+    gym_id = session["gym_id"]
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    
+    now_time = now_ist().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO win_back_interactions (member_id, gym_id, interaction_type, notes, follow_up_date, contacted_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (member_id, gym_id, interaction_type, notes, follow_up_date, now_time))
+    
+    log_action(cursor, "win_back_interaction", "member", member_id, {
+        "interaction_type": interaction_type, "follow_up_date": follow_up_date
+    })
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"success": True})
+
+@app.route("/api/admin/win-back/bulk-action", methods=["POST"])
+@login_required("owner")
+def log_win_back_bulk_action():
+    data = request.get_json() or {}
+    member_ids = data.get("member_ids")
+    interaction_type = data.get("interaction_type", "contacted")
+    notes = data.get("notes", "Bulk follow-up")
+    
+    if not member_ids or not isinstance(member_ids, list):
+        return jsonify({"error": "Missing or invalid member_ids"}), 400
+        
+    gym_id = session["gym_id"]
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    
+    now_time = now_ist().strftime("%Y-%m-%d %H:%M:%S")
+    for mid in member_ids:
+        cursor.execute("""
+            INSERT INTO win_back_interactions (member_id, gym_id, interaction_type, notes, contacted_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (mid, gym_id, interaction_type, notes, now_time))
+        log_action(cursor, "win_back_bulk_interaction", "member", mid, {
+            "interaction_type": interaction_type
+        })
+        
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"success": True})
 
 @app.route("/api/admin/dashboard/pending-dues", methods=["GET"])
 @login_required("owner")
@@ -2093,6 +2342,22 @@ def admin_payment_reminder(id):
         WHERE p.id = ? AND p.gym_id = ?
     """, (id, session["gym_id"]))
     pay = cursor.fetchone()
+
+    # Fetch dynamic gym name from settings or gyms
+    gym_name = "Gym"
+    if pay:
+        cursor.execute("SELECT value FROM settings WHERE key = 'gym_name' AND gym_id = ?", (session["gym_id"],))
+        sett = cursor.fetchone()
+        if sett and sett["value"] and sett["value"].strip():
+            gym_name = sett["value"].strip()
+        else:
+            cursor.execute("SELECT name FROM gyms WHERE id = ?", (session["gym_id"],))
+            g_row = cursor.fetchone()
+            if g_row and g_row["name"] and g_row["name"].strip():
+                gym_name = g_row["name"].strip()
+            else:
+                app.logger.warning(f"Developer Warning: Gym business name not found for gym_id {session['gym_id']}. Using fallback 'Gym'.")
+
     conn.close()
 
     if not pay:
@@ -2104,7 +2369,7 @@ def admin_payment_reminder(id):
     due = pay["due_date"] or now_ist().strftime("%Y-%m-%d")
     plan = pay["plan_name"] or "Gym Membership"
 
-    msg = f"Hello {name}, your membership payment of ₹{amount:.2f} for '{plan}' is due on {due}. Please renew or pay at counter. Thank you! - GymOS Fitness"
+    msg = f"Hello {name},\n\nYour membership payment of ₹{amount:.2f} for '{plan}' is due on {due}. Please renew or pay at counter.\n\nThank you!\n\n— {gym_name}"
     whatsapp_url = build_whatsapp_link(phone, msg)
 
     return jsonify({
@@ -2128,6 +2393,22 @@ def admin_member_renewal_reminder(id):
         ORDER BY ms.end_date DESC LIMIT 1
     """, (id, session["gym_id"]))
     row = cursor.fetchone()
+
+    # Fetch dynamic gym name from settings or gyms
+    gym_name = "Gym"
+    if row:
+        cursor.execute("SELECT value FROM settings WHERE key = 'gym_name' AND gym_id = ?", (session["gym_id"],))
+        sett = cursor.fetchone()
+        if sett and sett["value"] and sett["value"].strip():
+            gym_name = sett["value"].strip()
+        else:
+            cursor.execute("SELECT name FROM gyms WHERE id = ?", (session["gym_id"],))
+            g_row = cursor.fetchone()
+            if g_row and g_row["name"] and g_row["name"].strip():
+                gym_name = g_row["name"].strip()
+            else:
+                app.logger.warning(f"Developer Warning: Gym business name not found for gym_id {session['gym_id']}. Using fallback 'Gym'.")
+
     conn.close()
 
     if not row:
@@ -2138,7 +2419,7 @@ def admin_member_renewal_reminder(id):
     end_date = row["end_date"]
     plan = row["plan_name"] or "Gym Membership"
 
-    msg = f"Hello {name}, your '{plan}' membership is expiring on {end_date}. Please renew soon to continue uninterrupted access. Thank you! - GymOS Fitness"
+    msg = f"Hello {name},\n\nYour '{plan}' membership is expiring on {end_date}. Please renew soon to continue uninterrupted access.\n\nThank you!\n\n— {gym_name}"
     whatsapp_url = build_whatsapp_link(phone, msg)
 
     return jsonify({
@@ -2341,6 +2622,42 @@ def get_leaderboard():
     conn.close()
     return jsonify(leaderboard)
 
+def check_and_record_win_back_recovery(cursor, member_id, gym_id):
+    # Find the last successful check-in before this one (so offset 1)
+    cursor.execute("""
+        SELECT check_in_time FROM attendance
+        WHERE member_id = ? AND gym_id = ? AND status = 'success'
+        ORDER BY check_in_time DESC LIMIT 1 OFFSET 1
+    """, (member_id, gym_id))
+    last_row = cursor.fetchone()
+    
+    last_visit = None
+    if last_row:
+        last_visit = last_row["check_in_time"]
+    else:
+        # Fallback to joined_at
+        cursor.execute("SELECT joined_at FROM members WHERE id = ? AND gym_id = ?", (member_id, gym_id))
+        mem_row = cursor.fetchone()
+        if mem_row:
+            last_visit = mem_row["joined_at"]
+            
+    if last_visit:
+        try:
+            last_visit_clean = last_visit.split(".")[0]
+            if ' ' in last_visit_clean:
+                last_dt = datetime.strptime(last_visit_clean[:19], "%Y-%m-%d %H:%M:%S")
+            else:
+                last_dt = datetime.strptime(last_visit_clean[:10], "%Y-%m-%d")
+            
+            days_inactive = (now_ist() - last_dt).days
+            if days_inactive >= 15:
+                cursor.execute("""
+                    INSERT INTO win_back_recoveries (member_id, gym_id, days_inactive, recovery_date)
+                    VALUES (?, ?, ?, to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
+                """, (member_id, gym_id, days_inactive))
+        except Exception as e:
+            app.logger.error(f"Error recording win back recovery: {e}")
+
 @app.route("/api/admin/members/<int:id>/check-in", methods=["POST"])
 @login_required("owner")
 def admin_manual_check_in(id):
@@ -2383,6 +2700,7 @@ def admin_manual_check_in(id):
         if mbr["status"] == "expired":
             cursor.execute("UPDATE members SET status = 'active' WHERE id = ?", (id,))
             
+        check_and_record_win_back_recovery(cursor, id, gym_id)
         conn.commit()
         
         fullname = f"{mbr['first_name']} {mbr['last_name']}"
@@ -3653,6 +3971,7 @@ def member_check_in():
                 INSERT INTO attendance (member_id, check_in_time, attendance_date, gym_id, attendance_state, status)
                 VALUES (?, ?, ?, ?, 'checked_in', 'success')
             """, (m_id, now_time_str, today_str, gym_id))
+            check_and_record_win_back_recovery(cursor, m_id, gym_id)
             conn.commit()
             
             fullname = f"{mbr['first_name']} {mbr['last_name']}"
@@ -4032,6 +4351,416 @@ def member_read_notifications():
     conn.commit()
     conn.close()
     return jsonify({"success": True})
+
+# ================= REVENUE ANALYTICS SERVICE =================
+
+class AnalyticsService:
+    @staticmethod
+    def get_overview(gym_id):
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        
+        # 1. Lifetime Revenue
+        cursor.execute("SELECT SUM(amount) FROM payments WHERE status = 'paid' AND gym_id = ?", (gym_id,))
+        lifetime_revenue = cursor.fetchone()[0] or 0.0
+        
+        # 2. This Month Revenue
+        now_dt = now_ist()
+        this_month_start = now_dt.strftime("%Y-%m-01 00:00:00")
+        if now_dt.month == 12:
+            next_month_start = f"{now_dt.year + 1}-01-01 00:00:00"
+        else:
+            next_month_start = f"{now_dt.year}-{str(now_dt.month + 1).zfill(2)}-01 00:00:00"
+            
+        cursor.execute("SELECT SUM(amount) FROM payments WHERE status = 'paid' AND payment_date >= ? AND payment_date < ? AND gym_id = ?", (this_month_start, next_month_start, gym_id))
+        this_month_revenue = cursor.fetchone()[0] or 0.0
+        
+        # 3. Last Month Revenue
+        if now_dt.month == 1:
+            last_month_start = f"{now_dt.year - 1}-12-01 00:00:00"
+            last_month_end = f"{now_dt.year}-01-01 00:00:00"
+        else:
+            last_month_start = f"{now_dt.year}-{str(now_dt.month - 1).zfill(2)}-01 00:00:00"
+            last_month_end = this_month_start
+            
+        cursor.execute("SELECT SUM(amount) FROM payments WHERE status = 'paid' AND payment_date >= ? AND payment_date < ? AND gym_id = ?", (last_month_start, last_month_end, gym_id))
+        last_month_revenue = cursor.fetchone()[0] or 0.0
+        
+        # 4. Growth Rate
+        if last_month_revenue > 0:
+            growth_rate = round(((this_month_revenue - last_month_revenue) / last_month_revenue) * 100, 1)
+        else:
+            growth_rate = 100.0 if this_month_revenue > 0 else 0.0
+            
+        # 5. Average Monthly Revenue (Last 12 months)
+        cursor.execute("""
+            SELECT AVG(month_sum) FROM (
+                SELECT TO_CHAR(payment_date::timestamp, 'YYYY-MM') as month, SUM(amount) as month_sum
+                FROM payments
+                WHERE status = 'paid' AND gym_id = ?
+                  AND payment_date::date >= CURRENT_DATE - INTERVAL '12 months'
+                GROUP BY month
+            ) sub
+        """, (gym_id,))
+        avg_monthly_rev = cursor.fetchone()[0] or 0.0
+        
+        # 6. Active Members
+        cursor.execute("SELECT COUNT(*) FROM members WHERE status = 'active' AND gym_id = ?", (gym_id,))
+        active_members = cursor.fetchone()[0] or 0
+        
+        # 7. ARPU (Revenue / Active Members)
+        arpu = round(this_month_revenue / active_members, 1) if active_members > 0 else 0.0
+        
+        # 8. Outstanding Dues
+        cursor.execute("SELECT SUM(amount) FROM payments WHERE status IN ('pending', 'overdue') AND gym_id = ?", (gym_id,))
+        outstanding_dues = cursor.fetchone()[0] or 0.0
+        
+        # 9. Collection Rate (Paid / Expected) for this month
+        cursor.execute("""
+            SELECT SUM(amount) FROM payments 
+            WHERE status IN ('pending', 'overdue') 
+              AND due_date >= ? AND due_date < ? AND gym_id = ?
+        """, (this_month_start, next_month_start, gym_id))
+        outstanding_due_this_month = cursor.fetchone()[0] or 0.0
+        
+        expected_this_month = this_month_revenue + outstanding_due_this_month
+        if expected_this_month > 0:
+            collection_rate = round((this_month_revenue / expected_this_month) * 100, 1)
+        else:
+            collection_rate = 100.0
+            
+        # 10. Last 12 Months Revenue Trend
+        cursor.execute("""
+            SELECT TO_CHAR(payment_date::timestamp, 'YYYY-MM') as month, SUM(amount) as revenue
+            FROM payments
+            WHERE status = 'paid' AND gym_id = ?
+              AND payment_date::date >= CURRENT_DATE - INTERVAL '12 months'
+            GROUP BY month
+            ORDER BY month ASC
+        """, (gym_id,))
+        monthly_trend = [dict(row) for row in cursor.fetchall()]
+        
+        # 11. Plan Breakdown
+        cursor.execute("""
+            SELECT pl.name as plan_name, SUM(p.amount) as revenue
+            FROM payments p
+            JOIN memberships ms ON p.membership_id = ms.id
+            JOIN plans pl ON ms.plan_id = pl.id
+            WHERE p.status = 'paid' AND p.gym_id = ?
+            GROUP BY plan_name
+        """, (gym_id,))
+        plan_breakdown = [dict(row) for row in cursor.fetchall()]
+        
+        # 12. Payment Method Analytics
+        cursor.execute("""
+            SELECT COALESCE(payment_method, 'online') as method, SUM(amount) as revenue, COUNT(*) as cnt
+            FROM payments
+            WHERE status = 'paid' AND gym_id = ?
+            GROUP BY method
+        """, (gym_id,))
+        method_rows = cursor.fetchall()
+        total_payment_count = sum(r["cnt"] for r in method_rows) or 1
+        payment_methods = []
+        for r in method_rows:
+            payment_methods.append({
+                "method": r["method"],
+                "revenue": r["revenue"],
+                "percentage": round((r["cnt"] / total_payment_count) * 100, 1)
+            })
+            
+        # 13. Membership Analytics
+        cursor.execute("""
+            SELECT status, COUNT(*) as count FROM members
+            WHERE gym_id = ? AND status NOT IN ('pending', 'rejected')
+            GROUP BY status
+        """, (gym_id,))
+        membership_breakdown = {row["status"]: row["count"] for row in cursor.fetchall()}
+        
+        # 14. Top Performing Months
+        cursor.execute("""
+            SELECT TO_CHAR(payment_date::timestamp, 'YYYY-MM') as month, SUM(amount) as revenue
+            FROM payments
+            WHERE status = 'paid' AND gym_id = ?
+            GROUP BY month
+            ORDER BY revenue DESC LIMIT 3
+        """, (gym_id,))
+        top_months = [dict(row) for row in cursor.fetchall()]
+
+        # 15. Dynamic Business Insights
+        insights = []
+        
+        cursor.execute("""
+            SELECT SUM(amount) FROM payments 
+            WHERE status IN ('pending', 'overdue')
+              AND due_date >= ? AND due_date < ? AND gym_id = ?
+        """, (last_month_start, last_month_end, gym_id))
+        last_month_dues = cursor.fetchone()[0] or 0.0
+        if last_month_dues > 0:
+            due_growth = round(((outstanding_due_this_month - last_month_dues) / last_month_dues) * 100, 1)
+            if due_growth > 5:
+                insights.append({
+                    "type": "warning",
+                    "title": "Pending dues increased",
+                    "text": f"Pending dues increased by {due_growth}% compared to last month. Consider sending payment reminders."
+                })
+                
+        if growth_rate > 0:
+            insights.append({
+                "type": "success",
+                "title": "Revenue Increased",
+                "text": f"Revenue increased by {growth_rate}% compared to last month. Keep up the high renewal numbers!"
+            })
+        elif growth_rate < 0:
+            insights.append({
+                "type": "warning",
+                "title": "Revenue Declined",
+                "text": f"Revenue declined by {abs(growth_rate)}% compared to last month. Focus on expiring memberships."
+            })
+            
+        cursor.execute("""
+            SELECT TO_CHAR(check_in_time::timestamp, 'FMDay') as day_of_week, COUNT(*) as cnt
+            FROM attendance
+            WHERE status = 'success' AND gym_id = ?
+              AND check_in_time::date >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY day_of_week
+            ORDER BY cnt ASC
+        """, (gym_id,))
+        day_rows = cursor.fetchall()
+        if day_rows:
+            lowest_day = day_rows[0]["day_of_week"].strip()
+            insights.append({
+                "type": "info",
+                "title": "Attendance Insights",
+                "text": f"Attendance is lowest on {lowest_day}s. Consider running a challenge or promotion on {lowest_day}s."
+            })
+            
+        today = now_ist().strftime("%Y-%m-%d")
+        next_week = (now_ist() + timedelta(days=7)).strftime("%Y-%m-%d")
+        cursor.execute("""
+            SELECT COUNT(*) FROM memberships
+            WHERE status = 'active' AND end_date >= ? AND end_date <= ? AND gym_id = ?
+        """, (today, next_week, gym_id))
+        due_soon_cnt = cursor.fetchone()[0] or 0
+        if due_soon_cnt > 0:
+            insights.append({
+                "type": "info",
+                "title": "Renewal Reminder Opportunity",
+                "text": f"{due_soon_cnt} memberships are due to expire within the next 7 days. Send renewal reminders today."
+            })
+            
+        cursor.execute("SELECT COUNT(*) FROM win_back_recoveries WHERE gym_id = ? AND recovery_date >= ?", (gym_id, this_month_start))
+        rec_cnt = cursor.fetchone()[0] or 0
+        if rec_cnt > 0:
+            insights.append({
+                "type": "success",
+                "title": "Recovery Campaign Working",
+                "text": f"{rec_cnt} inactive members returned and checked in this month."
+            })
+
+        # 16. AI Recommendations Action Cards
+        recommendations = []
+        
+        cursor.execute("SELECT COUNT(DISTINCT member_id) FROM payments WHERE status IN ('pending', 'overdue') AND gym_id = ?", (gym_id,))
+        pending_members_cnt = cursor.fetchone()[0] or 0
+        if outstanding_dues > 0:
+            recommendations.append({
+                "type": "recover_revenue",
+                "title": "Recover Revenue",
+                "text": f"Recover ₹{int(outstanding_dues):,} by contacting {pending_members_cnt} members with pending dues.",
+                "button_text": "View Members",
+                "tab": "pending-dues"
+            })
+            
+        if due_soon_cnt > 0:
+            recommendations.append({
+                "type": "renew_memberships",
+                "title": "Renew Memberships",
+                "text": f"{due_soon_cnt} memberships expire this week. Send bulk renewal reminders now.",
+                "button_text": "Send Reminders",
+                "tab": "expiring-soon"
+            })
+            
+        cursor.execute("""
+            SELECT COUNT(distinct m.id) FROM members m
+            LEFT JOIN (
+                SELECT member_id, MAX(check_in_time) as max_time
+                FROM attendance
+                WHERE status = 'success' AND gym_id = ?
+                GROUP BY member_id
+            ) a ON m.id = a.member_id
+            WHERE m.gym_id = ? AND m.status = 'active'
+              AND (date_part('day', now() - COALESCE(a.max_time::timestamp, m.joined_at::timestamp)) >= 15)
+        """, (gym_id, gym_id))
+        win_back_cnt = cursor.fetchone()[0] or 0
+        if win_back_cnt > 0:
+            recommendations.append({
+                "type": "win_back",
+                "title": "Win Back Members",
+                "text": f"{win_back_cnt} members haven't visited in 15 days. Initiate follow-up workflow.",
+                "button_text": "Open Win Back",
+                "tab": "win-back"
+            })
+            
+        cursor.execute("""
+            SELECT COUNT(distinct m.id) FROM members m
+            JOIN memberships ms ON ms.member_id = m.id
+            JOIN plans pl ON ms.plan_id = pl.id
+            JOIN (
+                SELECT member_id, COUNT(*) as visit_cnt 
+                FROM attendance 
+                WHERE status = 'success' AND check_in_time >= ? AND gym_id = ?
+                GROUP BY member_id
+            ) a ON m.id = a.member_id
+            WHERE m.gym_id = ? AND ms.status = 'active' 
+              AND pl.name ILIKE '%%monthly%%' AND a.visit_cnt >= 12
+        """, (this_month_start, gym_id, gym_id))
+        upsell_cnt = cursor.fetchone()[0] or 0
+        if upsell_cnt > 0:
+            recommendations.append({
+                "type": "upsell",
+                "title": "Upsell Opportunity",
+                "text": f"{upsell_cnt} frequent monthly members qualify for annual value plans. Potential upside: ₹{upsell_cnt * 6000:,}",
+                "button_text": "View Candidates",
+                "tab": "members"
+            })
+            
+        conn.close()
+        
+        return {
+            "lifetime_revenue": lifetime_revenue,
+            "this_month_revenue": this_month_revenue,
+            "last_month_revenue": last_month_revenue,
+            "growth_rate": growth_rate,
+            "avg_monthly_revenue": avg_monthly_rev,
+            "arpu": arpu,
+            "outstanding_dues": outstanding_dues,
+            "collection_rate": collection_rate,
+            "monthly_trend": monthly_trend,
+            "plan_breakdown": plan_breakdown,
+            "payment_methods": payment_methods,
+            "membership_breakdown": membership_breakdown,
+            "top_months": top_months,
+            "insights": insights,
+            "recommendations": recommendations
+        }
+
+    @staticmethod
+    def compare_months(gym_id, m1, m2):
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        
+        metrics = {}
+        for idx, m_str in enumerate([m1, m2], 1):
+            m_start = f"{m_str}-01 00:00:00"
+            if m_str.endswith("12"):
+                y = int(m_str[:4])
+                m_end = f"{y+1}-01-01 00:00:00"
+            else:
+                y = m_str[:4]
+                m = str(int(m_str[5:]) + 1).zfill(2)
+                m_end = f"{y}-{m}-01 00:00:00"
+                
+            cursor.execute("SELECT SUM(amount) FROM payments WHERE status = 'paid' AND payment_date >= ? AND payment_date < ? AND gym_id = ?", (m_start, m_end, gym_id))
+            rev = cursor.fetchone()[0] or 0.0
+            
+            cursor.execute("SELECT COUNT(*) FROM members WHERE joined_at >= ? AND joined_at < ? AND gym_id = ?", (m_start, m_end, gym_id))
+            new_m = cursor.fetchone()[0] or 0
+            
+            cursor.execute("SELECT COUNT(*) FROM payments WHERE status = 'paid' AND due_date >= ? AND due_date < ? AND gym_id = ?", (m_start, m_end, gym_id))
+            ren = cursor.fetchone()[0] or 0
+            
+            cursor.execute("SELECT SUM(amount) FROM payments WHERE status = 'paid' AND payment_date >= ? AND payment_date < ? AND gym_id = ?", (m_start, m_end, gym_id))
+            collected = cursor.fetchone()[0] or 0.0
+            cursor.execute("SELECT SUM(amount) FROM payments WHERE status IN ('pending', 'overdue') AND due_date >= ? AND due_date < ? AND gym_id = ?", (m_start, m_end, gym_id))
+            pending = cursor.fetchone()[0] or 0.0
+            
+            tot_exp = collected + pending
+            rec_rate = round((collected / tot_exp) * 100, 1) if tot_exp > 0 else 100.0
+            
+            cursor.execute("SELECT COUNT(*) FROM attendance WHERE status = 'success' AND check_in_time >= ? AND check_in_time < ? AND gym_id = ?", (m_start, m_end, gym_id))
+            att_cnt = cursor.fetchone()[0] or 0
+            
+            cursor.execute("""
+                SELECT TO_CHAR(check_in_time::timestamp, 'YYYY-MM-DD') as d, COUNT(*) as cnt
+                FROM attendance
+                WHERE status = 'success' AND check_in_time >= ? AND check_in_time < ? AND gym_id = ?
+                GROUP BY d
+                ORDER BY cnt DESC LIMIT 1
+            """, (m_start, m_end, gym_id))
+            peak_row = cursor.fetchone()
+            peak_day = peak_row["d"] if peak_row else "N/A"
+            
+            cursor.execute("SELECT COUNT(*) FROM win_back_recoveries WHERE recovery_date >= ? AND recovery_date < ? AND gym_id = ?", (m_start, m_end, gym_id))
+            win_backs = cursor.fetchone()[0] or 0
+            
+            metrics[f"m{idx}"] = {
+                "revenue": rev,
+                "new_members": new_m,
+                "renewals": ren,
+                "collected": collected,
+                "pending": pending,
+                "recovery_rate": rec_rate,
+                "attendance": att_cnt,
+                "peak_day": peak_day,
+                "win_backs": win_backs
+            }
+            
+        conn.close()
+        
+        m1_data = metrics["m1"]
+        m2_data = metrics["m2"]
+        
+        rev_diff = m2_data["revenue"] - m1_data["revenue"]
+        rev_pct = round((rev_diff / m1_data["revenue"] * 100), 1) if m1_data["revenue"] > 0 else 100.0
+        
+        return {
+            "m1": m1_data,
+            "m2": m2_data,
+            "comparison": {
+                "revenue_diff": rev_diff,
+                "revenue_pct": rev_pct,
+                "new_members_diff": m2_data["new_members"] - m1_data["new_members"],
+                "renewals_diff": m2_data["renewals"] - m1_data["renewals"],
+                "collected_diff": m2_data["collected"] - m1_data["collected"],
+                "pending_diff": m2_data["pending"] - m1_data["pending"],
+                "attendance_diff": m2_data["attendance"] - m1_data["attendance"],
+                "win_backs_diff": m2_data["win_backs"] - m1_data["win_backs"]
+            }
+        }
+
+@app.route("/api/admin/analytics/overview", methods=["GET"])
+@login_required("owner")
+def admin_analytics_overview():
+    try:
+        gym_id = session["gym_id"]
+        data = AnalyticsService.get_overview(gym_id)
+        return jsonify(data)
+    except Exception as e:
+        app.logger.error(f"Error in analytics overview: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/admin/analytics/compare", methods=["GET"])
+@login_required("owner")
+def admin_analytics_compare():
+    try:
+        gym_id = session["gym_id"]
+        m1 = request.args.get("month1", "").strip()
+        m2 = request.args.get("month2", "").strip()
+        if not m1 or not m2:
+            return jsonify({"error": "month1 and month2 parameters are required"}), 400
+        data = AnalyticsService.compare_months(gym_id, m1, m2)
+        return jsonify(data)
+    except Exception as e:
+        app.logger.error(f"Error in analytics comparison: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/service-worker.js")
+def serve_service_worker():
+    return send_file(os.path.join(app.static_folder, "service-worker.js"), mimetype="application/javascript")
+
+@app.route("/manifest.json")
+def serve_manifest():
+    return send_file(os.path.join(app.static_folder, "manifest.json"), mimetype="application/json")
 
 # Start Flask server
 if __name__ == "__main__":

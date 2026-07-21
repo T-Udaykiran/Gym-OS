@@ -1,5 +1,6 @@
 let activeMemberData = {};
 let memberDataReady = false;
+let isUploadingProfilePhoto = false;
 
 // Single source of truth for the logged-in member. This is the ONLY function
 // allowed to assign to activeMemberData. It merges additively (patch fields
@@ -1282,6 +1283,10 @@ function handleProfilePhotoUpload(event) {
         return;
     }
     
+    // Start Upload
+    isUploadingProfilePhoto = true;
+    setPhotoOptionsSheetDisabledState(true);
+
     // Show spinner
     const spinner = document.getElementById('profilePhotoLoading');
     if (spinner) spinner.style.display = 'flex';
@@ -1299,32 +1304,70 @@ function handleProfilePhotoUpload(event) {
             });
             const resData = await res.json();
             if (res.ok && resData.success) {
+                // Update local member data
                 setMemberData({ profile_photo: base64 });
+                
+                // Update local activityDataGlobal cache as well
+                if (activityDataGlobal) {
+                    activityDataGlobal.profile_photo = base64;
+                    ['leaderboard_weekly', 'leaderboard_monthly', 'leaderboard_all'].forEach(key => {
+                        if (Array.isArray(activityDataGlobal[key])) {
+                            activityDataGlobal[key].forEach(u => {
+                                if (u.id === activeMemberData.member_id) {
+                                    u.profile_photo = base64;
+                                }
+                            });
+                        }
+                    });
+                }
+                
                 syncMemberProfileState();
-                showMobileToast('Profile photo updated successfully', 'success');
+                
+                // Fetch latest activity/leaderboard from server to keep database and UI perfectly in sync
+                try {
+                    await fetchActivityData();
+                } catch (e) {
+                    console.error('Failed to sync activity/leaderboard after upload', e);
+                }
+                
+                isUploadingProfilePhoto = false;
+                setPhotoOptionsSheetDisabledState(false);
+                closePhotoOptionsSheet();
+                
+                showMobileToast('Profile photo updated successfully.', 'success');
             } else if (res.status === 401 || res.status === 403) {
                 showMobileToast('Authentication expired. Please log in again.', 'error');
+                isUploadingProfilePhoto = false;
+                setPhotoOptionsSheetDisabledState(false);
             } else {
                 showMobileToast(resData.error || 'Upload failed. Please try again.', 'error');
+                isUploadingProfilePhoto = false;
+                setPhotoOptionsSheetDisabledState(false);
             }
         } catch (err) {
             console.error(err);
-            showMobileToast('Network unavailable. Check your connection and try again.', 'error');
+            showMobileToast('Network connection lost.', 'error');
+            isUploadingProfilePhoto = false;
+            setPhotoOptionsSheetDisabledState(false);
         } finally {
             if (spinner) spinner.style.display = 'none';
             event.target.value = '';
         }
     };
     reader.onerror = () => {
-        showMobileToast('Unsupported image type. Please choose a different photo.', 'error');
+        showMobileToast('Unsupported image format.', 'error');
         if (spinner) spinner.style.display = 'none';
         event.target.value = '';
+        isUploadingProfilePhoto = false;
+        setPhotoOptionsSheetDisabledState(false);
     };
     reader.readAsDataURL(file);
 }
 
 async function removeProfilePhoto() {
-    closePhotoOptionsSheet();
+    isUploadingProfilePhoto = true;
+    setPhotoOptionsSheetDisabledState(true);
+
     const spinner = document.getElementById('profilePhotoLoading');
     if (spinner) spinner.style.display = 'flex';
 
@@ -1339,16 +1382,47 @@ async function removeProfilePhoto() {
         const resData = await res.json();
         if (res.ok && resData.success) {
             setMemberData({ profile_photo: '' });
+            
+            if (activityDataGlobal) {
+                activityDataGlobal.profile_photo = '';
+                ['leaderboard_weekly', 'leaderboard_monthly', 'leaderboard_all'].forEach(key => {
+                    if (Array.isArray(activityDataGlobal[key])) {
+                        activityDataGlobal[key].forEach(u => {
+                            if (u.id === activeMemberData.member_id) {
+                                u.profile_photo = '';
+                            }
+                        });
+                    }
+                });
+            }
+
             syncMemberProfileState();
+            
+            try {
+                await fetchActivityData();
+            } catch (e) {
+                console.error('Failed to sync activity/leaderboard after photo removal', e);
+            }
+
+            isUploadingProfilePhoto = false;
+            setPhotoOptionsSheetDisabledState(false);
+            closePhotoOptionsSheet();
+
             showMobileToast('Profile photo removed.', 'success');
         } else if (res.status === 401 || res.status === 403) {
             showMobileToast('Authentication expired. Please log in again.', 'error');
+            isUploadingProfilePhoto = false;
+            setPhotoOptionsSheetDisabledState(false);
         } else {
             showMobileToast(resData.error || 'Unable to remove profile photo. Please try again.', 'error');
+            isUploadingProfilePhoto = false;
+            setPhotoOptionsSheetDisabledState(false);
         }
     } catch (err) {
         console.error(err);
-        showMobileToast('Network unavailable. Check your connection and try again.', 'error');
+        showMobileToast('Network connection lost.', 'error');
+        isUploadingProfilePhoto = false;
+        setPhotoOptionsSheetDisabledState(false);
     } finally {
         if (spinner) spinner.style.display = 'none';
     }
@@ -1826,7 +1900,19 @@ function openPhotoOptionsSheet() {
 }
 
 function closePhotoOptionsSheet() {
+    if (isUploadingProfilePhoto) return;
     document.getElementById('photoOptionsSheet').style.display = 'none';
+}
+
+function setPhotoOptionsSheetDisabledState(disabled) {
+    const sheet = document.getElementById('photoOptionsSheet');
+    if (!sheet) return;
+    const buttons = sheet.querySelectorAll('.sheet-option-btn');
+    buttons.forEach(btn => {
+        btn.disabled = disabled;
+        btn.style.opacity = disabled ? '0.5' : '1';
+        btn.style.pointerEvents = disabled ? 'none' : 'auto';
+    });
 }
 
 function viewProfilePhotoFull() {
@@ -1845,7 +1931,6 @@ function closePhotoViewer() {
 }
 
 function triggerProfilePhotoUpdate() {
-    closePhotoOptionsSheet();
     document.getElementById('profilePhotoInput').click();
 }
 

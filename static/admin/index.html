@@ -211,6 +211,20 @@
                         </svg>
                         <span class="nav-text">Expiring Soon</span>
                     </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="win-back" data-tooltip="Win Back Members">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                        </svg>
+                        <span class="nav-text">Win Back Members</span>
+                    </a></li>
+                <li class="nav-item"><a class="nav-link" data-tab="revenue-analytics" data-tooltip="Revenue Analytics">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        <span class="nav-text">Revenue Analytics</span>
+                    </a></li>
                 <li class="nav-item" style="position: relative;"><a class="nav-link" data-tab="pending-approvals" data-tooltip="Pending Approvals">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -300,6 +314,7 @@
                     <div class="greeting-block">
                         <span class="greeting-text" style="font-size: 13.5px; color: var(--text-secondary); display: block;"><span id="greetingTimePrefix">Good Morning</span>, <strong id="greetingUser">Ramesh 👋</strong></span>
                         <h1 class="gym-title-headline" style="font-size: 24px; font-weight: 800; color: #fff; margin: 4px 0;" id="headerGymName">FitZone Gym</h1>
+                        <span id="realTimeHeaderDate" style="font-size: 12px; color: var(--text-tertiary); display: block;"></span>
                     </div>
                     <div class="header-controls" style="position: relative; display: flex; gap: 12px; align-items: center;">
                         <button class="btn-round-control" id="ownerBellBtn" onclick="toggleNotificationPopover(event)" style="position: relative;" aria-label="Notifications">
@@ -378,23 +393,22 @@
                         </span>
                     </div>
 
-                    <!-- Monthly Revenue -->
-                    <div class="kpi-card">
+                    <!-- Total Revenue -->
+                    <div class="kpi-card kpi-card-nav" style="cursor: pointer;" onclick="showTab('revenue-analytics')">
                         <div class="kpi-h-row">
-                            <span class="kpi-label">Monthly Revenue</span>
-                            <div class="kpi-badge-icon kpi-avatar-orange">
+                            <span class="kpi-label">Total Revenue</span>
+                            <div class="kpi-badge-icon kpi-avatar-orange" style="background-color: rgba(245, 158, 11, 0.1); color: #f59e0b;">
                                 <span style="font-weight: 700; font-size:16px;">₹</span>
                             </div>
                         </div>
-                        <div class="kpi-value" id="statMonthlyRevenue">₹0</div>
-                        <span class="kpi-trend-growth growth-positive" style="display: none;">
-                            <svg style="width: 12px; height: 12px;" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                    d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                            </svg>
-                            <span>0% vs last month</span>
+                        <div class="kpi-value" id="statLifetimeRevenue">₹0</div>
+                        <span class="kpi-trend-growth" id="statRevenueGrowthTrend" style="color: #22c55e; display: flex; align-items: center; gap: 4px; font-weight: 700;">
+                            <span id="statRevenueGrowthArrow">↑</span> <span id="statRevenueGrowthVal">0%</span>
+                            <span style="font-weight: normal; color: var(--text-tertiary); font-size: 11px;">vs last month</span>
                         </span>
+                        <button class="kpi-nav-btn" type="button" title="View Revenue Analytics" aria-label="View Revenue Analytics">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
                     </div>
 
                     <!-- Pending Payments -->
@@ -431,6 +445,26 @@
                             <span>Next 7 days</span>
                         </span>
                         <button class="kpi-nav-btn" type="button" title="View Expiring Soon" aria-label="View Expiring Soon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    </div>
+
+                    <!-- Win Back Members -->
+                    <div class="kpi-card kpi-card-nav" style="cursor: pointer;" onclick="showTab('win-back')">
+                        <div class="kpi-h-row">
+                            <span class="kpi-label">Win Back Members</span>
+                            <div class="kpi-badge-icon" style="background-color: rgba(239, 68, 68, 0.1); color: #ef4444; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                <svg style="width: 18px; height: 18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-value" id="statWinBackCount">0</div>
+                        <span class="kpi-trend-growth growth-neutral" style="color: var(--text-tertiary);">
+                            <span>No visits in the last 15 days</span>
+                        </span>
+                        <button class="kpi-nav-btn" type="button" title="View Win Back Members" aria-label="View Win Back Members">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
                         </button>
                     </div>
@@ -933,8 +967,294 @@
                             <tbody id="expiringSoonTableBody"></tbody>
                         </table>
                     </div>
-                    <div class="premium-table-footer">
-                        <div class="pagination-info" id="expiringSoonTotalInfo">Total: 0 members</div>
+            </section>
+
+            <!-- ================= TAB: WIN BACK MEMBERS ================= -->
+            <section id="win-backTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Win Back Members</h2>
+                    <p>Identify and re-engage members who haven't visited in 15+ days.</p>
+                </div>
+
+                <!-- CRM Analytics summary widgets -->
+                <div class="winback-stats-grid">
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label">Total Inactive</span>
+                        <span class="winback-stat-val" id="winbackTotalCount">0</span>
+                        <span class="winback-stat-sub">15+ days absent</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label">Needs Follow-up</span>
+                        <span class="winback-stat-val" id="winbackFollowupCount" style="color: #3b82f6;">0</span>
+                        <span class="winback-stat-sub">15–20 days absent</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label">High Risk</span>
+                        <span class="winback-stat-val" id="winbackHighRiskCount" style="color: #f59e0b;">0</span>
+                        <span class="winback-stat-sub">21–30 days absent</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label">Almost Lost</span>
+                        <span class="winback-stat-val" id="winbackAlmostLostCount" style="color: #ef4444;">0</span>
+                        <span class="winback-stat-sub">30+ days absent</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label">Recovered (Month)</span>
+                        <span class="winback-stat-val" id="winbackRecoveredMonth" style="color: #10b981;">0</span>
+                        <span class="winback-stat-sub">Returned this month</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label">Recovery Rate</span>
+                        <span class="winback-stat-val" id="winbackRecoveryRate" style="color: var(--accent);">0.0%</span>
+                        <span class="winback-stat-sub">Lifetime recovery metric</span>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="premium-filter-card card" style="margin-bottom: 24px; padding: 18px 24px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; flex: 1;">
+                            <!-- Search -->
+                            <div class="input-icon-group" style="min-width: 200px; max-width: 320px; flex: 1;">
+                                <input type="text" id="winbackSearchInput" class="input-control" placeholder="Search by name, ID or phone..." oninput="fetchWinBackMembers()">
+                            </div>
+                            
+                            <!-- Days filter -->
+                            <div class="select-group" style="min-width: 140px;">
+                                <select id="winbackDaysFilter" class="input-control" onchange="fetchWinBackMembers()">
+                                    <option value="15">15+ Days Absent</option>
+                                    <option value="30">30+ Days Absent</option>
+                                    <option value="60">60+ Days Absent</option>
+                                </select>
+                            </div>
+
+                            <!-- Custom date range -->
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <input type="date" id="winbackStartDate" class="input-control" style="width: auto;" onchange="fetchWinBackMembers()">
+                                <span style="color: var(--text-secondary); font-size: 13px;">to</span>
+                                <input type="date" id="winbackEndDate" class="input-control" style="width: auto;" onchange="fetchWinBackMembers()">
+                                <button class="btn btn-secondary" onclick="clearWinBackDateRange()" style="padding: 6px 12px; font-size: 12px;">Clear</button>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-secondary" onclick="exportWinBackCSV()" style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
+                            <button class="btn btn-secondary" onclick="printWinBackList()" style="font-size:13.5px; padding: 10px 14px;">Print List</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bulk Actions Toolbar (Sticky / hidden by default) -->
+                <div id="winbackBulkToolbar" class="bulk-actions-toolbar" style="display: none;">
+                    <div class="bulk-actions-left">
+                        <input type="checkbox" id="winbackSelectAllHeader" onclick="toggleWinBackAllRows(this)">
+                        <span id="winbackBulkCountText">0 members selected</span>
+                    </div>
+                    <div class="bulk-actions-right">
+                        <button class="btn btn-secondary" onclick="triggerBulkInteractionModal('whatsapp')">Bulk WhatsApp</button>
+                        <button class="btn btn-secondary" onclick="triggerBulkInteractionModal('contacted')">Mark Followed Up</button>
+                    </div>
+                </div>
+
+                <!-- Table Card -->
+                <div class="premium-table-card">
+                    <div class="premium-table-container">
+                        <table class="premium-table" id="winbackTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px; text-align: center;"><input type="checkbox" id="winbackSelectAllMaster" onclick="toggleWinBackAllRows(this)"></th>
+                                    <th>Member Details</th>
+                                    <th>Membership Plan</th>
+                                    <th>Last Visit</th>
+                                    <th>Days Absent</th>
+                                    <th>Expiry Date</th>
+                                    <th>Status</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="winbackTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="premium-table-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 24px;">
+                        <div class="pagination-info" id="winbackTotalInfo">Showing 0 members</div>
+                        <div style="display: flex; gap: 8px;" id="winbackPagination">
+                            <button class="btn btn-secondary" id="winbackPrevPageBtn" onclick="changeWinBackPage(-1)" disabled style="padding: 6px 12px;">Prev</button>
+                            <button class="btn btn-secondary" id="winbackNextPageBtn" onclick="changeWinBackPage(1)" disabled style="padding: 6px 12px;">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= TAB: REVENUE ANALYTICS ================= -->
+            <section id="revenue-analyticsTab" class="tab-content">
+                <div class="module-page-header">
+                    <h2>Revenue Analytics & Business Insights</h2>
+                    <p>Overview of gym financial health, month-over-month performance comparison, and automated recommendations.</p>
+                </div>
+
+                <!-- KPI Grid -->
+                <div class="winback-stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 24px;">
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label" style="font-size:10px;">Lifetime Revenue</span>
+                        <span class="winback-stat-val" id="analyticsLifetimeRev" style="font-size:18px;">₹0</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label" style="font-size:10px;">This Month</span>
+                        <span class="winback-stat-val" id="analyticsThisMonthRev" style="font-size:18px; color: var(--gold);">₹0</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label" style="font-size:10px;">Last Month</span>
+                        <span class="winback-stat-val" id="analyticsLastMonthRev" style="font-size:18px;">₹0</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label" style="font-size:10px;">Monthly Growth</span>
+                        <span class="winback-stat-val" id="analyticsGrowthVal" style="font-size:18px;">0%</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label" style="font-size:10px;">Monthly Avg</span>
+                        <span class="winback-stat-val" id="analyticsAvgMonthly" style="font-size:18px;">₹0</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label" style="font-size:10px;">ARPU</span>
+                        <span class="winback-stat-val" id="analyticsARPU" style="font-size:18px; color: #3b82f6;">₹0</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label" style="font-size:10px;">Collection Rate</span>
+                        <span class="winback-stat-val" id="analyticsCollectionRate" style="font-size:18px; color: #10b981;">0%</span>
+                    </div>
+                    <div class="winback-stat-card">
+                        <span class="winback-stat-label" style="font-size:10px;">Outstanding Dues</span>
+                        <span class="winback-stat-val" id="analyticsOutstandingDues" style="font-size:18px; color: #ef4444;">₹0</span>
+                    </div>
+                </div>
+
+                <!-- Main Chart & Control Row -->
+                <div class="premium-table-card" style="padding: 20px; margin-bottom: 24px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; flex-wrap:wrap; gap:12px;">
+                        <h4 style="font-weight:700; font-size:16px;">12-Month Revenue Trend</h4>
+                        <div style="display:flex; gap:8px;">
+                            <div class="btn-group">
+                                <button class="btn btn-secondary btn-sm active" id="btnTrendMonth" onclick="toggleTrendGrouping('month')">Month</button>
+                                <button class="btn btn-secondary btn-sm" id="btnTrendQuarter" onclick="toggleTrendGrouping('quarter')">Quarter</button>
+                                <button class="btn btn-secondary btn-sm" id="btnTrendYear" onclick="toggleTrendGrouping('year')">Year</button>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" onclick="exportAnalytics('csv')">CSV</button>
+                            <button class="btn btn-secondary btn-sm" onclick="exportAnalytics('excel')">Excel</button>
+                            <button class="btn btn-secondary btn-sm" onclick="exportAnalytics('pdf')">PDF</button>
+                        </div>
+                    </div>
+                    <div style="height: 280px; position: relative;">
+                        <canvas id="analyticsTrendLineChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- MoM Comparison Selector & Metrics Card -->
+                <div style="display:grid; grid-template-columns: 1fr; gap: 24px; margin-bottom: 24px;">
+                    <div class="premium-table-card" style="padding: 20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px; flex-wrap:wrap; gap:12px;">
+                            <h4 style="font-weight:700; font-size:16px;">Compare Business Performance</h4>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <select id="compareMonth1" class="input-control" style="width: auto; padding:6px 12px; font-size:13px;" onchange="fetchComparisonData()"></select>
+                                <span style="font-size:13px; color:var(--text-secondary);">vs</span>
+                                <select id="compareMonth2" class="input-control" style="width: auto; padding:6px 12px; font-size:13px;" onchange="fetchComparisonData()"></select>
+                            </div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                            <div class="winback-stat-card" style="background-color: var(--bg-raised); align-items: center;">
+                                <span class="winback-stat-label">Revenue Difference</span>
+                                <span class="winback-stat-val" id="compRevDiff" style="font-size: 20px;">₹0</span>
+                                <span class="kpi-trend-growth" id="compRevGrowth" style="font-size: 11px;">0%</span>
+                            </div>
+                            <div class="winback-stat-card" style="background-color: var(--bg-raised);">
+                                <span class="winback-stat-label">New Members</span>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span id="compLabelM1_new">Month 1:</span> <strong id="compValM1_new">0</strong>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span id="compLabelM2_new">Month 2:</span> <strong id="compValM2_new">0</strong>
+                                </div>
+                                <span style="font-size: 11px; font-weight:700;" id="compDiff_new">0</span>
+                            </div>
+                            <div class="winback-stat-card" style="background-color: var(--bg-raised);">
+                                <span class="winback-stat-label">Membership Renewals</span>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span>Month 1:</span> <strong id="compValM1_renew">0</strong>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span>Month 2:</span> <strong id="compValM2_renew">0</strong>
+                                </div>
+                                <span style="font-size: 11px; font-weight:700;" id="compDiff_renew">0</span>
+                            </div>
+                            <div class="winback-stat-card" style="background-color: var(--bg-raised);">
+                                <span class="winback-stat-label">Collections & Rate</span>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span>Month 1:</span> <strong id="compValM1_col">₹0 (0%)</strong>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span>Month 2:</span> <strong id="compValM2_col">₹0 (0%)</strong>
+                                </div>
+                                <span style="font-size: 11px; font-weight:700;" id="compDiff_col">0</span>
+                            </div>
+                            <div class="winback-stat-card" style="background-color: var(--bg-raised);">
+                                <span class="winback-stat-label">Attendance Metrics</span>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span>Month 1 Checkins:</span> <strong id="compValM1_att">0</strong>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span>Month 2 Checkins:</span> <strong id="compValM2_att">0</strong>
+                                </div>
+                                <span style="font-size: 10px; color: var(--text-tertiary);" id="compDiff_att">Peak Days: N/A vs N/A</span>
+                            </div>
+                            <div class="winback-stat-card" style="background-color: var(--bg-raised);">
+                                <span class="winback-stat-label">Retention Win Backs</span>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span>Month 1 Recovered:</span> <strong id="compValM1_wb">0</strong>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; font-size:13px; margin: 4px 0;">
+                                    <span>Month 2 Recovered:</span> <strong id="compValM2_wb">0</strong>
+                                </div>
+                                <span style="font-size: 11px; font-weight:700;" id="compDiff_wb">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Insights & AI Action Recommendations -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                    <!-- Business Insights Feed -->
+                    <div class="premium-table-card" style="padding: 20px; display:flex; flex-direction:column; gap:16px;">
+                        <h4 style="font-weight:700; font-size:16px; margin:0 0 8px 0;">Business Intelligence & Insights</h4>
+                        <div id="analyticsInsightsFeed" style="display:flex; flex-direction:column; gap:12px;"></div>
+                    </div>
+
+                    <!-- AI Action Recommendations -->
+                    <div class="premium-table-card" style="padding: 20px; display:flex; flex-direction:column; gap:16px;">
+                        <h4 style="font-weight:700; font-size:16px; margin:0 0 8px 0;">AI Recommendations & Opportunities</h4>
+                        <div id="analyticsRecommendationsContainer" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;"></div>
+                    </div>
+                </div>
+
+                <!-- Breakdowns and Performing months -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                    <!-- Plan Breakdown Pie Chart -->
+                    <div class="premium-table-card" style="padding: 20px;">
+                        <h4 style="font-weight:700; font-size:16px; margin-bottom: 16px;">Revenue by Plan Tier</h4>
+                        <div style="height: 220px; position: relative;">
+                            <canvas id="analyticsPlanPieChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Payment Method split -->
+                    <div class="premium-table-card" style="padding: 20px;">
+                        <h4 style="font-weight:700; font-size:16px; margin-bottom: 16px;">Payment Method analytics</h4>
+                        <div id="analyticsPaymentMethodsSplit" style="display:flex; flex-direction:column; gap:14px; padding-top:10px;"></div>
+                    </div>
+
+                    <!-- Top performing months -->
+                    <div class="premium-table-card" style="padding: 20px;">
+                        <h4 style="font-weight:700; font-size:16px; margin-bottom: 16px;">Top Performing Months</h4>
+                        <div id="analyticsTopMonthsList" style="display:flex; flex-direction:column; gap:12px;"></div>
                     </div>
                 </div>
             </section>
@@ -1515,6 +1835,70 @@
         </div>
     </div>
 
+    <!-- MODAL: WIN BACK WHATSAPP TEMPLATES DIALOG -->
+    <div id="winBackWhatsappModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 550px;">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Send CRM Inactive Notification</h3>
+                <button class="modal-close" onclick="closeModal('winBackWhatsappModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <div class="input-group">
+                    <label for="winBackWhatsappTemplateSelect">Select Template Message</label>
+                    <select id="winBackWhatsappTemplateSelect" class="input-control" onchange="updateWinBackWhatsappPreview()">
+                        <option value="1">Template 1: Inactive 15 Days</option>
+                        <option value="2">Template 2: Inactive 30 Days</option>
+                        <option value="3">Template 3: Inactive 60+ Days</option>
+                        <option value="4">Template 4: Membership Expiring Soon</option>
+                        <option value="5">Template 5: Membership Expired</option>
+                        <option value="6">Template 6: Fee Due Reminder</option>
+                        <option value="7">Template 7: Come Back Offer</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="winBackWhatsappPreviewTxt">Message Preview (Editable)</label>
+                    <textarea id="winBackWhatsappPreviewTxt" class="input-control" style="min-height: 180px; font-family: monospace; font-size: 13px; line-height: 1.4; padding: 10px;"></textarea>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeModal('winBackWhatsappModal')">Cancel</button>
+                <button onclick="triggerSendWinBackWhatsapp()" class="btn btn-primary" style="background-color:#22c55e;">Open WhatsApp</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SCHEDULE FOLLOW UP -->
+    <div id="winBackFollowUpModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 420px;">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Schedule Follow Up</h3>
+                <button class="modal-close" onclick="closeModal('winBackFollowUpModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <form id="winBackFollowUpForm" onsubmit="submitWinBackFollowUp(event)">
+                <input type="hidden" id="winBackFollowUpMemberId">
+                <div class="input-group">
+                    <label for="winBackFollowUpDate">Follow Up Date</label>
+                    <input type="date" id="winBackFollowUpDate" class="input-control" required>
+                </div>
+                <div class="input-group">
+                    <label for="winBackFollowUpNotes">Notes / Conversation Summary</label>
+                    <textarea id="winBackFollowUpNotes" class="input-control" placeholder="E.g., spoke on call, wants to renew next week..." style="min-height: 100px; padding: 8px;"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; font-weight:600;">Schedule Follow Up</button>
+            </form>
+        </div>
+    </div>
+
     <!-- MODAL: REVIEW PAYMENT -->
     <div id="reviewPaymentModal" class="modal-overlay">
         <div class="modal-container" style="max-width: 480px;">
@@ -1709,6 +2093,7 @@
 
     <script src="/shared/member-avatar.js"></script>
     <script src="/shared/date-picker.js"></script>
+    <script src="/shared/whatsapp.js"></script>
     <script src="/admin/app.js?v=3"></script>
     <script>
         if ('serviceWorker' in navigator) {

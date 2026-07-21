@@ -1274,7 +1274,7 @@
 
                             <div style="display: flex; justify-content: center; margin: 16px auto 20px; cursor: pointer; position: relative; width: 96px;" onclick="openPhotoOptionsSheet()">
                                 <member-avatar id="profileEditAvatar" size="96" editable="true"></member-avatar>
-                                <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" style="display: none;" onchange="handleProfilePhotoUpload(event)">
+                                <input type="file" id="profilePhotoInput" accept="image/png,image/jpeg,image/webp" style="display: none;" onchange="handleProfilePhotoUpload(event)" onclick="event.stopPropagation();">
                                 <div id="profilePhotoLoading" class="profile-avatar-edit-spinner" style="display: none;">
                                     <span class="profile-avatar-spinner-icon"></span>
                                 </div>

@@ -243,6 +243,33 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id)")
 
+    # Win Back CRM tables
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS win_back_recoveries (
+        id SERIAL PRIMARY KEY,
+        member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        gym_id INTEGER NOT NULL DEFAULT 1,
+        days_inactive INTEGER NOT NULL,
+        recovery_date TEXT NOT NULL
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_win_back_recoveries_gym ON win_back_recoveries(gym_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_win_back_recoveries_member ON win_back_recoveries(member_id)")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS win_back_interactions (
+        id SERIAL PRIMARY KEY,
+        member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        gym_id INTEGER NOT NULL DEFAULT 1,
+        interaction_type TEXT CHECK(interaction_type IN ('whatsapp', 'call', 'follow_up', 'contacted')) NOT NULL,
+        notes TEXT,
+        contacted_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')),
+        follow_up_date TEXT
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_win_back_interactions_gym ON win_back_interactions(gym_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_win_back_interactions_member ON win_back_interactions(member_id)")
+
     conn.commit()
     _migrate_multi_tenancy(cursor)
     conn.commit()
