@@ -65,9 +65,15 @@ def init_db():
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         role TEXT CHECK(role IN ('owner', 'member')) NOT NULL,
+        first_name TEXT,
+        last_name TEXT,
+        profile_photo TEXT,
         created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
     );
     """)
+    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT")
+    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT")
+    cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo TEXT")
 
     # Create Gym table
     cursor.execute("""
@@ -460,12 +466,26 @@ def _migrate_multi_tenancy(cursor):
     except Exception:
         pass
     try:
+        cursor.execute("ALTER TABLE payments ADD CONSTRAINT payments_status_check CHECK(status IN ('paid', 'pending', 'overdue', 'pending_approval', 'rejected', 'draft', 'submitted', 'approved', 'cancelled'))")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_status_check")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE memberships ADD CONSTRAINT memberships_status_check CHECK(status IN ('active', 'suspended', 'expired', 'rejected', 'cancelled'))")
+    except Exception:
+        pass
+    try:
         cursor.execute("""
-            ALTER TABLE payments ADD CONSTRAINT payments_status_check 
-            CHECK(status IN ('paid', 'pending', 'overdue', 'pending_approval', 'rejected'))
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_txn_ref 
+            ON payments (transaction_reference) 
+            WHERE (transaction_reference IS NOT NULL AND transaction_reference != '')
         """)
     except Exception:
         pass
+
 
 def seed_data(conn):
     cursor = conn.cursor()
@@ -493,8 +513,8 @@ def seed_data(conn):
     # 2. Add Default Owner Account
     owner_pw = hash_password("password123")
     cursor.execute(
-        "INSERT INTO users (email, password_hash, role, gym_id) VALUES (?, ?, ?, ?)",
-        ("owner@gymos.com", owner_pw, "owner", gym_id)
+        "INSERT INTO users (email, password_hash, role, gym_id, first_name, last_name) VALUES (?, ?, ?, ?, ?, ?)",
+        ("owner@gymos.com", owner_pw, "owner", gym_id, "Ramesh", "Kumar")
     )
     owner_user_id = cursor.lastrowid
     cursor.execute("UPDATE gyms SET owner_user_id = ? WHERE id = ?", (owner_user_id, gym_id))

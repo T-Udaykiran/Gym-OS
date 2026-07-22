@@ -120,6 +120,48 @@ class LocalDbLeaderboardRepository extends LeaderboardRepository {
             allTimeRank: data.allTimeRank || 0
         };
     }
+function updateMemberAppBranding(gymInfo) {
+    if (!gymInfo) return;
+    const name = gymInfo.name || "GymOS";
+    
+    // Page Title
+    document.title = `${name} | GymOS`;
+    
+    // Splash Gym Name
+    const splashName = document.getElementById('splashGymName');
+    if (splashName) splashName.innerText = name.toUpperCase();
+    
+    // Login Gym Name
+    const loginName = document.getElementById('loginGymName');
+    if (loginName) loginName.innerText = name.toUpperCase();
+    
+    // Join Gym Name
+    const registerName = document.getElementById('registerGymName');
+    if (registerName) registerName.innerText = `Join ${name}`;
+    
+    // Secondary login view button
+    const secondaryBtn = document.getElementById('secondaryLoginBtn');
+    if (secondaryBtn) secondaryBtn.innerText = `New to ${name}? Sign In`;
+
+    // Inner header logo (e.g. NGYM at top of wrapper page)
+    const appHeaderLogo = document.querySelector('#memberAppWrapper .app-header span') || document.querySelector('#memberAppWrapper span[style*="font-size: 22px"]');
+    if (appHeaderLogo) appHeaderLogo.innerText = name.toUpperCase();
+
+    // Home membership card brand logo
+    const cardBrandLogo = document.getElementById('homeMembershipCardBrand');
+    if (cardBrandLogo) cardBrandLogo.innerText = name.toUpperCase();
+}
+
+async function fetchPublicGymInfo() {
+    try {
+        const res = await fetch('/api/public/gym-info');
+        const data = await res.json();
+        if (data && data.name) {
+            updateMemberAppBranding(data);
+        }
+    } catch (err) {
+        console.error('Error fetching public gym info:', err);
+    }
 }
 
 const leaderboardRepo = new LocalDbLeaderboardRepository();
@@ -128,6 +170,7 @@ const leaderboardRepo = new LocalDbLeaderboardRepository();
 document.addEventListener('DOMContentLoaded', () => {
     updateSimulatorClock();
     setInterval(updateSimulatorClock, 1000);
+    fetchPublicGymInfo();
     checkMemberSession();
     setupAuthForms();
     updatePwaInstallMenuItem();
@@ -477,6 +520,9 @@ async function fetchDashboardData() {
         const data = await res.json();
         setMemberData(data);
         syncAttendanceState();
+        if (data.gym_info) {
+            updateMemberAppBranding(data.gym_info);
+        }
 
         // Fill home fields
         if (document.getElementById('homeMemberFirstName')) {
@@ -647,11 +693,11 @@ function renderBillingBills() {
         
         let statusText = 'Pending';
         let badgeClass = 'pending';
-        if (invoice.status === 'paid') {
+        if (invoice.status === 'paid' || invoice.status === 'approved') {
             statusText = 'Approved';
             badgeClass = 'approved';
-        } else if (invoice.status === 'pending_approval') {
-            statusText = 'Pending for Approval';
+        } else if (invoice.status === 'pending_approval' || invoice.status === 'submitted') {
+            statusText = 'Pending Gym Approval';
             badgeClass = 'pending';
         } else if (invoice.status === 'rejected') {
             statusText = 'Rejected';
@@ -665,19 +711,27 @@ function renderBillingBills() {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
-        }) : (invoice.due_date || 'Date unavailable');
+        }) : (invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        }) : 'Date unavailable');
 
-        let rightActionHtml = '';
-        if (invoice.status === 'paid' || invoice.status === 'pending_approval' || invoice.status === 'rejected') {
-            rightActionHtml = `
-                <a href="#" class="payment-download-link" onclick="downloadMemberReceipt(${JSON.stringify(invoice).replace(/"/g, '&quot;')}); return false;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    <span>Download Receipt</span>
-                </a>
-            `;
-        } else {
-            rightActionHtml = `
-                <button class="profile-btn-primary" style="margin: 0; padding: 6px 14px; font-size: 11px; font-weight: 700; width: auto;" onclick="initiateMemberPayment(${invoice.id}, ${invoice.amount})">Pay Now</button>
+        const rightActionHtml = `
+            <button class="profile-btn-primary" style="margin: 0; padding: 6px 14px; font-size: 11px; font-weight: 700; width: auto; background-color: var(--border-color); color: var(--text-primary);" onclick="showPaymentDetails(${JSON.stringify(invoice).replace(/"/g, '&quot;')})">View Details</button>
+        `;
+
+        let detailsHtml = '';
+        if (invoice.status === 'paid' || invoice.status === 'approved' || invoice.status === 'pending_approval' || invoice.status === 'submitted' || invoice.status === 'rejected') {
+            const submittedDate = invoice.created_at ? new Date(invoice.created_at).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            }) : '—';
+            detailsHtml = `
+                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 6px; line-height: 1.4;">
+                    <div><strong>Submitted:</strong> ${submittedDate}</div>
+                    <div><strong>Method:</strong> ${invoice.payment_method ? invoice.payment_method.toUpperCase() : '—'}</div>
+                    <div><strong>Ref ID:</strong> ${invoice.transaction_reference || '—'}</div>
+                </div>
             `;
         }
 
@@ -686,8 +740,9 @@ function renderBillingBills() {
                 <span class="payment-history-name">Membership Renewal</span>
                 <span class="payment-history-date">${dateStr}</span>
                 <span class="payment-status-badge ${badgeClass}">${statusText}</span>
+                ${detailsHtml}
             </div>
-            <div class="payment-history-right">
+            <div class="payment-history-right" style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
                 <span class="payment-history-amount">₹${invoice.amount.toFixed(2)}</span>
                 ${rightActionHtml}
             </div>
@@ -701,17 +756,25 @@ function downloadMemberReceipt(invoice) {
         const link = document.createElement('a');
         link.href = invoice.receipt_file_url;
         const extension = invoice.receipt_file_type === 'application/pdf' ? 'pdf' : 'png';
-        link.download = `GymOS-Receipt-${invoice.receipt_number || invoice.id}.${extension}`;
+        link.download = `Receipt-${invoice.receipt_number || invoice.id}.${extension}`;
         link.click();
         showMobileToast('Receipt document downloaded.', 'success');
         return;
     }
-    const receiptId = invoice.receipt_number || `RC-${invoice.id}`;
-    const d = new Date(invoice.payment_date).toLocaleString();
+    const receiptId = invoice.receipt_number || `RCPT-PAY-${invoice.id}`;
+    const d = new Date(invoice.payment_date || invoice.created_at).toLocaleString();
+    
+    const gymName = (activeMemberData.gym_settings && activeMemberData.gym_settings.gym_name) || (activeMemberData.gym_info && activeMemberData.gym_info.name) || "GymOS";
+    const gymPhone = (activeMemberData.gym_settings && activeMemberData.gym_settings.gym_phone) || (activeMemberData.gym_info && activeMemberData.gym_info.phone) || "";
+    const gymAddress = (activeMemberData.gym_settings && activeMemberData.gym_settings.gym_address) || (activeMemberData.gym_info && activeMemberData.gym_info.address) || "";
+    const gymEmail = (activeMemberData.gym_settings && activeMemberData.gym_settings.gym_email) || "";
+    const gstNo = (activeMemberData.gym_settings && activeMemberData.gym_settings.gst_number) || "";
+    const customFooter = (activeMemberData.gym_settings && activeMemberData.gym_settings.receipt_footer) || `Thank you for choosing ${gymName}.<br>We appreciate your trust and wish you success on your fitness journey.<br>Powered by GymOS`;
+
     const receipt = `
     <html>
     <head>
-      <title>GymOS Payment Receipt</title>
+      <title>${gymName} Payment Receipt</title>
       <style>
         body { font-family: monospace; padding: 24px; color: #333; line-height: 1.4; }
         .center { text-align: center; }
@@ -723,8 +786,12 @@ function downloadMemberReceipt(invoice) {
     </head>
     <body>
       <div class="center">
-        <div class="logo">GymOS</div>
-        <div>Membership Payment Receipt</div>
+        <div class="logo">${gymName}</div>
+        <div>${gymAddress}</div>
+        ${gymPhone ? `<div>Phone: ${gymPhone}</div>` : ''}
+        ${gymEmail ? `<div>Email: ${gymEmail}</div>` : ''}
+        ${gstNo ? `<div>GST No: ${gstNo}</div>` : ''}
+        <div style="margin-top: 10px; font-weight: bold;">Membership Payment Receipt</div>
       </div>
       <div class="divider"></div>
       <div style="margin-top: 10px;">Receipt ID: ${receiptId}</div>
@@ -734,14 +801,16 @@ function downloadMemberReceipt(invoice) {
       <div class="row"><span class="bold">Paid Value:</span> <span>₹${invoice.amount.toFixed(2)}</span></div>
       <div class="row"><span class="bold">Payment Status:</span> <span>PAID</span></div>
       <div class="divider"></div>
-      <div class="center bold">THANK YOU FOR WORKING OUT WITH US!</div>
+      <div class="center bold" style="font-size: 11px;">
+        ${customFooter}
+      </div>
     </body>
     </html>
   `;
     const blob = new Blob([receipt], { type: 'text/html;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `GymOS-${receiptId}-receipt.html`;
+    link.download = `${gymName.replace(/\s+/g, '-')}-${receiptId}-receipt.html`;
     link.click();
     URL.revokeObjectURL(link.href);
     showMobileToast('Receipt downloaded. Open it to print or save as PDF.', 'success');
@@ -1618,7 +1687,6 @@ function connectMemberSse(memberId) {
                     `;
                     showMobileToast('Your registration was approved!', 'success');
                 } else if (payload.status === 'rejected') {
-                    // Update Pending View to Rejected
                     document.getElementById('pendingTitle').innerText = 'Registration Rejected';
                     document.getElementById('pendingTitle').style.color = '#ff4a4a';
                     document.getElementById('pendingText').innerText = 'Your registration request was rejected. Please contact your gym.';
@@ -1628,6 +1696,23 @@ function connectMemberSse(memberId) {
                         <button class="auth-capsule-btn secondary-btn" style="border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff;" onclick="showLoginView()">Back to Login</button>
                     `;
                     showMobileToast('Your registration was rejected.', 'error');
+                }
+            }
+        }
+        if (data.type === 'PAYMENT_RECORDED' || data.type === 'PAYMENT_REQUESTED' || data.type === 'PAYMENT_REJECTED') {
+            const payload = data.payload;
+            if (payload && payload.member_id === currentMemberId) {
+                if (data.type === 'PAYMENT_RECORDED') {
+                    showMobileToast(`Your payment of ₹${payload.amount} has been approved!`, 'success');
+                } else if (data.type === 'PAYMENT_REJECTED') {
+                    showMobileToast(`Your payment request was rejected. Reason: ${payload.rejection_reason || ''}`, 'error');
+                }
+                if (typeof fetchDashboardData === 'function') {
+                    fetchDashboardData();
+                }
+                if (currentMobileTab === 'payments') {
+                    renderBillingBills();
+                    fetchAndRenderPlans();
                 }
             }
         }
@@ -2378,6 +2463,23 @@ async function fetchAndRenderPlans() {
             card.style.borderRadius = 'var(--radius-md)';
             card.style.border = '1px solid var(--border-color)';
             
+            const hasPendingRequest = activeMemberData.billing_history && activeMemberData.billing_history.some(invoice => invoice.status === 'pending_approval' || invoice.status === 'submitted');
+            
+            let actionBtnHtml = '';
+            let warningTextHtml = '';
+            if (hasPendingRequest) {
+                actionBtnHtml = `
+                    <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; height: 26px; cursor: not-allowed; opacity: 0.6;" disabled>Buy Plan</button>
+                `;
+                warningTextHtml = `
+                    <div style="font-size: 11px; color: var(--warning-dark); font-weight: 600; margin-top: 4px;">⚠️ You already have a payment awaiting gym approval.</div>
+                `;
+            } else {
+                actionBtnHtml = `
+                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px; height: 26px;" onclick="initiatePlanPurchase(${plan.id}, ${plan.price})">Buy Plan</button>
+                `;
+            }
+
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <strong style="font-size: 14px; color: var(--text-primary);">${plan.name}</strong>
@@ -2386,8 +2488,9 @@ async function fetchAndRenderPlans() {
                 <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${plan.benefits || 'Standard Gym Dues'}</div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
                     <span style="font-size: 11px; color: var(--text-tertiary);">${plan.duration_months} ${plan.duration_months === 1 ? 'Month' : 'Months'} duration</span>
-                    <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px; height: 26px;" onclick="initiatePlanPurchase(${plan.id}, ${plan.price})">Buy Plan</button>
+                    ${actionBtnHtml}
                 </div>
+                ${warningTextHtml}
             `;
             container.appendChild(card);
         });
@@ -2438,52 +2541,268 @@ async function readFileAsBase64(file) {
     });
 }
 
-function initiateMemberPayment(paymentId, amount) {
-    document.getElementById('modalPaymentId').value = paymentId;
-    document.getElementById('modalPlanId').value = '';
-    document.getElementById('modalPaymentAmount').innerText = `₹${amount.toFixed(2)}`;
-    document.getElementById('modalPaymentRef').value = '';
-    
-    // Set default date to today
-    document.getElementById('modalPaymentDate').value = new Date().toISOString().split('T')[0];
-    
-    // Reset file state
-    selectedReceiptFile = null;
-    document.getElementById('paymentScreenshotInput').value = '';
-    document.getElementById('fileUploadDottedZone').style.display = 'block';
-    document.getElementById('fileUploadTitle').innerText = 'Choose Receipt File...';
-    document.getElementById('fileUploadProgressCard').style.display = 'none';
-    document.getElementById('progressFillBar').style.width = '0%';
-    
-    document.getElementById('memberPaymentModal').style.display = 'flex';
+let selectedReceiptFileDetails = null;
+
+function triggerFileInputDetails() {
+    document.getElementById('detPaymentScreenshotInput').click();
+}
+
+function handleFileSelectionDetails(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 1024 * 1024) {
+        showMobileToast('File size exceeds the 1 MB limit.', 'error');
+        e.target.value = '';
+        return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+        showMobileToast('Only JPG, PNG, and PDF receipt formats are supported.', 'error');
+        e.target.value = '';
+        return;
+    }
+
+    selectedReceiptFileDetails = file;
+    document.getElementById('detProgressFileName').innerText = file.name;
+    document.getElementById('detFileUploadTitle').innerText = file.name;
+    document.getElementById('detFileUploadDottedZone').style.display = 'none';
+    document.getElementById('detFileUploadProgressCard').style.display = 'flex';
 }
 
 function initiatePlanPurchase(planId, price) {
-    document.getElementById('modalPaymentId').value = '';
-    document.getElementById('modalPlanId').value = planId;
-    document.getElementById('modalPaymentAmount').innerText = `₹${price.toFixed(2)}`;
-    document.getElementById('modalPaymentRef').value = '';
-    
-    // Set default date to today
-    document.getElementById('modalPaymentDate').value = new Date().toISOString().split('T')[0];
-    
-    // Reset file state
-    selectedReceiptFile = null;
-    document.getElementById('paymentScreenshotInput').value = '';
-    document.getElementById('fileUploadDottedZone').style.display = 'block';
-    document.getElementById('fileUploadTitle').innerText = 'Choose Receipt File...';
-    document.getElementById('fileUploadProgressCard').style.display = 'none';
-    document.getElementById('progressFillBar').style.width = '0%';
-    
-    document.getElementById('memberPaymentModal').style.display = 'flex';
+    // Check if there is already a pending request
+    const hasPendingRequest = activeMemberData.billing_history && activeMemberData.billing_history.some(invoice => invoice.status === 'pending_approval');
+    if (hasPendingRequest) {
+        showMobileToast('You already have a payment awaiting gym approval.', 'error');
+        return;
+    }
+    showPaymentFormForPlan(planId, price);
 }
 
-function closePaymentModal() {
-    document.getElementById('memberPaymentModal').style.display = 'none';
+function showPaymentFormForPlan(planId, price) {
+    const modal = document.getElementById('memberPaymentDetailsModal');
+    if (!modal) return;
+
+    document.getElementById('detPlanName').innerText = 'Membership Plan Purchase';
+    document.getElementById('detAmount').innerText = `₹${price.toFixed(2)}`;
+    
+    const badgeEl = document.getElementById('detStatusBadge');
+    badgeEl.className = 'badge pending';
+    badgeEl.innerText = 'Unpaid';
+
+    document.getElementById('detFormPaymentId').value = '';
+    document.getElementById('detFormPlanId').value = planId;
+    document.getElementById('detPaymentMethodSelect').value = 'online';
+    document.getElementById('detPaymentDateInput').value = new Date().toISOString().split('T')[0];
+    document.getElementById('detPaymentRefInput').value = '';
+
+    selectedReceiptFileDetails = null;
+    document.getElementById('detPaymentScreenshotInput').value = '';
+    document.getElementById('detFileUploadDottedZone').style.display = 'block';
+    document.getElementById('detFileUploadTitle').innerText = 'Choose Receipt File...';
+    document.getElementById('detFileUploadProgressCard').style.display = 'none';
+    document.getElementById('detProgressFillBar').style.width = '0%';
+
+    document.getElementById('detInfoSection').style.display = 'none';
+    document.getElementById('detReceiptPreviewSection').style.display = 'none';
+    document.getElementById('detNotesSection').style.display = 'none';
+    document.getElementById('detailsPaymentForm').style.display = 'block';
+    document.getElementById('detCloseActionArea').style.display = 'none';
+
+    modal.style.display = 'flex';
 }
+
+function showPaymentDetails(invoice) {
+    const modal = document.getElementById('memberPaymentDetailsModal');
+    if (!modal) return;
+    
+    document.getElementById('detPlanName').innerText = invoice.plan_name || 'Membership Renewal';
+    document.getElementById('detAmount').innerText = `₹${invoice.amount.toFixed(2)}`;
+    
+    let statusText = 'Pending';
+    let badgeClass = 'pending';
+    if (invoice.status === 'paid' || invoice.status === 'approved') {
+        statusText = 'Approved';
+        badgeClass = 'approved';
+    } else if (invoice.status === 'pending_approval' || invoice.status === 'submitted') {
+        statusText = 'Pending Gym Approval';
+        badgeClass = 'pending';
+    } else if (invoice.status === 'rejected') {
+        statusText = 'Rejected';
+        badgeClass = 'rejected';
+    } else if (invoice.status === 'overdue') {
+        statusText = 'Overdue';
+        badgeClass = 'rejected';
+    }
+    
+    const badgeEl = document.getElementById('detStatusBadge');
+    badgeEl.className = `badge ${badgeClass}`;
+    badgeEl.innerText = statusText;
+
+    if (invoice.status === 'pending' || invoice.status === 'overdue') {
+        // Show submission form
+        document.getElementById('detFormPaymentId').value = invoice.id;
+        document.getElementById('detFormPlanId').value = '';
+        document.getElementById('detPaymentMethodSelect').value = 'online';
+        document.getElementById('detPaymentDateInput').value = new Date().toISOString().split('T')[0];
+        document.getElementById('detPaymentRefInput').value = '';
+
+        selectedReceiptFileDetails = null;
+        document.getElementById('detPaymentScreenshotInput').value = '';
+        document.getElementById('detFileUploadDottedZone').style.display = 'block';
+        document.getElementById('detFileUploadTitle').innerText = 'Choose Receipt File...';
+        document.getElementById('detFileUploadProgressCard').style.display = 'none';
+        document.getElementById('detProgressFillBar').style.width = '0%';
+
+        document.getElementById('detInfoSection').style.display = 'none';
+        document.getElementById('detReceiptPreviewSection').style.display = 'none';
+        document.getElementById('detNotesSection').style.display = 'none';
+        document.getElementById('detailsPaymentForm').style.display = 'block';
+        document.getElementById('detCloseActionArea').style.display = 'none';
+    } else {
+        // Show read-only details
+        document.getElementById('detMethod').innerText = invoice.payment_method || '—';
+        document.getElementById('detPaymentDate').innerText = invoice.payment_date || '—';
+        document.getElementById('detRefId').innerText = invoice.transaction_reference || '—';
+        document.getElementById('detSubmittedTime').innerText = invoice.created_at || '—';
+        
+        const receiptNoEl = document.getElementById('detReceiptNo');
+        const receiptLabelEl = document.getElementById('detReceiptLabel');
+        if (invoice.status === 'paid' || invoice.status === 'approved') {
+            receiptNoEl.style.display = 'inline-block';
+            receiptLabelEl.style.display = 'inline-block';
+            receiptNoEl.innerText = invoice.receipt_number || '—';
+        } else {
+            receiptNoEl.style.display = 'none';
+            receiptLabelEl.style.display = 'none';
+        }
+
+        const notesSec = document.getElementById('detNotesSection');
+        const notesText = document.getElementById('detNotesText');
+        if (invoice.rejection_reason && invoice.status === 'rejected') {
+            notesSec.style.display = 'block';
+            notesText.innerText = invoice.rejection_reason;
+        } else {
+            notesSec.style.display = 'none';
+        }
+
+        const previewSec = document.getElementById('detReceiptPreviewSection');
+        const container = document.getElementById('detReceiptContainer');
+        container.innerHTML = '';
+        
+        if (invoice.receipt_file_url && invoice.receipt_file_url !== '—') {
+            previewSec.style.display = 'block';
+            if (invoice.receipt_file_type === 'application/pdf') {
+                container.innerHTML = `<iframe src="${invoice.receipt_file_url}" style="width: 100%; height: 260px; border: none; border-radius: 8px;"></iframe>`;
+            } else {
+                container.innerHTML = `<img src="${invoice.receipt_file_url}" style="max-width: 100%; max-height: 260px; object-fit: contain; cursor: zoom-in;" onclick="window.open('${invoice.receipt_file_url}', '_blank')">`;
+            }
+        } else {
+            previewSec.style.display = 'none';
+        }
+
+        document.getElementById('detailsPaymentForm').style.display = 'none';
+        document.getElementById('detInfoSection').style.display = 'grid';
+        document.getElementById('detCloseActionArea').style.display = 'flex';
+    }
+    
+    modal.style.display = 'flex';
+}
+
+let isSubmittingDetailsPayment = false;
+
+async function submitDetailsPaymentRequest(event) {
+    event.preventDefault();
+    if (isSubmittingDetailsPayment) return;
+
+    const paymentId = document.getElementById('detFormPaymentId').value;
+    const planId = document.getElementById('detFormPlanId').value;
+    const method = document.getElementById('detPaymentMethodSelect').value;
+    const date = document.getElementById('detPaymentDateInput').value;
+    const ref = document.getElementById('detPaymentRefInput').value.trim();
+
+    if (!selectedReceiptFileDetails) {
+        showMobileToast('Please select and upload payment proof receipt.', 'error');
+        return;
+    }
+
+    const submitBtn = document.getElementById('detUploadPaymentSubmitBtn');
+    const originalBtnText = submitBtn.innerHTML;
+
+    isSubmittingDetailsPayment = true;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="spinner" style="display:inline-block; width:12px; height:12px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:spin-loader 1s linear infinite; margin-right:6px; vertical-align:middle;"></span> Submitting...`;
+
+    const progressCard = document.getElementById('detFileUploadProgressCard');
+    const fillBar = document.getElementById('detProgressFillBar');
+    progressCard.style.display = 'flex';
+    fillBar.style.width = '40%';
+
+    try {
+        const base64Data = await readFileAsBase64(selectedReceiptFileDetails);
+        const fileType = selectedReceiptFileDetails.type;
+        fillBar.style.width = '80%';
+
+        let res;
+        const payload = {
+            transaction_reference: ref,
+            payment_method: method,
+            payment_date: date,
+            receipt_file_url: base64Data,
+            receipt_file_type: fileType
+        };
+
+        if (paymentId) {
+            res = await fetch(`/api/member/payments/${paymentId}/pay`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else if (planId) {
+            payload.plan_id = parseInt(planId);
+            res = await fetch('/api/member/purchase-plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        fillBar.style.width = '100%';
+        const data = await res.json();
+        if (res.status === 200 || data.success) {
+            showMobileToast('Payment request submitted to Owner!', 'success');
+            document.getElementById('memberPaymentDetailsModal').style.display = 'none';
+
+            if (typeof fetchDashboardData === 'function') {
+                await fetchDashboardData();
+            }
+            if (currentMobileTab === 'payments') {
+                renderBillingBills();
+                fetchAndRenderPlans();
+            }
+        } else {
+            showMobileToast(data.error || 'Payment request failed.', 'error');
+        }
+    } catch (err) {
+        console.error('Payment submit error', err);
+        showMobileToast('Network error, please try again.', 'error');
+    } finally {
+        isSubmittingDetailsPayment = false;
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+        fillBar.style.width = '0%';
+        progressCard.style.display = 'none';
+    }
+}
+
+let isSubmittingPayment = false;
 
 async function submitPaymentRequest(event) {
     event.preventDefault();
+    if (isSubmittingPayment) return;
+    
     const paymentId = document.getElementById('modalPaymentId').value;
     const planId = document.getElementById('modalPlanId').value;
     const method = document.getElementById('modalPaymentMethod').value;
@@ -2496,70 +2815,74 @@ async function submitPaymentRequest(event) {
     }
 
     const submitBtn = document.getElementById('uploadPaymentSubmitBtn');
+    const originalBtnText = submitBtn.innerHTML;
+    
+    // Set submitting state
+    isSubmittingPayment = true;
     submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="spinner" style="display:inline-block; width:12px; height:12px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:spin-loader 1s linear infinite; margin-right:6px; vertical-align:middle;"></span> Submitting...`;
 
-    // Simulate upload progress
+    // Show upload progress fill bar mock
     const progressCard = document.getElementById('fileUploadProgressCard');
     const fillBar = document.getElementById('progressFillBar');
     progressCard.style.display = 'flex';
-    
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-        progress += 10;
-        fillBar.style.width = `${progress}%`;
-        if (progress >= 100) {
-            clearInterval(progressInterval);
-            completePaymentSubmission();
+    fillBar.style.width = '50%';
+
+    try {
+        const base64Data = await readFileAsBase64(selectedReceiptFile);
+        const fileType = selectedReceiptFile.type;
+        fillBar.style.width = '85%';
+
+        let res;
+        const payload = {
+            transaction_reference: ref,
+            payment_method: method,
+            payment_date: date,
+            receipt_file_url: base64Data,
+            receipt_file_type: fileType
+        };
+
+        if (paymentId) {
+            res = await fetch(`/api/member/payments/${paymentId}/pay`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else if (planId) {
+            payload.plan_id = parseInt(planId);
+            res = await fetch('/api/member/purchase-plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
         }
-    }, 50);
 
-    async function completePaymentSubmission() {
-        try {
-            const base64Data = await readFileAsBase64(selectedReceiptFile);
-            const fileType = selectedReceiptFile.type;
-
-            let res;
-            const payload = {
-                transaction_reference: ref,
-                payment_method: method,
-                payment_date: date,
-                receipt_file_url: base64Data,
-                receipt_file_type: fileType
-            };
-
-            if (paymentId) {
-                res = await fetch(`/api/member/payments/${paymentId}/pay`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-            } else if (planId) {
-                payload.plan_id = parseInt(planId);
-                res = await fetch('/api/member/purchase-plan', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+        fillBar.style.width = '100%';
+        const data = await res.json();
+        if (res.status === 200 || data.success) {
+            showMobileToast('Payment request submitted to Owner!', 'success');
+            closePaymentModal();
+            
+            // Refresh member state
+            if (typeof fetchDashboardData === 'function') {
+                await fetchDashboardData();
             }
-
-            const data = await res.json();
-            if (res.status === 200 || data.success) {
-                showMobileToast('Payment request submitted to Owner!', 'success');
-                closePaymentModal();
-                fetchDashboardData();
-                if (currentMobileTab === 'payments') {
-                    renderBillingBills();
-                    fetchAndRenderPlans();
-                }
-            } else {
-                showMobileToast(data.error || 'Payment request failed.', 'error');
+            if (currentMobileTab === 'payments') {
+                renderBillingBills();
+                fetchAndRenderPlans();
             }
-        } catch (err) {
-            console.error('Payment submit error', err);
-            showMobileToast('Network error, please try again.', 'error');
-        } finally {
-            submitBtn.disabled = false;
+        } else {
+            showMobileToast(data.error || 'Payment request failed.', 'error');
         }
+    } catch (err) {
+        console.error('Payment submit error', err);
+        showMobileToast('Network error, please try again.', 'error');
+    } finally {
+        isSubmittingPayment = false;
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnText;
+        fillBar.style.width = '0%';
+        progressCard.style.display = 'none';
     }
 }
 
@@ -2930,7 +3253,7 @@ function renderTimelineSubScreen() {
     const log = selectedTimelineLog;
     
     const dateStr = formatDateShort(log.check_in_time);
-    const branch = log.gym_name || 'GymOS Fitness Center';
+    const branch = log.gym_name || (activeMemberData && activeMemberData.gym_info && activeMemberData.gym_info.name) || 'GymOS';
     
     document.getElementById('timelineDateVal').innerText = dateStr;
     document.getElementById('timelineBranchVal').innerText = branch;
@@ -2967,7 +3290,7 @@ function viewCurrentWorkoutDetails() {
     const log = selectedTimelineLog;
     
     const dateStr = formatDateShort(log.check_in_time);
-    const branch = log.gym_name || 'GymOS Fitness Center';
+    const branch = log.gym_name || (activeMemberData && activeMemberData.gym_info && activeMemberData.gym_info.name) || 'GymOS';
     const plan = activityDataGlobal.plan_name || 'Active Membership Plan';
     
     document.getElementById('detailDateText').innerText = dateStr;

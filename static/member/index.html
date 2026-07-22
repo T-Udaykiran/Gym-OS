@@ -53,13 +53,13 @@
                             <path d="M12 8v8"></path>
                         </svg>
                     </div>
-                    <h1 style="font-size: 26px; font-weight: 800; letter-spacing: 0.1em; color: #fff; margin-top: 20px;">N GYM</h1>
+                    <h1 id="splashGymName" style="font-size: 26px; font-weight: 800; letter-spacing: 0.1em; color: #fff; margin-top: 20px;">N GYM</h1>
                 </div>
 
                 <!-- 2. LOGIN SCREEN -->
                 <div id="authLoginView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 100%), url('https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=600&auto=format&fit=crop'); background-size: cover; background-position: center; justify-content: flex-end; padding: 24px 20px 40px; z-index: 5;">
                     <div style="margin-bottom: 24px;">
-                        <h1 style="font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -0.03em; margin: 0;">NGYM</h1>
+                        <h1 id="loginGymName" style="font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -0.03em; margin: 0;">NGYM</h1>
                         <p style="font-size: 13.5px; color: rgba(255,255,255,0.7); margin-top: 4px; margin-bottom: 0;">Sign in to your member mobile portal</p>
                     </div>
 
@@ -83,7 +83,7 @@
                         <button type="submit" class="auth-capsule-btn primary-btn" style="margin-top: 10px;">Login</button>
                     </form>
 
-                    <button class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showRegisterView()">New to NGYM? Sign In</button>
+                    <button id="secondaryLoginBtn" class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showRegisterView()">New to NGYM? Sign In</button>
                 </div>
 
                 <!-- 2b. FORGOT PASSWORD SCREEN -->
@@ -117,7 +117,7 @@
                 <!-- 3. REGISTER SCREEN -->
                 <div id="authRegisterView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 100%), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=600&auto=format&fit=crop'); background-size: cover; background-position: center; justify-content: flex-end; padding: 24px 20px 40px; z-index: 5;">
                     <div style="margin-bottom: 20px;">
-                        <h1 style="font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin: 0;">Join NGYM</h1>
+                        <h1 id="registerGymName" style="font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin: 0;">Join NGYM</h1>
                         <p style="font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px; margin-bottom: 0;">Create your fitness profile today</p>
                     </div>
 
@@ -522,7 +522,7 @@
                                         <span style="font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.05em;">Membership ID</span>
                                         <h4 style="font-size: 22px; font-weight: 800; color: #fff; margin: 4px 0 0 0; letter-spacing: 0.02em;" id="homeMembershipId">--</h4>
                                     </div>
-                                    <span style="font-size: 22px; font-weight: 800; color: #fff; letter-spacing: 0.03em;">NGYM</span>
+                                    <span id="homeMembershipCardBrand" style="font-size: 22px; font-weight: 800; color: #fff; letter-spacing: 0.03em;">NGYM</span>
                                 </div>
 
                                 <div style="display: flex; justify-content: space-between; align-items: flex-end;">
@@ -1565,6 +1565,112 @@
                                 <button type="submit" id="uploadPaymentSubmitBtn" class="btn btn-primary" style="flex: 1; font-weight: 600;">Submit Request</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+
+                <!-- Payment Details Modal -->
+                <div id="memberPaymentDetailsModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
+                    <div class="member-modal-card" style="text-align: left; max-width: 420px; width: 90%; max-height: 90vh; overflow-y: auto; padding: 24px; border-radius: 16px; background-color: var(--bg-card); border: 1px solid var(--border-color);">
+                        <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">Payment Details</h3>
+                        
+                        <!-- Core Details (Always visible) -->
+                        <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 12px; font-size: 13.5px; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 16px;">
+                            <span style="color: var(--text-secondary); font-weight: 500;">Plan:</span>
+                            <span id="detPlanName" style="font-weight: 600; color: #fff;">-</span>
+
+                            <span style="color: var(--text-secondary); font-weight: 500;">Amount:</span>
+                            <span id="detAmount" style="font-weight: 700; color: var(--accent); font-size: 15px;">-</span>
+
+                            <span style="color: var(--text-secondary); font-weight: 500;">Status:</span>
+                            <span id="detStatusBadge" class="badge" style="font-weight: 700; width: fit-content; text-align: left;">-</span>
+                        </div>
+
+                        <!-- Read-only Details Info Section (for submitted/paid/rejected payments) -->
+                        <div id="detInfoSection" style="display: none; grid-template-columns: 1fr 1.2fr; gap: 12px; font-size: 13.5px; margin-bottom: 16px;">
+                            <span style="color: var(--text-secondary); font-weight: 500;">Payment Method:</span>
+                            <span id="detMethod" style="text-transform: uppercase; color: #fff;">-</span>
+                            
+                            <span style="color: var(--text-secondary); font-weight: 500;">Payment Date:</span>
+                            <span id="detPaymentDate" style="color: #fff;">-</span>
+                            
+                            <span style="color: var(--text-secondary); font-weight: 500;">Reference ID:</span>
+                            <span id="detRefId" style="font-family: monospace; font-weight: 600; color: #fff;">-</span>
+                            
+                            <span style="color: var(--text-secondary); font-weight: 500;">Submitted Time:</span>
+                            <span id="detSubmittedTime" style="color: #fff;">-</span>
+                            
+                            <span id="detReceiptLabel" style="color: var(--text-secondary); font-weight: 500;">Receipt Code:</span>
+                            <span id="detReceiptNo" style="font-family: monospace; font-weight: 600; color: #fff;">-</span>
+                        </div>
+
+                        <!-- Admin Remarks / Notes Section (for rejected/notes) -->
+                        <div id="detNotesSection" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 12px; margin-bottom: 16px;">
+                            <strong style="color: var(--danger); font-size: 13px; display: block; margin-bottom: 4px;">Admin Remarks:</strong>
+                            <p id="detNotesText" style="margin: 0; font-size: 13px; color: var(--text-primary); line-height: 1.4;"></p>
+                        </div>
+
+                        <!-- Uploaded Receipt Proof Preview (read-only mode) -->
+                        <div id="detReceiptPreviewSection" style="display: none; margin-bottom: 20px;">
+                            <strong style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 8px;">Uploaded Receipt Proof:</strong>
+                            <div id="detReceiptContainer" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 120px;">
+                                <!-- Inline preview loaded dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Form Section (for unpaid/pending submissions) -->
+                        <form id="detailsPaymentForm" onsubmit="submitDetailsPaymentRequest(event)" style="display: none; margin-top: 16px;">
+                            <input type="hidden" id="detFormPaymentId">
+                            <input type="hidden" id="detFormPlanId">
+                            
+                            <div class="input-group" style="margin-bottom: 12px;">
+                                <label for="detPaymentMethodSelect">Payment Method</label>
+                                <select id="detPaymentMethodSelect" class="input-control" style="background-color: rgba(255,255,255,0.02); color: var(--text-primary); border-color: var(--border-color);" required>
+                                    <option value="online">Online Transfer / UPI</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="card">Card Payment</option>
+                                </select>
+                            </div>
+
+                            <div class="input-group" style="margin-bottom: 12px;">
+                                <label for="detPaymentDateInput">Payment Date</label>
+                                <input type="date" id="detPaymentDateInput" class="input-control" required style="background-color: rgba(255,255,255,0.02); color: var(--text-primary); border-color: var(--border-color);">
+                            </div>
+
+                            <div class="input-group" style="margin-bottom: 12px;">
+                                <label for="detPaymentRefInput">Transaction Reference ID (e.g. UPI Ref / Cashier code)</label>
+                                <input type="text" id="detPaymentRefInput" class="input-control" placeholder="UPI Ref ID or Cashier Code" required>
+                            </div>
+
+                            <div class="input-group" style="margin-bottom: 12px;">
+                                <label style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 6px; display: block;">Upload Payment Proof (JPG, PNG, PDF - Max 1MB)</label>
+                                <div id="detFileUploadDottedZone" class="file-upload-dotted-zone" onclick="triggerFileInputDetails()" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.02);">
+                                    <div class="file-upload-icon" style="margin-bottom: 6px;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                    </div>
+                                    <div class="file-upload-title" id="detFileUploadTitle" style="font-size: 12.5px; font-weight: 700; color: #fff;">Choose Receipt File...</div>
+                                    <input type="file" id="detPaymentScreenshotInput" accept="image/jpeg,image/png,application/pdf" style="display:none;" onchange="handleFileSelectionDetails(event)">
+                                </div>
+                            </div>
+
+                            <!-- Progress file card -->
+                            <div id="detFileUploadProgressCard" class="uploaded-file-card" style="display:none; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; align-items: center; gap: 10px; margin-bottom: 16px;">
+                                <div class="uploaded-file-info" style="flex: 1;">
+                                    <div id="detProgressFileName" class="uploaded-file-name" style="font-size: 12.5px; font-weight: 600; color: #fff; margin-bottom: 4px;">File.png</div>
+                                    <div style="width: 100%; height: 4px; background-color: var(--border-color); border-radius: 2px; overflow: hidden;">
+                                        <div id="detProgressFillBar" style="width: 0%; height: 100%; background-color: var(--accent); transition: width 0.2s;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 10px; width: 100%; margin-top: 16px;">
+                                <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="document.getElementById('memberPaymentDetailsModal').style.display='none'">Cancel</button>
+                                <button type="submit" id="detUploadPaymentSubmitBtn" class="btn btn-primary" style="flex: 1; font-weight: 600;">Submit Request</button>
+                            </div>
+                        </form>
+
+                        <div id="detCloseActionArea" class="member-modal-actions" style="display: flex; justify-content: center; width: 100%; margin-top: 16px;">
+                            <button type="button" class="btn btn-secondary" style="width: 100%; font-weight: 600;" onclick="document.getElementById('memberPaymentDetailsModal').style.display='none'">Close Details</button>
+                        </div>
                     </div>
                 </div>
 

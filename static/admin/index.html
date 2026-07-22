@@ -270,10 +270,10 @@
             <div class="sidebar-footer">
                 <div class="owner-profile-card" style="display: flex; align-items: center; justify-content: space-between;">
                     <div class="owner-details" onclick="showTab('settings')" style="cursor: pointer; display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
-                        <div class="owner-avatar">RK</div>
+                        <div class="owner-avatar" id="profileOwnerAvatar">RK</div>
                         <div class="owner-info-text">
                             <span class="owner-name" id="profileOwnerName">Ramesh Kumar</span>
-                            <span class="owner-role">Owner Operator</span>
+                            <span class="owner-role" id="profileOwnerRole">Owner Operator</span>
                         </div>
                     </div>
                     <button class="btn-logout-sidebar" onclick="triggerOwnerLogout(event)" style="background: none; border: none; color: #ef4444; padding: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background-color 0.2s;" title="Logout">
@@ -297,7 +297,7 @@
             <header class="mobile-top-bar">
                 <div class="mobile-brand">
                     <span class="brand-logo-fitzone-mini" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; background-color: rgba(234, 179, 8, 0.1); border: 2px solid var(--gold); border-radius: 8px; color: var(--gold); font-size: 13px; font-weight: bold; margin-right: 8px;">⚡</span>
-                    <span style="font-weight: 700; font-size: 16px; color: var(--text-primary);">FitZone Admin</span>
+                    <span id="mobileBrandText" style="font-weight: 700; font-size: 16px; color: var(--text-primary);">FitZone Admin</span>
                 </div>
                 <button class="mobile-bell-btn" id="mobileBellBtn" onclick="toggleNotificationPopover(event)" type="button" title="Notifications" aria-label="Notifications">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1468,8 +1468,55 @@
                                     <small style="color: var(--text-tertiary); font-size: 12px;">PNG, JPG or WEBP. Maximum file size 2MB.</small>
                                 </div>
                             </div>
+                        <div class="input-group">
+                            <label for="settingsGymEmail">Contact Email Address</label>
+                            <input type="email" id="settingsGymEmail" class="input-control" placeholder="gym@example.com">
+                        </div>
+                        <div class="input-group">
+                            <label for="settingsGymGST">GST / Tax Number (optional)</label>
+                            <input type="text" id="settingsGymGST" class="input-control" placeholder="e.g. 27AAAAA1111A1Z1">
+                        </div>
+                        <div class="input-group">
+                            <label for="settingsReceiptFooter">Custom Receipt Footer</label>
+                            <textarea id="settingsReceiptFooter" class="input-control" rows="3" placeholder="Thank you message, terms, or policy details..."></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary" style="margin-top: 12px;">Save Changes</button>
+                    </form>
+                </div>
+
+                <div class="card" style="max-width: 650px; margin-top: 24px;">
+                    <h3>Owner Profile</h3>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Configure your administrator name and profile photo.</p>
+                    <form id="ownerProfileForm">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px;">
+                            <div class="input-group" style="margin-bottom: 0;">
+                                <label for="settingsOwnerFirstName">First Name</label>
+                                <input type="text" id="settingsOwnerFirstName" class="input-control" placeholder="First Name">
+                            </div>
+                            <div class="input-group" style="margin-bottom: 0;">
+                                <label for="settingsOwnerLastName">Last Name</label>
+                                <input type="text" id="settingsOwnerLastName" class="input-control" placeholder="Last Name">
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Profile Photo</label>
+                            <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                                <div id="ownerPhotoPreviewContainer" style="width: 50px; height: 50px; border-radius: 50%; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0;">
+                                    <img id="ownerPhotoPreview" src="" alt="Owner Photo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                    <span id="ownerPhotoFallback" style="font-weight: 700; font-size: 18px; color: var(--accent);">OW</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+                                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                        <label for="ownerPhotoFileInput" class="btn btn-secondary" style="cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; margin-bottom: 0;">
+                                            Upload Photo
+                                        </label>
+                                        <input type="file" id="ownerPhotoFileInput" accept="image/png, image/jpeg, image/webp" style="display: none;" onchange="handleOwnerPhotoSelect(event)">
+                                        <button type="button" id="btnRemoveOwnerPhoto" class="btn btn-ghost" style="font-size: 13px; color: var(--danger-dark); display: none;" onclick="removeOwnerPhoto()">Remove</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" id="btnUpdateOwnerProfile" class="btn btn-primary" style="margin-top: 12px;">Update Profile</button>
                     </form>
                 </div>
             </section>
@@ -1911,31 +1958,53 @@
                 </button>
             </div>
             <div class="modal-body" style="padding-top: 10px;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13.5px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13.5px; border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
                     <div>
                         <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Member Name</span>
-                        <strong id="reviewMemberName" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                        <strong id="reviewMemberName" style="color: var(--text-primary); font-size: 14px;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Member ID</span>
+                        <strong id="reviewMemberId" style="color: var(--text-primary); font-size: 14px;">-</strong>
                     </div>
                     <div>
                         <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Membership Plan</span>
-                        <strong id="reviewPlanName" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                        <strong id="reviewPlanName" style="color: var(--text-primary); font-size: 14px;">-</strong>
                     </div>
                     <div>
                         <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Amount</span>
-                        <strong id="reviewAmount" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                        <strong id="reviewAmount" style="color: var(--accent); font-size: 14px;">-</strong>
                     </div>
                     <div>
                         <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Payment Date</span>
-                        <strong id="reviewPaymentDate" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                        <strong id="reviewPaymentDate" style="color: var(--text-primary); font-size: 14px;">-</strong>
                     </div>
                     <div>
                         <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Payment Method</span>
-                        <strong id="reviewPaymentMethod" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                        <strong id="reviewPaymentMethod" style="color: var(--text-primary); font-size: 14px; text-transform: uppercase;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Reference ID</span>
+                        <strong id="reviewRefId" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Receipt Code</span>
+                        <strong id="reviewReceiptNo" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">-</strong>
                     </div>
                     <div>
                         <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase;">Submitted Time</span>
-                        <strong id="reviewSubmittedTime" style="color: var(--text-primary); font-size: 14.5px;">-</strong>
+                        <strong id="reviewSubmittedTime" style="color: var(--text-primary); font-size: 14px;">-</strong>
                     </div>
+                    <div>
+                        <span style="color: var(--text-tertiary); display: block; font-size: 11px; text-transform: uppercase; margin-bottom: 2px;">Current Status</span>
+                        <span id="reviewStatusBadge" class="badge" style="font-weight: 700; font-size: 11.5px; width: fit-content;">-</span>
+                    </div>
+                </div>
+
+                <!-- Admin Remarks (if any) -->
+                <div id="reviewRemarksSection" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 10px; margin-bottom: 16px;">
+                    <strong style="color: var(--danger); font-size: 12px; display: block; margin-bottom: 4px;">Rejection Feedback:</strong>
+                    <p id="reviewAdminRemarks" style="margin: 0; font-size: 12.5px; color: var(--text-primary); line-height: 1.4;"></p>
                 </div>
 
                 <div style="margin-bottom: 16px;">
@@ -1945,11 +2014,51 @@
                     </div>
                 </div>
             </div>
-            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <div style="display: flex; gap: 12px; justify-content: flex-end; padding: 0 24px 24px;">
                 <input type="hidden" id="reviewPaymentId">
+                <a id="reviewDownloadBtn" class="btn btn-secondary" style="display: none; align-items: center; gap: 6px; text-decoration: none;" target="_blank">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Download
+                </a>
                 <button class="btn btn-secondary" onclick="closeModal('reviewPaymentModal')">Close</button>
                 <button class="btn btn-primary" style="background-color: var(--danger-dark); border-color: var(--danger-dark);" onclick="triggerReviewReject()">Reject</button>
                 <button class="btn btn-primary" style="background-color: var(--success); border-color: var(--success); color: white;" onclick="triggerReviewApprove()">Approve</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: REJECT PAYMENT WITH REASON -->
+    <div id="rejectPaymentModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 style="font-weight:700;">Reject Payment Request</h3>
+                <button class="modal-close" onclick="closeModal('rejectPaymentModal')">
+                    <svg style="width: 20px; height: 20px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding-top: 10px;">
+                <form id="rejectPaymentForm" onsubmit="submitRejectPayment(event)">
+                    <input type="hidden" id="rejectPaymentId">
+                    <div class="input-group" style="margin-bottom: 12px;">
+                        <label for="rejectReason">Reason for Rejection <span style="color: var(--danger);">*</span></label>
+                        <textarea id="rejectReason" class="input-control" rows="3" placeholder="Explain why the payment is being rejected..." required style="background: rgba(255,255,255,0.02); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); width: 100%; box-sizing: border-box; padding: 10px;"></textarea>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <span style="font-size: 11px; color: var(--text-tertiary); display: block; margin-bottom: 6px;">Common Examples:</span>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            <button type="button" class="btn btn-ghost" style="font-size: 11px; padding: 4px 8px; border: 1px solid var(--border-color); height: auto; line-height: 1;" onclick="setRejectExample('Receipt unreadable')">Receipt unreadable</button>
+                            <button type="button" class="btn btn-ghost" style="font-size: 11px; padding: 4px 8px; border: 1px solid var(--border-color); height: auto; line-height: 1;" onclick="setRejectExample('Wrong amount')">Wrong amount</button>
+                            <button type="button" class="btn btn-ghost" style="font-size: 11px; padding: 4px 8px; border: 1px solid var(--border-color); height: auto; line-height: 1;" onclick="setRejectExample('Invalid payment')">Invalid payment</button>
+                            <button type="button" class="btn btn-ghost" style="font-size: 11px; padding: 4px 8px; border: 1px solid var(--border-color); height: auto; line-height: 1;" onclick="setRejectExample('Duplicate payment')">Duplicate payment</button>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('rejectPaymentModal')">Cancel</button>
+                        <button type="submit" class="btn btn-primary" style="background-color: var(--danger-dark); border-color: var(--danger-dark); color: white;">Confirm Rejection</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

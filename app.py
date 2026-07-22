@@ -72,13 +72,16 @@ def parse_and_validate_dob(value):
         return None, "Please enter a valid date of birth."
     return parsed.isoformat(), None
 
-def generate_receipt_number(cursor, gym_id):
+def generate_receipt_number(cursor, gym_id, payment_id=None):
     today_str = now_ist().strftime("%Y%m%d")
-    prefix = f"RC-{today_str}-"
+    if payment_id:
+        return f"RCPT-PAY-{today_str}-{payment_id:06d}"
+    
+    prefix = f"RCPT-PAY-{today_str}-"
     cursor.execute("SELECT COUNT(*) FROM payments WHERE receipt_number LIKE ?", (prefix + "%",))
     count = cursor.fetchone()[0] + 1
     while True:
-        candidate = f"{prefix}{count:06d}"
+        candidate = f"{prefix}TEMP{count:06d}"
         cursor.execute("SELECT 1 FROM payments WHERE receipt_number = ?", (candidate,))
         if not cursor.fetchone():
             return candidate
@@ -361,6 +364,27 @@ def auth_register():
     finally:
         conn.close()
 
+@app.route("/api/public/gym-info", methods=["GET"])
+def public_gym_info():
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, phone, address, logo_url FROM gyms ORDER BY id ASC LIMIT 1")
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return jsonify({
+            "name": row["name"] or "GymOS",
+            "phone": row["phone"] or "",
+            "address": row["address"] or "",
+            "logo_url": row["logo_url"] or ""
+        })
+    return jsonify({
+        "name": "GymOS",
+        "phone": "",
+        "address": "",
+        "logo_url": ""
+    })
+
 @app.route("/api/auth/login", methods=["POST"])
 def auth_login():
     data = request.get_json() or {}
@@ -443,6 +467,12 @@ def auth_me():
 
     if role == "owner":
         user_data["subscription_active"] = is_subscription_active(session.get("gym_id"))
+        cursor.execute("SELECT first_name, last_name, profile_photo FROM users WHERE id = ?", (user_id,))
+        u_row = cursor.fetchone()
+        if u_row:
+            user_data["first_name"] = u_row["first_name"] or ""
+            user_data["last_name"] = u_row["last_name"] or ""
+            user_data["profile_photo"] = u_row["profile_photo"] or ""
 
     if role == "member":
         cursor.execute("""
@@ -548,8 +578,8 @@ def company_create_gym():
 
         pw_hash = database.hash_password(owner_password)
         cursor.execute(
-            "INSERT INTO users (email, password_hash, role, gym_id) VALUES (?, ?, 'owner', ?)",
-            (owner_email, pw_hash, gym_id)
+            "INSERT INTO users (email, password_hash, role, gym_id, first_name) VALUES (?, ?, 'owner', ?, ?)",
+            (owner_email, pw_hash, gym_id, owner_first_name)
         )
         owner_user_id = cursor.lastrowid
 
@@ -1577,13 +1607,15 @@ def admin_create_member():
         pay_status = "paid" if record_payment else "pending"
         pay_date = now_ist().strftime("%Y-%m-%d %H:%M:%S") if record_payment else None
         due_date = start_date_str if not record_payment else None
-        receipt = generate_receipt_number(cursor, gym_id)
         
         cursor.execute("""
             INSERT INTO payments (membership_id, member_id, amount, status, payment_date, due_date, receipt_number, gym_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (membership_id, member_id, plan["price"], pay_status, pay_date, due_date, receipt, gym_id))
+            VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+        """, (membership_id, member_id, plan["price"], pay_status, pay_date, due_date, gym_id))
         payment_id = cursor.lastrowid
+        
+        receipt = generate_receipt_number(cursor, gym_id, payment_id=payment_id)
+        cursor.execute("UPDATE payments SET receipt_number = ? WHERE id = ?", (receipt, payment_id))
 
         # Create notifications
         cursor.execute(
@@ -1898,13 +1930,15 @@ def admin_assign_plan(id):
         pay_status = "paid" if record_payment else "pending"
         pay_date = now_ist().strftime("%Y-%m-%d %H:%M:%S") if record_payment else None
         due_date = start_date_str if not record_payment else None
-        receipt = generate_receipt_number(cursor, gym_id)
         
         cursor.execute("""
             INSERT INTO payments (membership_id, member_id, amount, status, payment_date, due_date, receipt_number, gym_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (membership_id, id, plan["price"], pay_status, pay_date, due_date, receipt, gym_id))
+            VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
+        """, (membership_id, id, plan["price"], pay_status, pay_date, due_date, gym_id))
         payment_id = cursor.lastrowid
+        
+        receipt = generate_receipt_number(cursor, gym_id, payment_id=payment_id)
+        cursor.execute("UPDATE payments SET receipt_number = ? WHERE id = ?", (receipt, payment_id))
 
         # Notifications
         notif_msg = f"Your new membership '{plan['name']}' has been activated! Expires on: {end_date_str}."
@@ -2190,7 +2224,10 @@ def admin_get_payments():
         "Pending": "pending",
         "Pending Approval": "pending_approval",
         "Rejected": "rejected",
-        "Overdue": "overdue"
+        "Overdue": "overdue",
+        "Draft": "draft",
+        "Submitted": "submitted",
+        "Cancelled": "cancelled"
     }
     db_status = status_map_db.get(status_filter, status_filter)
 
@@ -2198,8 +2235,15 @@ def admin_get_payments():
     filter_sql = ""
     
     if db_status:
-        filter_sql += " AND p.status = ?"
-        params.append(db_status)
+        if db_status == "paid":
+            filter_sql += " AND p.status IN ('paid', 'approved')"
+        elif db_status == "pending_approval":
+            filter_sql += " AND p.status IN ('pending_approval', 'submitted')"
+        elif db_status == "pending":
+            filter_sql += " AND p.status IN ('pending', 'draft')"
+        else:
+            filter_sql += " AND p.status = ?"
+            params.append(db_status)
 
     if year_filter and month_filter:
         filter_sql += " AND TO_CHAR(p.payment_date::timestamp, 'YYYY-MM') = ?"
@@ -2242,9 +2286,13 @@ def admin_get_payments():
 
     status_map_ui = {
         "paid": "Approved",
+        "approved": "Approved",
         "pending": "Pending",
+        "draft": "Draft",
         "pending_approval": "Pending Approval",
+        "submitted": "Pending Approval",
         "rejected": "Rejected",
+        "cancelled": "Cancelled",
         "overdue": "Overdue"
     }
     for p in data:
@@ -2460,6 +2508,9 @@ def admin_settings():
         qr_token = data.get("qr_token")
         gym_logo = data.get("gym_logo") or data.get("gym_image_url") or ""
         gym_code = (data.get("gym_code") or "").strip().upper() or None
+        gym_email = data.get("gym_email") or ""
+        gst_number = data.get("gst_number") or ""
+        receipt_footer = data.get("receipt_footer") or ""
 
         if not gym_name:
             conn.close()
@@ -2481,6 +2532,9 @@ def admin_settings():
         if qr_token:
             cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('qr_token', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (qr_token, gym_id))
         
+        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_email', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_email, gym_id))
+        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gst_number', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gst_number, gym_id))
+        cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('receipt_footer', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (receipt_footer, gym_id))
         cursor.execute("INSERT INTO settings (key, value, gym_id) VALUES ('gym_logo', ?, ?) ON CONFLICT (gym_id, key) DO UPDATE SET value = EXCLUDED.value", (gym_logo, gym_id))
 
         # Update gyms table
@@ -2522,6 +2576,53 @@ def admin_settings():
 
     conn.close()
     return jsonify(settings)
+
+@app.route("/api/admin/owner-profile", methods=["POST"])
+@login_required("owner")
+def update_owner_profile():
+    data = request.get_json() or {}
+    first_name = data.get("first_name", "").strip()
+    last_name = data.get("last_name", "").strip()
+    profile_photo = data.get("profile_photo") # base64, "", or None (unchanged)
+
+    if not first_name:
+        return jsonify({"error": "First Name is required"}), 400
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    try:
+        timestamp = now_ist().strftime("%Y-%m-%d %H:%M:%S")
+        query_parts = ["first_name = ?", "last_name = ?"]
+        params = [first_name, last_name]
+
+        if profile_photo is not None:
+            query_parts.append("profile_photo = ?")
+            params.append(profile_photo)
+
+        params.append(session["user_id"])
+        sql = f"UPDATE users SET {', '.join(query_parts)} WHERE id = ?"
+        cursor.execute(sql, tuple(params))
+        conn.commit()
+
+        cursor.execute("SELECT profile_photo FROM users WHERE id = ?", (session["user_id"],))
+        updated_photo = cursor.fetchone()["profile_photo"] or ""
+
+        return jsonify({
+            "success": True,
+            "profile": {
+                "first_name": first_name,
+                "last_name": last_name,
+                "profile_photo": updated_photo
+            },
+            "updated_owner_name": f"{first_name} {last_name}".strip(),
+            "updated_image_url": updated_photo,
+            "updated_timestamp": timestamp
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": f"Database update failed: {str(e)}"}), 500
+    finally:
+        conn.close()
 
 @app.route("/api/owner/subscription-info", methods=["GET"])
 @login_required("owner", allow_expired=True)
@@ -2802,10 +2903,20 @@ def member_submit_payment(id):
     if not pay:
         conn.close()
         return jsonify({"error": "Billing record not found"}), 404
-        
-    if pay["status"] == "paid":
+    app.logger.info(f"DEBUG: pay status in DB before submit is {pay['status']!r}")
+    if pay["status"] in ("paid", "approved"):
         conn.close()
         return jsonify({"error": "Payment already completed"}), 400
+        
+    if pay["status"] == "pending_approval":
+        conn.close()
+        return jsonify({"error": "Payment is already pending approval"}), 400
+
+    # Idempotency check: check if this transaction reference has already been used
+    cursor.execute("SELECT id FROM payments WHERE transaction_reference = ? AND status IN ('paid', 'pending_approval', 'approved') AND id != ?", (tx_ref, id))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "Transaction reference already submitted or exists"}), 400
         
     method = data.get("payment_method", "online")
     date = data.get("payment_date")
@@ -2813,8 +2924,8 @@ def member_submit_payment(id):
     receipt_type = data.get("receipt_file_type")
 
     try:
-        # Auto-generate receipt number
-        receipt_no = generate_receipt_number(cursor, session["gym_id"])
+        # Auto-generate receipt number linked to payment ID
+        receipt_no = generate_receipt_number(cursor, session["gym_id"], payment_id=id)
         
         # Update payment status to pending_approval and store details
         cursor.execute("""
@@ -2884,6 +2995,12 @@ def member_purchase_plan():
     conn = database.get_db_connection()
     cursor = conn.cursor()
 
+    # Idempotency check: check if this transaction reference has already been used
+    cursor.execute("SELECT id FROM payments WHERE transaction_reference = ? AND status IN ('paid', 'pending_approval', 'approved')", (tx_ref,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "Transaction reference already submitted or exists"}), 400
+
     # Get plan details
     cursor.execute("SELECT name, price, duration_months FROM plans WHERE id = ? AND gym_id = ?", (plan_id, gym_id))
     plan = cursor.fetchone()
@@ -2908,9 +3025,6 @@ def member_purchase_plan():
     receipt_type = data.get("receipt_file_type")
 
     try:
-        # Auto-generate receipt number
-        receipt_no = generate_receipt_number(cursor, gym_id)
-
         # Create a new membership with status suspended (awaits payment approval)
         cursor.execute("""
             INSERT INTO memberships (member_id, plan_id, status, start_date, end_date, price_paid, gym_id)
@@ -2918,12 +3032,16 @@ def member_purchase_plan():
         """, (m_id, plan_id, start_date_str, end_date_str, plan["price"], gym_id))
         membership_id = cursor.lastrowid
 
-        # Create payment request in pending_approval status
+        # Create payment request in pending_approval status with temp receipt
         cursor.execute("""
             INSERT INTO payments (membership_id, member_id, amount, status, receipt_number, transaction_reference, payment_method, payment_date, receipt_file_url, receipt_file_type, plan_id, gym_id)
-            VALUES (?, ?, ?, 'pending_approval', ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (membership_id, m_id, plan["price"], receipt_no, tx_ref, method, date, receipt_url, receipt_type, plan_id, gym_id))
+            VALUES (?, ?, ?, 'pending_approval', NULL, ?, ?, ?, ?, ?, ?, ?)
+        """, (membership_id, m_id, plan["price"], tx_ref, method, date, receipt_url, receipt_type, plan_id, gym_id))
         payment_id = cursor.lastrowid
+
+        # Generate receipt number linked to payment ID
+        receipt_no = generate_receipt_number(cursor, gym_id, payment_id=payment_id)
+        cursor.execute("UPDATE payments SET receipt_number = ? WHERE id = ?", (receipt_no, payment_id))
 
         # Notify the Gym Owner
         cursor.execute("SELECT id FROM users WHERE role = 'owner' AND gym_id = ?", (gym_id,))
@@ -3285,9 +3403,13 @@ def member_dashboard():
     
     status_map_ui = {
         "paid": "Approved",
+        "approved": "Approved",
         "pending": "Pending",
+        "draft": "Draft",
         "pending_approval": "Pending Approval",
+        "submitted": "Pending Approval",
         "rejected": "Rejected",
+        "cancelled": "Cancelled",
         "overdue": "Overdue"
     }
     for b in billing_history:
@@ -3316,6 +3438,18 @@ def member_dashboard():
     """, (session["gym_id"], m_id))
     m_rnk_row = cursor.fetchone()
     monthly_rank = m_rnk_row[0] if m_rnk_row else 0
+
+    # Gym Profile & Settings
+    cursor.execute("SELECT key, value FROM settings WHERE gym_id = ?", (session["gym_id"],))
+    gym_settings = {row["key"]: row["value"] for row in cursor.fetchall()}
+    cursor.execute("SELECT name, phone, address, logo_url FROM gyms WHERE id = ?", (session["gym_id"],))
+    gym_row = cursor.fetchone()
+    gym_info = {
+        "name": gym_row["name"] if (gym_row and gym_row["name"]) else "GymOS",
+        "phone": gym_row["phone"] if (gym_row and gym_row["phone"]) else "",
+        "address": gym_row["address"] if (gym_row and gym_row["address"]) else "",
+        "logo_url": gym_row["logo_url"] if (gym_row and gym_row["logo_url"]) else ""
+    }
 
     conn.close()
 
@@ -3347,7 +3481,9 @@ def member_dashboard():
         "monthly_rank": monthly_rank,
         "attendance_history": attendance_history,
         "notifications": notifs,
-        "billing_history": billing_history
+        "billing_history": billing_history,
+        "gym_settings": gym_settings,
+        "gym_info": gym_info
     })
 
 @app.route("/api/member/activity", methods=["GET"])

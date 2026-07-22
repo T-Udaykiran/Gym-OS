@@ -344,16 +344,48 @@ async function checkUserSession() {
             loginOverlay.style.display = 'none';
             appLayout.style.display = 'flex';
 
-            const ownerDisplayName = data.user.first_name ? `${data.user.first_name} ${data.user.last_name || ''}` : "Ramesh Kumar";
-            const ownerFirstName = data.user.first_name || "Ramesh";
+            const ownerDisplayName = (data.user.first_name || data.user.last_name) ? `${data.user.first_name || ''} ${data.user.last_name || ''}`.trim() : "Owner";
+            const ownerFirstName = data.user.first_name || "Owner";
+            const ownerEmail = data.user.email || "";
 
             document.getElementById('profileOwnerName').innerText = ownerDisplayName;
+            const roleEl = document.getElementById('profileOwnerRole');
+            if (roleEl) roleEl.innerText = `Owner Operator • ${ownerEmail}`;
             document.getElementById('greetingUser').innerText = `${ownerFirstName} 👋`;
             updateTimeBasedGreeting();
 
-            const avatarDiv = document.querySelector('.owner-profile-card .owner-avatar');
-            if (avatarDiv && data.user.first_name) {
-                avatarDiv.innerText = (data.user.first_name[0] + (data.user.last_name ? data.user.last_name[0] : '')).toUpperCase();
+            // Populate Settings Owner Profile Form inputs
+            const ownerFirstInput = document.getElementById('settingsOwnerFirstName');
+            const ownerLastInput = document.getElementById('settingsOwnerLastName');
+            if (ownerFirstInput) ownerFirstInput.value = data.user.first_name || '';
+            if (ownerLastInput) ownerLastInput.value = data.user.last_name || '';
+
+            const avatarDiv = document.getElementById('profileOwnerAvatar') || document.querySelector('.owner-profile-card .owner-avatar');
+            if (avatarDiv) {
+                if (data.user.profile_photo) {
+                    avatarDiv.innerHTML = `<img src="${data.user.profile_photo}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" alt="Avatar">`;
+                } else {
+                    const initials = ((data.user.first_name ? data.user.first_name[0] : '') + (data.user.last_name ? data.user.last_name[0] : '')).toUpperCase() || 'OW';
+                    avatarDiv.innerText = initials;
+                    avatarDiv.innerHTML = initials;
+                }
+            }
+
+            const profilePreview = document.getElementById('ownerPhotoPreview');
+            const profileFallback = document.getElementById('ownerPhotoFallback');
+            const profileRemoveBtn = document.getElementById('btnRemoveOwnerPhoto');
+            if (profilePreview && profileFallback) {
+                if (data.user.profile_photo) {
+                    profilePreview.src = data.user.profile_photo;
+                    profilePreview.style.display = 'block';
+                    profileFallback.style.display = 'none';
+                    if (profileRemoveBtn) profileRemoveBtn.style.display = 'inline-block';
+                } else {
+                    profilePreview.src = '';
+                    profilePreview.style.display = 'none';
+                    profileFallback.style.display = 'block';
+                    if (profileRemoveBtn) profileRemoveBtn.style.display = 'none';
+                }
             }
 
             startApp();
@@ -1290,7 +1322,7 @@ async function fetchPayments() {
                     <button class="dots-dropdown-item" style="color: var(--warning-dark);" onclick="triggerWhatsAppModal(${p.id})">WhatsApp Alert</button>
                 `;
             } else {
-                actionBtn = `<button class="dots-dropdown-item" style="color: var(--accent);" onclick="generateMockReceipt(${p.id}, '${p.first_name} ${p.last_name}', '${p.plan_name}', ${p.amount}, '${p.payment_date}')">Print Receipt</button>`;
+                actionBtn = `<button class="dots-dropdown-item" style="color: var(--accent);" onclick="generateMockReceipt(${p.id}, '${p.first_name} ${p.last_name}', '${p.plan_name}', ${p.amount}, '${p.payment_date}', '${p.receipt_number || ''}', '${p.payment_method || ''}')">Print Receipt</button>`;
             }
 
             if (p.receipt_file_url && p.receipt_file_url !== '—') {
@@ -1709,13 +1741,18 @@ async function fetchGymSettings() {
         const phoneInput = document.getElementById('settingsGymPhone');
         const addressInput = document.getElementById('settingsGymAddress');
         const tokenInput = document.getElementById('settingsQRToken');
-        const imageInput = document.getElementById('settingsGymImageUrl');
+        const emailInput = document.getElementById('settingsGymEmail');
+        const gstInput = document.getElementById('settingsGymGST');
+        const footerInput = document.getElementById('settingsReceiptFooter');
 
         if (codeInput) codeInput.value = gymSettings.gym_code || '';
         if (nameInput) nameInput.value = gymSettings.gym_name || '';
         if (phoneInput) phoneInput.value = gymSettings.gym_phone || '';
         if (addressInput) addressInput.value = gymSettings.gym_address || '';
         if (tokenInput) tokenInput.value = gymSettings.qr_token || '';
+        if (emailInput) emailInput.value = gymSettings.gym_email || '';
+        if (gstInput) gstInput.value = gymSettings.gst_number || '';
+        if (footerInput) footerInput.value = gymSettings.receipt_footer || '';
         
         const logoUrl = gymSettings.gym_logo || gymSettings.gym_image_url || '';
         updateGymLogoPreviewUI(logoUrl);
@@ -1725,6 +1762,59 @@ async function fetchGymSettings() {
         console.error('Gym settings loading error', err);
     }
 }
+
+let currentSelectedOwnerPhoto = null; // null = unchanged, "" = removed, base64 = new
+
+function handleOwnerPhotoSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        showToast('Unsupported format. Please upload PNG, JPG, or WEBP image.', 'error');
+        event.target.value = '';
+        return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        showToast('File size exceeds 2MB limit. Please choose a smaller image.', 'error');
+        event.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        currentSelectedOwnerPhoto = e.target.result;
+        updateOwnerPhotoPreviewUI(currentSelectedOwnerPhoto);
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeOwnerPhoto() {
+    currentSelectedOwnerPhoto = "";
+    const fileInput = document.getElementById('ownerPhotoFileInput');
+    if (fileInput) fileInput.value = '';
+    updateOwnerPhotoPreviewUI("");
+}
+
+function updateOwnerPhotoPreviewUI(photoSrc) {
+    const previewImg = document.getElementById('ownerPhotoPreview');
+    const fallbackSpan = document.getElementById('ownerPhotoFallback');
+    const removeBtn = document.getElementById('btnRemoveOwnerPhoto');
+
+    if (photoSrc) {
+        previewImg.src = photoSrc;
+        previewImg.style.display = 'block';
+        fallbackSpan.style.display = 'none';
+        if (removeBtn) removeBtn.style.display = 'inline-block';
+    } else {
+        previewImg.src = '';
+        previewImg.style.display = 'none';
+        fallbackSpan.style.display = 'block';
+        if (removeBtn) removeBtn.style.display = 'none';
+    }
+}
+
+window.handleOwnerPhotoSelect = handleOwnerPhotoSelect;
+window.removeOwnerPhoto = removeOwnerPhoto;
 
 let currentSelectedGymLogo = null; // null = unchanged, "" = removed, base64/url = new
 
@@ -1789,6 +1879,17 @@ function renderGymBranding(logoUrl, gymName) {
     if (brandNameEl) brandNameEl.innerText = gymName || 'GymOS';
     const headerNameEl = document.getElementById('headerGymName');
     if (headerNameEl) headerNameEl.innerText = gymName || 'GymOS';
+
+    // Dynamic browser tab title
+    document.title = `GymOS Admin • ${gymName || 'GymOS'}`;
+
+    // Mini branding element next to logo
+    const miniBrandEl = document.getElementById('mobileBrandText');
+    if (miniBrandEl) miniBrandEl.innerText = `${gymName || 'GymOS'} Admin`;
+
+    // Footer copy branding
+    const footerEl = document.querySelector('.dashboard-copy-footer');
+    if (footerEl) footerEl.innerHTML = `&copy; 2026 ${gymName || 'GymOS'}. All rights reserved. Powered by GymOS.`;
 }
 
 function copyGymCode() {
@@ -1929,6 +2030,9 @@ function setupFormHandlers() {
             gym_phone: document.getElementById('settingsGymPhone').value,
             gym_address: document.getElementById('settingsGymAddress').value,
             qr_token: document.getElementById('settingsQRToken').value,
+            gym_email: document.getElementById('settingsGymEmail').value,
+            gst_number: document.getElementById('settingsGymGST').value,
+            receipt_footer: document.getElementById('settingsReceiptFooter').value,
             gym_logo: logoPayload,
             gym_image_url: logoPayload
         };
@@ -1951,6 +2055,98 @@ function setupFormHandlers() {
             showToast('Network error updating settings', 'error');
         }
     });
+    // Owner Profile Update
+    const ownerProfileForm = document.getElementById('ownerProfileForm');
+    if (ownerProfileForm) {
+        ownerProfileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnUpdateOwnerProfile');
+            const originalText = btn.innerHTML;
+            
+            // Loading state
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-small"></span> Updating...';
+
+            const first_name = document.getElementById('settingsOwnerFirstName').value.trim();
+            const last_name = document.getElementById('settingsOwnerLastName').value.trim();
+            const photoPayload = currentSelectedOwnerPhoto; // null = unchanged, "" = removed, base64 = new
+
+            const payload = { first_name, last_name };
+            if (photoPayload !== null) {
+                payload.profile_photo = photoPayload;
+            }
+
+            try {
+                const res = await fetch('/api/admin/owner-profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    let errMsg = `Server returned ${res.status}`;
+                    try {
+                        const parsed = JSON.parse(errorText);
+                        errMsg = parsed.error || errMsg;
+                    } catch (_) {}
+                    throw new Error(errMsg);
+                }
+
+                const resData = await res.json();
+                if (resData.success) {
+                    showToast('Owner Profile updated successfully', 'success');
+                    currentSelectedOwnerPhoto = null;
+                    
+                    // Real-time synchronization WITHOUT refresh:
+                    // 1. Sidebar Name
+                    const nameEl = document.getElementById('profileOwnerName');
+                    if (nameEl) nameEl.innerText = resData.updated_owner_name;
+
+                    // 2. Sidebar Image
+                    const avatarDiv = document.getElementById('profileOwnerAvatar');
+                    if (avatarDiv) {
+                        if (resData.updated_image_url) {
+                            avatarDiv.innerHTML = `<img src="${resData.updated_image_url}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;" alt="Avatar">`;
+                        } else {
+                            const initials = ((first_name ? first_name[0] : '') + (last_name ? last_name[0] : '')).toUpperCase() || 'OW';
+                            avatarDiv.innerText = initials;
+                            avatarDiv.innerHTML = initials;
+                        }
+                    }
+
+                    // 3. Dashboard greeting
+                    const greetingUser = document.getElementById('greetingUser');
+                    if (greetingUser) greetingUser.innerText = `${first_name} 👋`;
+
+                    // 4. Update photo input preview state
+                    const profilePreview = document.getElementById('ownerPhotoPreview');
+                    const profileFallback = document.getElementById('ownerPhotoFallback');
+                    const profileRemoveBtn = document.getElementById('btnRemoveOwnerPhoto');
+                    if (profilePreview && profileFallback) {
+                        if (resData.updated_image_url) {
+                            profilePreview.src = resData.updated_image_url;
+                            profilePreview.style.display = 'block';
+                            profileFallback.style.display = 'none';
+                            if (profileRemoveBtn) profileRemoveBtn.style.display = 'inline-block';
+                        } else {
+                            profilePreview.src = '';
+                            profilePreview.style.display = 'none';
+                            profileFallback.style.display = 'block';
+                            if (profileRemoveBtn) profileRemoveBtn.style.display = 'none';
+                        }
+                    }
+                } else {
+                    showToast(resData.error || 'Failed to update profile', 'error');
+                }
+            } catch (err) {
+                showToast(err.message || 'Server unavailable', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        });
+    }
 
     // Add Member: show/hide plan options based on plan selection
     document.getElementById('mPlanSelect').addEventListener('change', (e) => {
@@ -2285,9 +2481,18 @@ function triggerAttendanceExport() {
     document.body.removeChild(link);
 }
 
-function generateMockReceipt(id, name, plan, amount, date) {
+function generateMockReceipt(id, name, plan, amount, date, receipt_number, payment_method) {
     const win = window.open("", "Receipt " + id, "width=400,height=550");
     const d = new Date(date).toLocaleString();
+    const receiptId = receipt_number || `RCPT-PAY-${new Date(date).toISOString().slice(0, 10).replace(/-/g, '')}-${String(id).padStart(6, '0')}`;
+    
+    const gymName = gymSettings.gym_name || 'GymOS';
+    const gymPhone = gymSettings.gym_phone || '';
+    const gymAddress = gymSettings.gym_address || '';
+    const gymEmail = gymSettings.gym_email || '';
+    const gstNo = gymSettings.gst_number || '';
+    const customFooter = gymSettings.receipt_footer || `Thank you for choosing ${gymName}.<br>We appreciate your trust and wish you success on your fitness journey.<br>Powered by GymOS`;
+
     win.document.write(`
     <html>
     <head>
@@ -2303,15 +2508,17 @@ function generateMockReceipt(id, name, plan, amount, date) {
     </head>
     <body>
       <div class="center">
-        <div class="logo">FitZone Gym</div>
-        <div>${gymSettings.gym_name || 'FitZone Gym'}</div>
-        <div>${gymSettings.gym_address || ''}</div>
-        <div>Tel: ${gymSettings.gym_phone || ''}</div>
+        <div class="logo">${gymName}</div>
+        <div>${gymAddress}</div>
+        ${gymPhone ? `<div>Phone: ${gymPhone}</div>` : ''}
+        ${gymEmail ? `<div>Email: ${gymEmail}</div>` : ''}
+        ${gstNo ? `<div>GST No: ${gstNo}</div>` : ''}
       </div>
       <div class="divider"></div>
       <div class="center bold">RECEIPT FOR PAYMENT</div>
-      <div style="margin-top: 10px;">ID: RC-${id}-${Math.floor(Date.now() / 1000)}</div>
+      <div style="margin-top: 10px;">Receipt ID: ${receiptId}</div>
       <div>Date: ${d}</div>
+      <div>Method: ${(payment_method || 'online').toUpperCase()}</div>
       <div class="divider"></div>
       <div class="row"><span class="bold">Member:</span> <span>${name}</span></div>
       <div class="row"><span class="bold">Description:</span> <span>${plan} Plan</span></div>
@@ -2319,8 +2526,9 @@ function generateMockReceipt(id, name, plan, amount, date) {
       <div class="divider"></div>
       <div class="row bold" style="font-size:16px;"><span>Total Paid:</span> <span>${formatINRCurrency(amount)}</span></div>
       <div class="divider"></div>
-      <div class="center bold">THANK YOU FOR YOUR PATRONAGE!</div>
-      <div class="center" style="font-size: 11px; margin-top: 24px; color: #777;">GymOS Integration Engine.</div>
+      <div class="center bold" style="font-size: 11px; line-height: 1.4;">
+        ${customFooter}
+      </div>
       <script>window.print();</script>
     </body>
     </html>
@@ -2951,12 +3159,29 @@ async function adminApprovePayment(id) {
     }
 }
 
-async function adminRejectPayment(id) {
-    const reason = prompt('Enter rejection reason:', 'Receipt details are unclear. Please upload a clearer receipt.');
-    if (reason === null) return; // user cancelled prompt
-    
+function setRejectExample(text) {
+    document.getElementById('rejectReason').value = text;
+}
+
+function adminRejectPayment(id) {
+    closeAllDotsMenus();
+    document.getElementById('rejectPaymentId').value = id;
+    document.getElementById('rejectReason').value = '';
+    openModal('rejectPaymentModal');
+}
+
+async function submitRejectPayment(event) {
+    event.preventDefault();
+    const id = document.getElementById('rejectPaymentId').value;
+    const reason = document.getElementById('rejectReason').value.trim();
+
+    if (!reason) {
+        showToast('Please enter a rejection reason.', 'error');
+        return;
+    }
+
     try {
-        const res = await fetch(`/api/admin/payments/${id}/reject`, { 
+        const res = await fetch(`/api/admin/payments/${id}/reject`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rejection_reason: reason })
@@ -2964,6 +3189,7 @@ async function adminRejectPayment(id) {
         const data = await res.json();
         if (data.success) {
             showToast('Payment request rejected.');
+            closeModal('rejectPaymentModal');
             fetchPayments();
             fetchDashboardStats();
         } else {
@@ -2978,11 +3204,39 @@ async function adminRejectPayment(id) {
 function openReviewPaymentModal(p) {
     document.getElementById('reviewPaymentId').value = p.id;
     document.getElementById('reviewMemberName').textContent = `${p.first_name} ${p.last_name || ''}`;
-    document.getElementById('reviewPlanName').textContent = p.plan_name || 'Membership Plan';
+    document.getElementById('reviewMemberId').textContent = p.member_id || '—';
+    document.getElementById('reviewPlanName').textContent = p.plan_name || 'Membership Renewal';
     document.getElementById('reviewAmount').textContent = formatINRCurrency(p.amount);
-    document.getElementById('reviewPaymentDate').textContent = p.payment_date || '-';
-    document.getElementById('reviewPaymentMethod').textContent = p.payment_method ? p.payment_method.toUpperCase() : 'ONLINE';
-    document.getElementById('reviewSubmittedTime').textContent = p.created_at || '-';
+    document.getElementById('reviewPaymentDate').textContent = p.payment_date || '—';
+    document.getElementById('reviewPaymentMethod').textContent = p.payment_method ? p.payment_method.toUpperCase() : '—';
+    document.getElementById('reviewRefId').textContent = p.transaction_reference || '—';
+    document.getElementById('reviewReceiptNo').textContent = p.receipt_number || 'PENDING';
+    document.getElementById('reviewSubmittedTime').textContent = p.created_at || '—';
+
+    // Status Badge
+    const badgeEl = document.getElementById('reviewStatusBadge');
+    badgeEl.textContent = p.status || '—';
+    badgeEl.className = 'badge';
+    if (p.status === 'Approved') {
+        badgeEl.classList.add('badge-active');
+    } else if (p.status === 'Pending Approval') {
+        badgeEl.classList.add('badge-pending-approval');
+    } else if (p.status === 'Rejected') {
+        badgeEl.classList.add('badge-expired');
+    } else {
+        badgeEl.classList.add('badge-suspended');
+    }
+
+    // Rejection Reason Feedback Section
+    const remarksSec = document.getElementById('reviewRemarksSection');
+    const remarksTxt = document.getElementById('reviewAdminRemarks');
+    if (p.status === 'Rejected' && p.rejection_reason) {
+        remarksSec.style.display = 'block';
+        remarksTxt.textContent = p.rejection_reason;
+    } else {
+        remarksSec.style.display = 'none';
+        remarksTxt.textContent = '';
+    }
 
     const container = document.getElementById('reviewReceiptContainer');
     container.innerHTML = '';
@@ -2994,28 +3248,30 @@ function openReviewPaymentModal(p) {
             container.innerHTML = `<img src="${p.receipt_file_url}" style="max-width: 100%; max-height: 320px; object-fit: contain; cursor: zoom-in;" onclick="window.open('${p.receipt_file_url}', '_blank')">`;
         }
     } else {
-        container.innerHTML = '<span style="color: var(--text-tertiary); font-size: 13px;">No receipt document uploaded.</span>';
+        container.innerHTML = '<span style="color: var(--text-tertiary); font-size: 13px;">Receipt proof not available.</span>';
     }
 
     // Toggle download button
     const downloadBtn = document.getElementById('reviewDownloadBtn');
-    if (p.receipt_file_url && p.receipt_file_url !== '—') {
-        downloadBtn.style.display = 'inline-block';
-        downloadBtn.href = p.receipt_file_url;
-        downloadBtn.download = `GymOS-Receipt-${p.receipt_number || p.id}.${p.receipt_file_type === 'application/pdf' ? 'pdf' : 'png'}`;
-    } else {
-        downloadBtn.style.display = 'none';
+    if (downloadBtn) {
+        if (p.receipt_file_url && p.receipt_file_url !== '—') {
+            downloadBtn.style.display = 'inline-flex';
+            downloadBtn.href = p.receipt_file_url;
+            downloadBtn.download = `Receipt-${p.receipt_number || p.id}.${p.receipt_file_type === 'application/pdf' ? 'pdf' : 'png'}`;
+        } else {
+            downloadBtn.style.display = 'none';
+        }
     }
 
     // Toggle Action Buttons based on status
     const approveBtn = document.querySelector('#reviewPaymentModal .btn-primary[onclick="triggerReviewApprove()"]');
     const rejectBtn = document.querySelector('#reviewPaymentModal .btn-primary[onclick="triggerReviewReject()"]');
     if (p.status === 'Pending Approval') {
-        approveBtn.style.display = 'inline-block';
-        rejectBtn.style.display = 'inline-block';
+        if (approveBtn) approveBtn.style.display = 'inline-block';
+        if (rejectBtn) rejectBtn.style.display = 'inline-block';
     } else {
-        approveBtn.style.display = 'none';
-        rejectBtn.style.display = 'none';
+        if (approveBtn) approveBtn.style.display = 'none';
+        if (rejectBtn) rejectBtn.style.display = 'none';
     }
 
     openModal('reviewPaymentModal');
