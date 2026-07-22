@@ -1,9 +1,10 @@
-const CACHE_NAME = 'gymos-cache-v24';
+const CACHE_NAME = 'gymos-cache-v25';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/shared/styles.css',
   '/shared/member-avatar.js',
+  '/shared/error-boundary.js',
   '/member/index.html',
   '/member/style.css',
   '/member/app.js',
@@ -46,6 +47,16 @@ self.addEventListener('activate', event => {
 
 // Fetch event listener
 self.addEventListener('fetch', event => {
+  // The Cache API only supports GET requests on http(s) schemes. Extensions,
+  // blob:/data: URLs, and non-GET requests reaching here (e.g. a browser
+  // extension's own chrome-extension:// fetches sharing this page context)
+  // previously fell through to cache.put() below, which throws
+  // "Request scheme 'chrome-extension' is unsupported" - let the browser
+  // handle anything outside our own GET http(s) traffic natively.
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
   // Avoid caching backend API calls or SSE streams
@@ -83,7 +94,7 @@ self.addEventListener('fetch', event => {
           if (navigator.onLine) {
             fetch(event.request).then(networkResponse => {
               if (networkResponse && networkResponse.status === 200) {
-                caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse));
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, networkResponse)).catch(() => {});
               }
             }).catch(() => {});
           }
@@ -99,7 +110,7 @@ self.addEventListener('fetch', event => {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then(cache => {
             cache.put(event.request, responseToCache);
-          });
+          }).catch(() => {});
 
           return response;
         });

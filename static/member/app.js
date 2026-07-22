@@ -120,6 +120,8 @@ class LocalDbLeaderboardRepository extends LeaderboardRepository {
             allTimeRank: data.allTimeRank || 0
         };
     }
+}
+
 function updateMemberAppBranding(gymInfo) {
     if (!gymInfo) return;
     const name = gymInfo.name || "GymOS";
@@ -3145,7 +3147,7 @@ function showActivitySubScreen(screenId) {
     if (screenId === 'subScreenHistory') {
         renderHistorySubScreen();
     } else if (screenId === 'subScreenStats') {
-        renderStatsSubScreen();
+        renderActivityStatsSubScreen();
     } else if (screenId === 'subScreenAchievements') {
         renderAchievementsSubScreen();
     } else if (screenId === 'subScreenLeaderboard') {
@@ -3324,7 +3326,7 @@ function viewCurrentWorkoutDetails() {
     showActivitySubScreen('subScreenDetails');
 }
 
-function renderStatsSubScreen() {
+function renderActivityStatsSubScreen() {
     const data = activityDataGlobal;
     document.getElementById('statWeeklyVisitsVal').innerText = data.monthly_visits;
     document.getElementById('statWorkoutHoursVal').innerText = `${data.total_workout_hours} hrs`;
@@ -3767,7 +3769,7 @@ function showProfileSubScreen(screenId) {
     } else if (screenId === 'profileEmergencySubScreen') {
         renderEmergencyContacts();
     } else if (screenId === 'profileStatsSubScreen') {
-        renderStatsSubScreen();
+        renderBodyStatsSubScreen();
     }
 }
 
@@ -3861,92 +3863,13 @@ async function saveProfileChangesRedesigned(e) {
 }
 
 // Emergency Contacts Management
-// The backend stores a single primary emergency contact on the member record
-// itself (emergency_contact_name/number/relation) - there is no separate
-// contacts list, so this reads/writes activeMemberData directly.
-function renderEmergencyContacts() {
-    const container = document.getElementById('emergencyContactsList');
-    if (!container) return;
-
-    const name = activeMemberData.emergency_contact_name;
-    const phone = activeMemberData.emergency_contact_number;
-    if (!name || !phone) {
-        container.innerHTML = '<p class="empty-state-message">No emergency contact added.</p>';
-        return;
-    }
-    container.innerHTML = `<div class="emergency-contact-card"><div class="emergency-contact-details">
-        <h4>${escapeHtml(name)} <span class="emergency-contact-relation">${escapeHtml(activeMemberData.emergency_contact_relation || '')}</span></h4>
-        <p>${escapeHtml(phone)}</p></div><div class="emergency-contact-actions">
-        <button class="emergency-action-btn" onclick="editEmergencyContact()">Edit</button>
-        <button class="emergency-action-btn delete" onclick="deleteEmergencyContact()">Delete</button>
-    </div></div>`;
-}
-
-function openAddEmergencyContactModal() {
-    document.getElementById('emergencyContactId').value = '';
-    document.getElementById('emergencyName').value = '';
-    document.getElementById('emergencyRelation').value = '';
-    document.getElementById('emergencyPhone').value = '';
-    document.getElementById('emergencyModalTitle').innerText = 'Add Emergency Contact';
-    document.getElementById('emergencyContactModal').style.display = 'flex';
-}
+// Authoritative, API-backed (GET/POST/PUT/DELETE /api/member/emergency-contacts),
+// always scoped to the logged-in member's server-side session.
+let emergencyContacts = [];
 
 function closeEmergencyContactModal() {
     document.getElementById('emergencyContactModal').style.display = 'none';
 }
-
-function saveEmergencyContactSubmit(e) {
-    e.preventDefault();
-    const name = document.getElementById('emergencyName').value.trim();
-    const relation = document.getElementById('emergencyRelation').value.trim();
-    const phone = document.getElementById('emergencyPhone').value.trim();
-
-    saveEmergencyContact({ name, relation, phone });
-}
-
-function editEmergencyContact() {
-    document.getElementById('emergencyContactId').value = 'primary';
-    document.getElementById('emergencyName').value = activeMemberData.emergency_contact_name || '';
-    document.getElementById('emergencyRelation').value = activeMemberData.emergency_contact_relation || '';
-    document.getElementById('emergencyPhone').value = activeMemberData.emergency_contact_number || '';
-    document.getElementById('emergencyModalTitle').innerText = 'Edit Emergency Contact';
-    document.getElementById('emergencyContactModal').style.display = 'flex';
-}
-
-function deleteEmergencyContact() {
-    if (window.confirm('Remove this emergency contact?')) saveEmergencyContact({ name: '', relation: '', phone: '' });
-}
-
-async function saveEmergencyContact(contact) {
-    if (!memberDataReady || !activeMemberData.member_id) {
-        showMobileToast('Still loading your profile - please try again in a moment.', 'info');
-        return;
-    }
-
-    const legacy = contact.name ? `${contact.name} (${contact.relation}) / ${contact.phone}` : '';
-    try {
-        // Only the emergency-contact fields are sent - this must never touch
-        // name/phone/dob/photo, which belong to the Edit Profile and Photo flows.
-        const res = await fetch('/api/member/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-            phone: activeMemberData.phone, emergency_contact: legacy, emergency_contact_name: contact.name,
-            emergency_contact_number: contact.phone, emergency_contact_relation: contact.relation
-        }) });
-        const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || 'Unable to save contact');
-        setMemberData({ emergency_contact: legacy, emergency_contact_name: contact.name, emergency_contact_number: contact.phone, emergency_contact_relation: contact.relation });
-        closeEmergencyContactModal();
-        renderEmergencyContacts();
-        showMobileToast(contact.name ? 'Emergency contact saved.' : 'Emergency contact removed.', 'success');
-    } catch (error) {
-        console.error(error);
-        showMobileToast('Something went wrong. Please try again.', 'error');
-    }
-}
-
-// Authoritative API-backed emergency contacts. These declarations replace the
-// retired browser-local implementation above and always use the logged-in
-// member's server-side session scope.
-let emergencyContacts = [];
 
 async function renderEmergencyContacts() {
     const container = document.getElementById('emergencyContactsList');
@@ -4117,7 +4040,7 @@ async function fetchBodyStatsHistory() {
     }
 }
 
-function renderStatsSubScreen() {
+function renderBodyStatsSubScreen() {
     fetchBodyStatsHistory().then(() => {
         const weightValEl = document.getElementById('statWeightVal');
         const heightValEl = document.getElementById('statHeightVal');
@@ -4346,7 +4269,7 @@ async function saveStatsSubmit(e) {
         if (data.success) {
             showMobileToast('Stats updated successfully', 'success');
             closeUpdateStatsModal();
-            renderStatsSubScreen();
+            renderBodyStatsSubScreen();
         } else {
             showMobileToast(data.error || 'Failed to update stats', 'error');
         }

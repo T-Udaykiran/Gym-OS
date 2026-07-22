@@ -1491,20 +1491,35 @@ def admin_get_members():
     
     members_list = []
     today = now_ist().strftime("%Y-%m-%d")
-    
+
+    # Collect rows whose membership lapsed since it was last read, and flip
+    # their status in two batched UPDATEs after the loop instead of firing
+    # up to 2 UPDATE statements per stale row inline (an N+1 pattern that
+    # scaled with page size on every single member-list request).
+    expired_member_ids = []
+    expired_membership_ids = []
+
     for row in rows:
         m_dict = dict(row)
         end_date = m_dict.get("end_date")
         m_status = m_dict.get("status")
-        
+
         if m_status == "active" and end_date and end_date < today:
-            cursor.execute("UPDATE members SET status = 'expired' WHERE id = ? AND gym_id = ?", (m_dict["id"], session["gym_id"]))
-            cursor.execute("UPDATE memberships SET status = 'expired' WHERE id = ? AND gym_id = ?", (m_dict["membership_id"], session["gym_id"]))
+            expired_member_ids.append(m_dict["id"])
+            if m_dict.get("membership_id"):
+                expired_membership_ids.append(m_dict["membership_id"])
             m_dict["status"] = "expired"
             m_dict["membership_status"] = "expired"
-            
+
         members_list.append(m_dict)
-            
+
+    if expired_member_ids:
+        cursor.execute("UPDATE members SET status = 'expired' WHERE id = ANY(?) AND gym_id = ?",
+                        (expired_member_ids, session["gym_id"]))
+    if expired_membership_ids:
+        cursor.execute("UPDATE memberships SET status = 'expired' WHERE id = ANY(?) AND gym_id = ?",
+                        (expired_membership_ids, session["gym_id"]))
+
     conn.commit()
     conn.close()
     
