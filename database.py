@@ -54,6 +54,62 @@ def unique_gym_code(cursor, name):
             return code
     raise RuntimeError("Could not generate a unique gym code")
 
+def generate_gym_prefix(name):
+    """Derive a short uppercase prefix for membership numbers from a gym name,
+    e.g. 'PowerHouse Fitness' -> 'PH', 'Your Gym' -> 'YG', 'FitZone' -> 'FZ'.
+    Used only as a fallback when the gym has no custom prefix configured in
+    Settings (key 'membership_prefix')."""
+    name = (name or "GYM").strip()
+    caps = re.findall(r'[A-Z]', name)
+    words = re.findall(r"[A-Za-z0-9]+", name)
+    if len(caps) >= 2:
+        return (caps[0] + caps[1]).upper()
+    if len(words) >= 2:
+        return (words[0][0] + words[1][0]).upper()
+    if words:
+        w = words[0]
+        return (w[:2] if len(w) >= 2 else (w + "X")).upper()
+    return "GY"
+
+def get_membership_prefix(cursor, gym_id, gym_name=None):
+    """Custom prefix from Settings takes priority; otherwise derive one from
+    the gym's name."""
+    cursor.execute("SELECT value FROM settings WHERE gym_id = ? AND key = 'membership_prefix'", (gym_id,))
+    row = cursor.fetchone()
+    if row and row["value"] and row["value"].strip():
+        return re.sub(r'[^A-Z0-9]', '', row["value"].strip().upper()) or generate_gym_prefix(gym_name)
+    if gym_name is None:
+        cursor.execute("SELECT name FROM gyms WHERE id = ?", (gym_id,))
+        g = cursor.fetchone()
+        gym_name = g["name"] if g else None
+    return generate_gym_prefix(gym_name)
+
+def next_membership_number(cursor, gym_id, gym_name=None):
+    """Atomically reserves the next sequential membership number for this gym
+    and formats it as '{prefix}-{6-digit sequence}' (e.g. 'PH-000001').
+
+    Call this ONLY at member creation. The result is stored permanently on
+    members.membership_number and must never be recomputed or overwritten -
+    it is the member's permanent identifier for the life of their
+    membership, independent of their internal database id.
+
+    The counter (gym_membership_counters) is a dedicated table rather than
+    COUNT(*)-on-members or MAX(sequence)+1, because both of those race under
+    concurrent registrations and can hand out duplicate numbers; an atomic
+    UPDATE ... RETURNING on a per-gym counter row cannot.
+    """
+    cursor.execute(
+        "INSERT INTO gym_membership_counters (gym_id, next_seq) VALUES (?, 1) "
+        "ON CONFLICT (gym_id) DO NOTHING", (gym_id,)
+    )
+    cursor.execute(
+        "UPDATE gym_membership_counters SET next_seq = next_seq + 1 WHERE gym_id = ? "
+        "RETURNING next_seq - 1", (gym_id,)
+    )
+    seq = cursor.fetchone()[0]
+    prefix = get_membership_prefix(cursor, gym_id, gym_name)
+    return f"{prefix}-{seq:06d}"
+
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -276,6 +332,21 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_win_back_interactions_gym ON win_back_interactions(gym_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_win_back_interactions_member ON win_back_interactions(member_id)")
 
+    # Atomic per-gym sequence for permanent membership numbers (see
+    # next_membership_number()). A dedicated counter row per gym, not
+    # COUNT(*)/MAX()+1 on members, so concurrent registrations can never be
+    # handed the same number. id+gym_id (not gym_id alone as PK) to match
+    # every other table's shape - supabase_db.py's sqlite-compat layer
+    # auto-appends "RETURNING id" to any INSERT that doesn't already have a
+    # RETURNING clause, so every table it inserts into needs an `id` column.
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS gym_membership_counters (
+        id SERIAL PRIMARY KEY,
+        gym_id INTEGER UNIQUE NOT NULL REFERENCES gyms(id) ON DELETE CASCADE,
+        next_seq INTEGER NOT NULL DEFAULT 1
+    );
+    """)
+
     conn.commit()
     _migrate_multi_tenancy(cursor)
     conn.commit()
@@ -301,6 +372,9 @@ def _migrate_multi_tenancy(cursor):
     cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS gender TEXT")
     cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS height REAL")
     cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS weight REAL")
+    # Permanent, gym-scoped membership number (see next_membership_number()).
+    # Generated once at member creation, never modified afterward.
+    cursor.execute("ALTER TABLE members ADD COLUMN IF NOT EXISTS membership_number TEXT")
     cursor.execute("ALTER TABLE gyms ADD COLUMN IF NOT EXISTS logo_url TEXT")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emergency_contacts (
@@ -479,12 +553,49 @@ def _migrate_multi_tenancy(cursor):
         pass
     try:
         cursor.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_txn_ref 
-            ON payments (transaction_reference) 
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_txn_ref
+            ON payments (transaction_reference)
             WHERE (transaction_reference IS NOT NULL AND transaction_reference != '')
         """)
     except Exception:
         pass
+
+    _backfill_membership_numbers(cursor)
+
+
+def _backfill_membership_numbers(cursor):
+    """One-time (per member), idempotent backfill for members created before
+    membership_number existed. Assigns numbers in joined_at order within
+    each gym, then fast-forwards that gym's counter past the backfilled
+    range so the next real registration continues the same sequence rather
+    than colliding with it. Members that already have a number are never
+    touched - this only ever fills in NULLs.
+    """
+    cursor.execute("""
+        SELECT id, gym_id FROM members
+        WHERE membership_number IS NULL
+        ORDER BY gym_id ASC, joined_at ASC, id ASC
+    """)
+    missing = cursor.fetchall()
+    if not missing:
+        return
+
+    by_gym = {}
+    for row in missing:
+        by_gym.setdefault(row["gym_id"], []).append(row["id"])
+
+    for gym_id, member_ids in by_gym.items():
+        cursor.execute("SELECT name FROM gyms WHERE id = ?", (gym_id,))
+        g = cursor.fetchone()
+        gym_name = g["name"] if g else None
+        for member_id in member_ids:
+            number = next_membership_number(cursor, gym_id, gym_name)
+            cursor.execute("UPDATE members SET membership_number = ? WHERE id = ?", (number, member_id))
+
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_members_gym_membership_number
+        ON members(gym_id, membership_number)
+    """)
 
 
 def seed_data(conn):

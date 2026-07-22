@@ -403,13 +403,6 @@ async function checkMemberSession() {
 }
 
 // Time & Date format helpers
-function formatMembershipId(id) {
-    if (!id) return '000000000';
-    const s = String(id);
-    if (s.length >= 9) return s;
-    return s.padStart(9, '863934660').slice(-9);
-}
-
 function formatExpiryDate(dateStr) {
     if (!dateStr || dateStr === 'No Plan') return 'NO PLAN';
     try {
@@ -567,10 +560,10 @@ async function fetchDashboardData() {
             const meObj = Object.assign({ email: meData.user.email }, meData.user.member_details || {});
             setMemberData(meObj);
 
-            // Format & set membership ID
+            // Permanent Membership Number, generated once at member creation
+            // (see database.next_membership_number) - never derived here.
             if (document.getElementById('homeMembershipId')) {
-                const rawId = activeMemberData.member_id;
-                document.getElementById('homeMembershipId').innerText = formatMembershipId(rawId);
+                document.getElementById('homeMembershipId').innerText = activeMemberData.membership_number || '--';
             }
         }
 
@@ -800,6 +793,7 @@ function downloadMemberReceipt(invoice) {
       <div>Date: ${d}</div>
       <div class="divider"></div>
       <div class="row"><span class="bold">Member:</span> <span>${activeMemberData.first_name} ${activeMemberData.last_name || ''}</span></div>
+      <div class="row"><span class="bold">Membership No:</span> <span>${activeMemberData.membership_number || '--'}</span></div>
       <div class="row"><span class="bold">Paid Value:</span> <span>₹${invoice.amount.toFixed(2)}</span></div>
       <div class="row"><span class="bold">Payment Status:</span> <span>PAID</span></div>
       <div class="divider"></div>

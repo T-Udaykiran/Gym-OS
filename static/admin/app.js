@@ -1034,7 +1034,7 @@ async function fetchMembers() {
                         </div>
                     </div>
                 </td>
-                <td class="col-id" data-label="Member ID"><span class="member-id-monospace">#${m.id}</span></td>
+                <td class="col-id" data-label="Member ID"><span class="member-id-monospace">${m.membership_number || '--'}</span></td>
                 <td class="col-phone" data-label="Phone Number">${m.phone}</td>
                 <td class="col-joined" data-label="Joined Date">${new Date(m.joined_at).toLocaleDateString()}</td>
                 <td class="col-status" data-label="Status">
@@ -3204,7 +3204,7 @@ async function submitRejectPayment(event) {
 function openReviewPaymentModal(p) {
     document.getElementById('reviewPaymentId').value = p.id;
     document.getElementById('reviewMemberName').textContent = `${p.first_name} ${p.last_name || ''}`;
-    document.getElementById('reviewMemberId').textContent = p.member_id || '—';
+    document.getElementById('reviewMemberId').textContent = p.membership_number || '—';
     document.getElementById('reviewPlanName').textContent = p.plan_name || 'Membership Renewal';
     document.getElementById('reviewAmount').textContent = formatINRCurrency(p.amount);
     document.getElementById('reviewPaymentDate').textContent = p.payment_date || '—';
@@ -3962,7 +3962,7 @@ function renderWinBackTable(members) {
                     ${MemberAvatar.html(m, { size: 36 })}
                     <div>
                         <div style="font-weight: 700; color: var(--text-primary); font-size:13.5px;">${m.first_name} ${m.last_name}</div>
-                        <div style="font-size: 11px; color: var(--text-tertiary);">ID: ${m.id} &bull; ${m.phone}</div>
+                        <div style="font-size: 11px; color: var(--text-tertiary);">${m.membership_number || ''} &bull; ${m.phone}</div>
                         ${interactionInfo}
                     </div>
                 </div>
@@ -4216,11 +4216,11 @@ function exportWinBackCSV() {
         return;
     }
     
-    let csv = 'Member ID,Name,Phone,Plan,Last Visit,Days Inactive,Expiry Date\n';
+    let csv = 'Membership Number,Name,Phone,Plan,Last Visit,Days Inactive,Expiry Date\n';
     winBackMembersList.forEach(m => {
         const lastVisit = m.last_visit ? new Date(m.last_visit).toLocaleDateString() : 'Never';
         const expiry = m.expiry_date ? new Date(m.expiry_date).toLocaleDateString() : 'No Plan';
-        csv += `"${m.id}","${m.first_name} ${m.last_name}","${m.phone}","${m.plan_name || 'No Active Plan'}","${lastVisit}","${m.days_inactive}","${expiry}"\n`;
+        csv += `"${m.membership_number || ''}","${m.first_name} ${m.last_name}","${m.phone}","${m.plan_name || 'No Active Plan'}","${lastVisit}","${m.days_inactive}","${expiry}"\n`;
     });
     
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

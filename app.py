@@ -303,7 +303,7 @@ def auth_register():
     conn = database.get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id, subscription_status, subscription_end_date FROM gyms WHERE id = ?", (gym_id,))
+    cursor.execute("SELECT id, name, subscription_status, subscription_end_date FROM gyms WHERE id = ?", (gym_id,))
     gym = cursor.fetchone()
     if not gym:
         conn.close()
@@ -321,10 +321,13 @@ def auth_register():
         )
         user_id = cursor.lastrowid
 
-        # Create Member (status default is 'pending' and requires owner approval)
+        # Create Member (status default is 'pending' and requires owner approval).
+        # membership_number is generated exactly once, here, at creation -
+        # never regenerated or recomputed afterward.
+        membership_number = database.next_membership_number(cursor, gym_id, gym["name"])
         cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, emergency_contact_name, emergency_contact_number, status, gym_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
-            (user_id, first_name, last_name, phone, legacy_emergency, emergency_name, emergency_number, gym_id)
+            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, emergency_contact_name, emergency_contact_number, status, gym_id, membership_number) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
+            (user_id, first_name, last_name, phone, legacy_emergency, emergency_name, emergency_number, gym_id, membership_number)
         )
         member_id = cursor.lastrowid
         # Do not create separate emergency contact records unless the member later adds a secondary contact.
@@ -951,7 +954,7 @@ def admin_stats():
 
     # 11. Pending Payments List
     cursor.execute("""
-        SELECT p.*, m.first_name, m.last_name, m.phone, pl.name as plan_name
+        SELECT p.*, m.first_name, m.last_name, m.phone, m.membership_number, pl.name as plan_name
         FROM payments p
         JOIN members m ON p.member_id = m.id
         LEFT JOIN memberships ms ON p.membership_id = ms.id
@@ -1095,7 +1098,7 @@ def get_win_back_members():
         params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
         
     sql = f"""
-        SELECT m.id, m.first_name, m.last_name, m.phone, m.profile_photo, m.status, m.joined_at,
+        SELECT m.id, m.membership_number, m.first_name, m.last_name, m.phone, m.profile_photo, m.status, m.joined_at,
                ms.end_date as expiry_date, pl.name as plan_name,
                a.max_time as last_visit,
                date_part('day', now() - COALESCE(a.max_time::timestamp, m.joined_at::timestamp))::integer as days_inactive,
@@ -1411,6 +1414,7 @@ def admin_get_members():
     
     sort_mapping = {
         "id": "m.id",
+        "membership_number": "m.membership_number",
         "first_name": "m.first_name",
         "phone": "m.phone",
         "joined_at": "m.joined_at",
@@ -1582,9 +1586,12 @@ def admin_create_member():
         cursor.execute("INSERT INTO users (email, password_hash, role, gym_id) VALUES (?, ?, 'member', ?)", (email, pw_hash, gym_id))
         u_id = cursor.lastrowid
 
+        # membership_number is generated exactly once, here, at creation -
+        # never regenerated or recomputed afterward.
+        membership_number = database.next_membership_number(cursor, gym_id)
         cursor.execute(
-            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, emergency_contact_name, emergency_contact_number, status, gym_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)",
-            (u_id, first_name, last_name, phone, legacy_emergency, emergency_name, emergency_number, gym_id)
+            "INSERT INTO members (user_id, first_name, last_name, phone, emergency_contact, emergency_contact_name, emergency_contact_number, status, gym_id, membership_number) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+            (u_id, first_name, last_name, phone, legacy_emergency, emergency_name, emergency_number, gym_id, membership_number)
         )
         member_id = cursor.lastrowid
 
@@ -2226,7 +2233,7 @@ def admin_get_payments():
     """
 
     query = """
-        SELECT p.*, m.first_name, m.last_name, m.phone, pl.name as plan_name
+        SELECT p.*, m.first_name, m.last_name, m.phone, m.membership_number, pl.name as plan_name
         FROM payments p
         JOIN members m ON p.member_id = m.id
         LEFT JOIN memberships ms ON p.membership_id = ms.id
@@ -2397,7 +2404,7 @@ def admin_payment_reminder(id):
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT p.*, m.first_name, m.last_name, m.phone, pl.name as plan_name
+        SELECT p.*, m.first_name, m.last_name, m.phone, m.membership_number, pl.name as plan_name
         FROM payments p
         JOIN members m ON p.member_id = m.id
         LEFT JOIN memberships ms ON p.membership_id = ms.id
@@ -3469,6 +3476,7 @@ def member_dashboard():
     conn.close()
 
     return jsonify({
+        "membership_number": mb["membership_number"],
         "first_name": mb["first_name"],
         "last_name": mb["last_name"],
         "email": mb["email"],
