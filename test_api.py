@@ -48,6 +48,15 @@ def make_request(path, method="GET", data=None, headers=None):
 def test_integration():
     print("Starting automated GymOS system integration checks...")
     
+    # Ensure owner@gymos.com has the password 'password123'
+    import database
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    owner_pw = database.hash_password("password123")
+    cursor.execute("UPDATE users SET password_hash = ? WHERE LOWER(email) = LOWER('owner@gymos.com')", (owner_pw,))
+    conn.commit()
+    conn.close()
+    
     # 1. Register Member
     unique_ts = int(time.time())
     unique_email = f"testmember_{unique_ts}@gymos.com"
@@ -277,6 +286,50 @@ def test_integration():
     status, regen_res, _ = make_request("/api/admin/settings/regenerate-qr-token", "POST", headers=headers_owner)
     assert status == 200 and regen_res.get("qr_token"), f"QR token regeneration failed: {regen_res}"
     print("[PASS] QR Token regenerated and settings audit verified.")
+
+    # 12. Forgot Password OTP Flow Test
+    # Trigger OTP send
+    status, res, _ = make_request("/api/auth/forgot-password", "POST", {"email": "owner@gymos.com"})
+    assert status == 200, f"Forgot password trigger failed: {res}"
+    print("[PASS] Forgot password OTP trigger returned 200.")
+
+    # Retrieve the OTP from the database
+    import database
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT otp_code FROM password_otps WHERE LOWER(email) = LOWER('owner@gymos.com')")
+    otp_row = cursor.fetchone()
+    conn.close()
+    assert otp_row and otp_row["otp_code"], "No OTP code found in database table password_otps"
+    otp = otp_row["otp_code"]
+    print(f"[PASS] Retrieved OTP code from database: {otp}")
+
+    # Verify invalid OTP fails
+    status, res, _ = make_request("/api/auth/reset-password", "POST", {"email": "owner@gymos.com", "otp": "000000", "new_password": "newpassword123"})
+    assert status == 400, f"Expected 400 for invalid OTP, got {status} {res}"
+    print("[PASS] Invalid OTP failed reset verification.")
+
+    # Verify valid reset password
+    status, res, _ = make_request("/api/auth/reset-password", "POST", {"email": "owner@gymos.com", "otp": otp, "new_password": "newpassword123"})
+    assert status == 200, f"Password reset failed: {res}"
+    print("[PASS] Password reset with valid OTP completed successfully.")
+
+    # Verify we can login with the new password
+    status, res, _ = make_request("/api/auth/login", "POST", {"email": "owner@gymos.com", "password": "newpassword123"})
+    assert status == 200, f"Login with new password failed: {res}"
+    print("[PASS] Login with new password successful.")
+
+    # Restore the password back to original so subsequent code cleanup runs fine
+    status, res, _ = make_request("/api/auth/forgot-password", "POST", {"email": "owner@gymos.com"})
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT otp_code FROM password_otps WHERE LOWER(email) = LOWER('owner@gymos.com')")
+    otp_row = cursor.fetchone()
+    conn.close()
+    otp = otp_row["otp_code"]
+    status, res, _ = make_request("/api/auth/reset-password", "POST", {"email": "owner@gymos.com", "otp": otp, "new_password": "password123"})
+    assert status == 200, f"Restoring owner password failed: {res}"
+    print("[PASS] Restored original owner password.")
 
     # Cleanup: Owner deletes Member
     status, res, _ = make_request(f"/api/admin/members/{member_id}", "DELETE", headers=headers_owner)

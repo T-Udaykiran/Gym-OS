@@ -1583,22 +1583,88 @@ function showForgotPasswordView() {
     hideAllAuthViews();
     document.getElementById('authForgotPasswordForm').reset();
     document.getElementById('authForgotPasswordError').style.display = 'none';
+    
+    // Reset view to phase 1
+    document.getElementById('fpMemberEmail').disabled = false;
+    document.getElementById('fpMemberResetBlock').style.display = 'none';
+    document.getElementById('btnMemberSendOtp').style.display = 'block';
+    document.getElementById('btnMemberResetPassword').style.display = 'none';
+    
     document.getElementById('authForgotPasswordView').style.display = 'flex';
 }
 
-async function submitMemberForgotPassword() {
+async function sendMemberOtp() {
     const errorBox = document.getElementById('authForgotPasswordError');
     errorBox.style.display = 'none';
 
     const email = document.getElementById('fpMemberEmail').value.trim();
-    const phone = document.getElementById('fpMemberPhone').value.trim();
+    if (!email) {
+        errorBox.innerText = 'Email address is required';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    const btn = document.getElementById('btnMemberSendOtp');
+    btn.disabled = true;
+    btn.innerText = 'Sending...';
+
+    try {
+        const res = await fetch('/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            showMobileToast('Verification code sent to your email.', 'success');
+            
+            // Move to phase 2
+            document.getElementById('fpMemberEmail').disabled = true;
+            document.getElementById('fpMemberResetBlock').style.display = 'flex';
+            btn.style.display = 'none';
+            document.getElementById('btnMemberResetPassword').style.display = 'block';
+        } else {
+            errorBox.innerText = data.error || 'Failed to send OTP';
+            errorBox.style.display = 'block';
+        }
+    } catch (err) {
+        errorBox.innerText = 'Network error. Please try again.';
+        errorBox.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'Send OTP';
+    }
+}
+
+async function resetMemberPassword() {
+    const errorBox = document.getElementById('authForgotPasswordError');
+    errorBox.style.display = 'none';
+
+    const email = document.getElementById('fpMemberEmail').value.trim();
+    const otp = document.getElementById('fpMemberOtp').value.trim();
     const new_password = document.getElementById('fpMemberNewPassword').value;
+
+    if (!otp || otp.length !== 6) {
+        errorBox.innerText = 'Please enter a valid 6-digit OTP code';
+        errorBox.style.display = 'block';
+        return;
+    }
+    if (!new_password || new_password.length < 8) {
+        errorBox.innerText = 'Password must be at least 8 characters';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    const btn = document.getElementById('btnMemberResetPassword');
+    btn.disabled = true;
+    btn.innerText = 'Resetting...';
 
     try {
         const res = await fetch('/api/auth/reset-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, phone, new_password })
+            body: JSON.stringify({ email, otp, new_password })
         });
         const data = await res.json();
 
@@ -1613,6 +1679,9 @@ async function submitMemberForgotPassword() {
     } catch (err) {
         errorBox.innerText = 'Network error. Please try again.';
         errorBox.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'Reset Password';
     }
 }
 

@@ -297,6 +297,13 @@ function openForgotPasswordFlow(event) {
     if (event) event.preventDefault();
     document.getElementById('forgotPasswordForm').reset();
     document.getElementById('forgotPasswordError').style.display = 'none';
+    
+    // Reset admin modal to Phase 1
+    document.getElementById('fpEmail').disabled = false;
+    document.getElementById('adminFpResetBlock').style.display = 'none';
+    document.getElementById('btnAdminSendOtp').style.display = 'block';
+    document.getElementById('btnAdminResetPassword').style.display = 'none';
+    
     openModal('forgotPasswordModal');
 }
 
@@ -304,20 +311,78 @@ function closeForgotPasswordFlow() {
     closeModal('forgotPasswordModal');
 }
 
-async function submitForgotPassword(event) {
-    event.preventDefault();
+async function sendAdminOtp() {
     const errorBox = document.getElementById('forgotPasswordError');
     errorBox.style.display = 'none';
 
     const email = document.getElementById('fpEmail').value.trim();
-    const phone = document.getElementById('fpPhone').value.trim();
+    if (!email) {
+        errorBox.innerText = 'Email address is required';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    const btn = document.getElementById('btnAdminSendOtp');
+    btn.disabled = true;
+    btn.innerText = 'Sending...';
+
+    try {
+        const res = await fetch('/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            showToast('Verification code sent to your email.', 'success');
+            
+            // Move to Phase 2
+            document.getElementById('fpEmail').disabled = true;
+            document.getElementById('adminFpResetBlock').style.display = 'flex';
+            btn.style.display = 'none';
+            document.getElementById('btnAdminResetPassword').style.display = 'block';
+        } else {
+            errorBox.innerText = data.error || 'Failed to send OTP';
+            errorBox.style.display = 'block';
+        }
+    } catch (err) {
+        errorBox.innerText = 'Failed request: server offline';
+        errorBox.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'Send OTP';
+    }
+}
+
+async function resetAdminPassword() {
+    const errorBox = document.getElementById('forgotPasswordError');
+    errorBox.style.display = 'none';
+
+    const email = document.getElementById('fpEmail').value.trim();
+    const otp = document.getElementById('fpOtp').value.trim();
     const new_password = document.getElementById('fpNewPassword').value;
+
+    if (!otp || otp.length !== 6) {
+        errorBox.innerText = 'Please enter a valid 6-digit OTP code';
+        errorBox.style.display = 'block';
+        return;
+    }
+    if (!new_password || new_password.length < 8) {
+        errorBox.innerText = 'Password must be at least 8 characters';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    const btn = document.getElementById('btnAdminResetPassword');
+    btn.disabled = true;
+    btn.innerText = 'Resetting...';
 
     try {
         const res = await fetch('/api/auth/reset-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, phone, new_password })
+            body: JSON.stringify({ email, otp, new_password })
         });
         const data = await res.json();
 
@@ -332,6 +397,19 @@ async function submitForgotPassword(event) {
     } catch (err) {
         errorBox.innerText = 'Failed request: server offline';
         errorBox.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'Reset Password';
+    }
+}
+
+function submitForgotPassword(event) {
+    if (event) event.preventDefault();
+    const isResetPhase = document.getElementById('adminFpResetBlock').style.display === 'flex';
+    if (isResetPhase) {
+        resetAdminPassword();
+    } else {
+        sendAdminOtp();
     }
 }
 

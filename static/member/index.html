@@ -91,25 +91,31 @@
                 <div id="authForgotPasswordView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: #000; padding: 24px 20px 40px; justify-content: flex-end; z-index: 5;">
                     <div style="margin-bottom: 20px;">
                         <h1 style="font-size: 26px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin: 0;">Reset Password</h1>
-                        <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 6px; margin-bottom: 0;">Enter your account email and registered phone number to set a new password.</p>
+                        <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 6px; margin-bottom: 0;">Enter your account email to receive a password reset OTP.</p>
                     </div>
 
                     <div id="authForgotPasswordError" class="auth-error-banner" style="display: none;"></div>
 
-                    <form id="authForgotPasswordForm" onsubmit="event.preventDefault(); submitMemberForgotPassword();" style="display: flex; flex-direction: column; gap: 14px;">
-                        <div class="input-block">
+                    <form id="authForgotPasswordForm" onsubmit="event.preventDefault();" style="display: flex; flex-direction: column; gap: 14px;">
+                        <div class="input-block" id="fpMemberEmailBlock">
                             <label class="input-lbl">Account Email</label>
                             <input type="email" id="fpMemberEmail" class="custom-input" placeholder="Enter your Email ID" required>
                         </div>
-                        <div class="input-block">
-                            <label class="input-lbl">Registered Phone Number</label>
-                            <input type="tel" id="fpMemberPhone" class="custom-input" placeholder="Enter your phone number" required>
+                        
+                        <!-- OTP & New Password Block (initially hidden) -->
+                        <div id="fpMemberResetBlock" style="display: none; flex-direction: column; gap: 14px;">
+                            <div class="input-block">
+                                <label class="input-lbl">OTP Code</label>
+                                <input type="text" id="fpMemberOtp" class="custom-input" placeholder="Enter 6-digit OTP code" minlength="6" maxlength="6">
+                            </div>
+                            <div class="input-block">
+                                <label class="input-lbl">New Password</label>
+                                <input type="password" id="fpMemberNewPassword" class="custom-input" placeholder="minimum 8 characters" minlength="8">
+                            </div>
                         </div>
-                        <div class="input-block">
-                            <label class="input-lbl">New Password</label>
-                            <input type="password" id="fpMemberNewPassword" class="custom-input" placeholder="minimum 8 characters" minlength="8" required>
-                        </div>
-                        <button type="submit" class="auth-capsule-btn primary-btn" style="margin-top: 10px;">Reset Password</button>
+                        
+                        <button type="button" id="btnMemberSendOtp" class="auth-capsule-btn primary-btn" style="margin-top: 10px;" onclick="sendMemberOtp();">Send OTP</button>
+                        <button type="submit" id="btnMemberResetPassword" class="auth-capsule-btn primary-btn" style="margin-top: 10px; display: none;" onclick="resetMemberPassword();">Reset Password</button>
                     </form>
 
                     <button class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showLoginView()">Back to Sign In</button>

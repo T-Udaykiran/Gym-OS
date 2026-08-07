@@ -347,6 +347,17 @@ def init_db():
     );
     """)
 
+    # Create password OTPs table for forgot password verification
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS password_otps (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        otp_code TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS'))
+    );
+    """)
+
     conn.commit()
     _migrate_multi_tenancy(cursor)
     conn.commit()

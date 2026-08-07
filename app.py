@@ -4,6 +4,9 @@ import uuid
 import sqlite3
 import json
 import queue
+import random
+import string
+import urllib.request
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, session, Response, send_file
 import database
@@ -782,49 +785,133 @@ def company_delete_plan(id):
     finally:
         conn.close()
 
+def send_otp_via_resend(email, otp):
+    resend_api_key = os.environ.get("RESEND_API_KEY")
+    from_email = os.environ.get("RESEND_FROM_EMAIL", "GymOS <onboarding@resend.dev>")
+    
+    if not resend_api_key:
+        print(f"[OTP DEV FALLBACK] OTP for {email} is: {otp}")
+        return True, "Fallback"
+
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {resend_api_key}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "from": from_email,
+        "to": [email],
+        "subject": "GymOS - Password Reset OTP",
+        "html": f"""
+        <div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 8px;">
+            <h2 style="color: #333;">Password Reset Request</h2>
+            <p>We received a request to reset your password. Use the following One-Time Password (OTP) to complete the process:</p>
+            <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; border-radius: 4px; margin: 20px 0; color: #ff3b30;">
+                {otp}
+            </div>
+            <p style="color: #666; font-size: 14px;">This OTP is valid for 10 minutes. If you did not request a password reset, please ignore this email.</p>
+        </div>
+        """
+    }
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode("utf-8"),
+            headers=headers,
+            method="POST"
+        )
+        with urllib.request.urlopen(req) as response:
+            res_body = response.read().decode("utf-8")
+            print(f"Resend API Response: {res_body}")
+            return True, res_body
+    except Exception as e:
+        print(f"Failed to send email via Resend: {e}")
+        print(f"[OTP FALLBACK DUE TO ERROR] OTP for {email} is: {otp}")
+        return False, str(e)
+
+@app.route("/api/auth/forgot-password", methods=["POST"])
+def auth_forgot_password():
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+
+    conn = database.get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({"error": "No account matches that email address"}), 404
+
+    # Generate 6-digit OTP
+    otp = "".join(random.choices(string.digits, k=6))
+    
+    # Store OTP in UTC
+    expires_at = (datetime.utcnow() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        # Delete any existing OTP for this email
+        cursor.execute("DELETE FROM password_otps WHERE LOWER(email) = ?", (email,))
+        # Insert new OTP
+        cursor.execute("INSERT INTO password_otps (email, otp_code, expires_at) VALUES (?, ?, ?)", (email, otp, expires_at))
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+    conn.close()
+
+    # Send the email
+    success, detail = send_otp_via_resend(email, otp)
+    
+    return jsonify({
+        "success": True, 
+        "message": "A verification code has been sent to your email address."
+    })
+
 @app.route("/api/auth/reset-password", methods=["POST"])
 def auth_reset_password():
-    # No email/SMS infrastructure is configured, so identity is verified with
-    # a second factor (phone on file) instead of a mailed reset link.
     data = request.get_json() or {}
-    email = (data.get("email") or "").strip()
-    phone = (data.get("phone") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    otp = (data.get("otp") or "").strip()
     new_password = data.get("new_password") or ""
 
-    if not email or not phone or not new_password:
-        return jsonify({"error": "Email, phone number and a new password are required"}), 400
+    if not email or not otp or not new_password:
+        return jsonify({"error": "Email, OTP code and new password are required"}), 400
     if len(new_password) < 8:
         return jsonify({"error": "New password must be at least 8 characters"}), 400
 
     conn = database.get_db_connection()
     cursor = conn.cursor()
 
-    generic_error = jsonify({"error": "No account matches that email and phone number combination"}), 404
+    # Check OTP validity (unexpired)
+    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute(
+        "SELECT id FROM password_otps WHERE LOWER(email) = ? AND otp_code = ? AND expires_at > ?",
+        (email, otp, now_str)
+    )
+    otp_record = cursor.fetchone()
+    if not otp_record:
+        conn.close()
+        return jsonify({"error": "Invalid or expired OTP code"}), 400
 
-    cursor.execute("SELECT id, role, gym_id FROM users WHERE email = ?", (email,))
+    # Get user
+    cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email,))
     user = cursor.fetchone()
     if not user:
         conn.close()
-        return generic_error
+        return jsonify({"error": "User no longer exists"}), 404
 
-    verified = False
-    if user["role"] == "member":
-        cursor.execute("SELECT phone FROM members WHERE user_id = ?", (user["id"],))
-        m = cursor.fetchone()
-        if m and m["phone"] and m["phone"].strip() == phone:
-            verified = True
-    else:
-        cursor.execute("SELECT phone FROM gyms WHERE id = ?", (user["gym_id"],))
-        g = cursor.fetchone()
-        if g and g["phone"] and g["phone"].strip() == phone:
-            verified = True
-
-    if not verified:
-        conn.close()
-        return generic_error
-
+    # Update password
     password_hash = database.hash_password(new_password)
     cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user["id"]))
+    
+    # Delete the used OTP
+    cursor.execute("DELETE FROM password_otps WHERE LOWER(email) = ?", (email,))
+    
     log_action(cursor, "password_reset", "user", user["id"], {"email": email})
     conn.commit()
     conn.close()

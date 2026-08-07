@@ -116,22 +116,27 @@
                 </button>
             </div>
             <div style="padding: 20px;">
-                <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 16px 0;">Enter your account email and the gym contact phone number on file to set a new password.</p>
+                <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 16px 0;">Enter your account email to receive a password reset OTP.</p>
                 <div id="forgotPasswordError" style="display:none; background-color: var(--danger-light); color: var(--danger-dark); border: 1px solid rgba(239, 68, 68, 0.1); padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 500; margin-bottom: 14px;"></div>
-                <form id="forgotPasswordForm">
-                    <div class="login-input-group">
+                <form id="forgotPasswordForm" onsubmit="event.preventDefault();">
+                    <div class="login-input-group" id="adminFpEmailBlock">
                         <label for="fpEmail">Account Email</label>
                         <input type="email" id="fpEmail" class="login-input-control" required>
                     </div>
-                    <div class="login-input-group">
-                        <label for="fpPhone">Gym Phone Number</label>
-                        <input type="tel" id="fpPhone" class="login-input-control" placeholder="Registered gym contact number" required>
+                    
+                    <div id="adminFpResetBlock" style="display: none; flex-direction: column; gap: 14px; margin-bottom: 14px;">
+                        <div class="login-input-group">
+                            <label for="fpOtp">OTP Code</label>
+                            <input type="text" id="fpOtp" class="login-input-control" placeholder="Enter 6-digit OTP" minlength="6" maxlength="6">
+                        </div>
+                        <div class="login-input-group">
+                            <label for="fpNewPassword">New Password</label>
+                            <input type="password" id="fpNewPassword" class="login-input-control" placeholder="minimum 8 characters" minlength="8">
+                        </div>
                     </div>
-                    <div class="login-input-group">
-                        <label for="fpNewPassword">New Password</label>
-                        <input type="password" id="fpNewPassword" class="login-input-control" placeholder="minimum 8 characters" minlength="8" required>
-                    </div>
-                    <button type="submit" class="login-btn-primary" style="margin-top: 6px;">Reset Password</button>
+                    
+                    <button type="button" id="btnAdminSendOtp" class="login-btn-primary" style="margin-top: 6px;" onclick="sendAdminOtp();">Send OTP</button>
+                    <button type="submit" id="btnAdminResetPassword" class="login-btn-primary" style="margin-top: 6px; display: none;" onclick="resetAdminPassword();">Reset Password</button>
                 </form>
             </div>
         </div>
