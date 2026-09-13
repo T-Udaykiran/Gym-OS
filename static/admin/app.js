@@ -165,7 +165,69 @@ function openModal(modalId) {
 }
 
 function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('active');
+    const el = document.getElementById(modalId);
+    if (el) el.classList.remove('active');
+}
+
+// Custom UI Confirmation & Alert Dialog System
+let customConfirmResolve = null;
+
+function showConfirmDialog({ title = 'Confirm Action', message = 'Are you sure you want to proceed?', confirmText = 'Confirm', type = 'warning' } = {}) {
+    return new Promise((resolve) => {
+        customConfirmResolve = resolve;
+        const titleEl = document.getElementById('customConfirmTitle');
+        const msgEl = document.getElementById('customConfirmMessage');
+        const btnOk = document.getElementById('customConfirmSubmitBtn');
+        const iconEl = document.getElementById('customConfirmIcon');
+
+        if (titleEl) titleEl.innerText = title;
+        if (msgEl) msgEl.innerText = message;
+        if (btnOk) {
+            btnOk.innerText = confirmText;
+            if (type === 'danger') {
+                btnOk.style.backgroundColor = 'var(--danger, #ef4444)';
+                btnOk.style.borderColor = 'var(--danger, #ef4444)';
+                btnOk.style.color = '#ffffff';
+            } else {
+                btnOk.style.backgroundColor = 'var(--accent, #c7ff24)';
+                btnOk.style.borderColor = 'var(--accent, #c7ff24)';
+                btnOk.style.color = '#000000';
+            }
+        }
+        if (iconEl) {
+            iconEl.className = `ui-dialog-icon ${type}`;
+        }
+
+        openModal('customConfirmModal');
+    });
+}
+
+function handleCustomConfirmOk() {
+    closeModal('customConfirmModal');
+    if (customConfirmResolve) {
+        customConfirmResolve(true);
+        customConfirmResolve = null;
+    }
+}
+
+function handleCustomConfirmCancel() {
+    closeModal('customConfirmModal');
+    if (customConfirmResolve) {
+        customConfirmResolve(false);
+        customConfirmResolve = null;
+    }
+}
+
+function showAlertDialog({ title = 'Notification', message = '', type = 'info' } = {}) {
+    const titleEl = document.getElementById('customAlertTitle');
+    const msgEl = document.getElementById('customAlertMessage');
+    const iconEl = document.getElementById('customAlertIcon');
+
+    if (titleEl) titleEl.innerText = title;
+    if (msgEl) msgEl.innerText = message;
+    if (iconEl) iconEl.className = `ui-dialog-icon ${type}`;
+
+    openModal('customAlertModal');
 }
 
 // Dashboard KPI drill-down (Pending Dues / Expiring Soon)
@@ -212,7 +274,7 @@ async function downloadPendingDuesCSV() {
         const rows = data.data || [];
 
         if (rows.length === 0) {
-            alert('No pending dues to export.');
+            showToast('No pending dues to export.', 'warning');
             return;
         }
 
@@ -241,7 +303,11 @@ async function fetchExpiringSoonPage() {
         const data = await res.json();
         const rows = data.data || [];
 
-        document.getElementById('expiringSoonTotalInfo').innerText = `Total: ${rows.length} member${rows.length === 1 ? '' : 's'}`;
+        const infoText = `Total: ${rows.length} member${rows.length === 1 ? '' : 's'}`;
+        const totalInfoEl = document.getElementById('expiringSoonTotalInfo');
+        if (totalInfoEl) totalInfoEl.innerText = infoText;
+        const footerTotalEl = document.getElementById('expiringSoonFooterTotalInfo');
+        if (footerTotalEl) footerTotalEl.innerText = infoText;
 
         if (rows.length === 0) {
             body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-tertiary); padding:16px 0;">No memberships expiring soon.</td></tr>';
@@ -261,6 +327,7 @@ async function fetchExpiringSoonPage() {
             `;
         }).join('');
     } catch (err) {
+        console.error('Failed to load expiring memberships', err);
         body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--danger);">Failed to load expiring memberships.</td></tr>';
     }
 }
@@ -272,7 +339,7 @@ async function downloadExpiringSoonCSV() {
         const rows = data.data || [];
 
         if (rows.length === 0) {
-            alert('No memberships expiring soon to export.');
+            showToast('No memberships expiring soon to export.', 'warning');
             return;
         }
 
@@ -415,10 +482,14 @@ function submitForgotPassword(event) {
 
 // Auth validation
 async function checkUserSession() {
+    const splashLoader = document.getElementById('authSplashLoader');
     try {
         const res = await fetch('/api/auth/me');
         const data = await res.json();
         if (data.user && data.user.role === 'owner') {
+            localStorage.setItem('gymos_owner_auth', 'true');
+            if (splashLoader) splashLoader.style.display = 'none';
+            document.documentElement.classList.remove('auth-session-precheck');
             loginOverlay.style.display = 'none';
             appLayout.style.display = 'flex';
 
@@ -429,7 +500,7 @@ async function checkUserSession() {
             document.getElementById('profileOwnerName').innerText = ownerDisplayName;
             const roleEl = document.getElementById('profileOwnerRole');
             if (roleEl) roleEl.innerText = `Owner Operator • ${ownerEmail}`;
-            document.getElementById('greetingUser').innerText = `${ownerFirstName} 👋`;
+            document.getElementById('greetingUser').innerText = ownerFirstName;
             updateTimeBasedGreeting();
 
             // Populate Settings Owner Profile Form inputs
@@ -468,20 +539,26 @@ async function checkUserSession() {
 
             startApp();
         } else {
+            localStorage.removeItem('gymos_owner_auth');
+            if (splashLoader) splashLoader.style.display = 'none';
+            document.documentElement.classList.remove('auth-session-precheck');
             loginOverlay.style.display = 'flex';
             appLayout.style.display = 'none';
         }
     } catch (err) {
         console.error('Session validation error', err);
+        localStorage.removeItem('gymos_owner_auth');
+        if (splashLoader) splashLoader.style.display = 'none';
+        document.documentElement.classList.remove('auth-session-precheck');
+        loginOverlay.style.display = 'flex';
+        appLayout.style.display = 'none';
     }
 }
 
 function startApp() {
+    // Only fetch dashboard stats and gym settings immediately on boot.
+    // Non-dashboard tabs (members, attendance, payments, plans) are loaded on demand via showTab().
     fetchDashboardStats();
-    fetchMembers();
-    fetchAttendance();
-    fetchPayments();
-    fetchPlans();
     fetchGymSettings();
     initSSEConnection();
 }
@@ -611,6 +688,11 @@ function showTab(tabName) {
     // Close floating popovers
     if (typeof closeNotificationPopover === 'function') closeNotificationPopover();
     
+    // Hide revenue-analytics and win-back for now
+    if (tabName === 'revenue-analytics' || tabName === 'win-back') {
+        tabName = 'dashboard';
+    }
+
     currentTab = tabName;
     clearAllSelections();
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
@@ -890,7 +972,7 @@ async function downloadMonthlyAttendance() {
         const rows = (data.data || []).filter(r => r.status === 'success');
 
         if (rows.length === 0) {
-            alert('No attendance records for this month.');
+            showToast('No attendance records for this month.', 'warning');
             return;
         }
 
@@ -1060,6 +1142,213 @@ function renderAttendanceDonut(todayCheckins, activeMembers) {
         }
     });
 }
+
+// ================= ORDER & FILTER MODAL CONTROLLER =================
+let currentOrderFilterTab = 'members';
+let modalSortDirection = 'desc';
+
+function openOrderFilterModal(tabName) {
+    currentOrderFilterTab = tabName || currentTab;
+    const modal = document.getElementById('orderFilterModal');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('orderModalTitle');
+    const subtitleEl = document.getElementById('orderModalSubtitle');
+    const filterLabel = document.getElementById('orderModalFilterLabel');
+    const filterSelect = document.getElementById('orderModalFilterSelect');
+    const sortBySelect = document.getElementById('orderModalSortBy');
+    const pageSizeSelect = document.getElementById('orderModalPageSize');
+
+    filterSelect.innerHTML = '';
+    sortBySelect.innerHTML = '';
+
+    if (currentOrderFilterTab === 'members') {
+        titleEl.innerText = 'Filter & Order Members';
+        subtitleEl.innerText = 'Sort and refine member directory records';
+        filterLabel.innerText = 'Member Status';
+        
+        filterSelect.innerHTML = `
+            <option value="all">All Members</option>
+            <option value="active">Active Members</option>
+            <option value="suspended">Suspended Members</option>
+            <option value="expired">Expired Members</option>
+            <option value="pending">Pending Approval</option>
+        `;
+        const curStatus = document.getElementById('memberStatusFilter')?.value || 'all';
+        filterSelect.value = curStatus;
+
+        sortBySelect.innerHTML = `
+            <option value="first_name">Member Name</option>
+            <option value="joined_at">Registration Date</option>
+            <option value="status">Account Status</option>
+            <option value="membership_number">Member ID</option>
+        `;
+        sortBySelect.value = memberSortBy || 'first_name';
+        modalSortDirection = memberSortOrder || 'asc';
+        pageSizeSelect.value = memberLimit || '25';
+
+    } else if (currentOrderFilterTab === 'attendance') {
+        titleEl.innerText = 'Filter & Order Attendance';
+        subtitleEl.innerText = 'Sort and refine check-in & check-out logs';
+        filterLabel.innerText = 'Time Range / Date';
+
+        filterSelect.innerHTML = `
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="last7days">Last 7 Days</option>
+            <option value="thismonth">This Month</option>
+            <option value="all">All Logs</option>
+        `;
+        const curDate = document.getElementById('attendanceDateFilter')?.value || 'today';
+        filterSelect.value = curDate;
+
+        sortBySelect.innerHTML = `
+            <option value="check_in_time">Check-In Timestamp</option>
+            <option value="name">Member Name</option>
+        `;
+        sortBySelect.value = attendanceSortBy || 'check_in_time';
+        modalSortDirection = attendanceSortOrder || 'desc';
+        pageSizeSelect.value = attendanceLimit || '25';
+
+    } else if (currentOrderFilterTab === 'payments') {
+        titleEl.innerText = 'Filter & Order Payments';
+        subtitleEl.innerText = 'Sort and refine membership transactions';
+        filterLabel.innerText = 'Payment Status';
+
+        filterSelect.innerHTML = `
+            <option value="all">All Payments</option>
+            <option value="paid">Paid</option>
+            <option value="pending">Pending</option>
+            <option value="overdue">Overdue</option>
+        `;
+        const curStatus = document.getElementById('paymentStatusFilter')?.value || 'all';
+        filterSelect.value = curStatus;
+
+        sortBySelect.innerHTML = `
+            <option value="created_at">Transaction Date</option>
+            <option value="amount">Amount</option>
+            <option value="name">Member Name</option>
+        `;
+        sortBySelect.value = paymentSortBy || 'created_at';
+        modalSortDirection = paymentSortOrder || 'desc';
+        pageSizeSelect.value = paymentLimit || '25';
+    }
+
+    setModalSortDirection(modalSortDirection);
+    openModal('orderFilterModal');
+}
+
+function setModalSortDirection(dir) {
+    modalSortDirection = dir;
+    const btnDesc = document.getElementById('btnSortDesc');
+    const btnAsc = document.getElementById('btnSortAsc');
+    if (btnDesc && btnAsc) {
+        if (dir === 'desc') {
+            btnDesc.classList.add('active');
+            btnAsc.classList.remove('active');
+        } else {
+            btnDesc.classList.remove('active');
+            btnAsc.classList.add('active');
+        }
+    }
+}
+
+function applyOrderModalFilters() {
+    const filterSelect = document.getElementById('orderModalFilterSelect');
+    const sortBySelect = document.getElementById('orderModalSortBy');
+    const pageSizeSelect = document.getElementById('orderModalPageSize');
+
+    const filterVal = filterSelect ? filterSelect.value : 'all';
+    const sortByVal = sortBySelect ? sortBySelect.value : '';
+    const pageSizeVal = pageSizeSelect ? pageSizeSelect.value : '25';
+
+    if (currentOrderFilterTab === 'members') {
+        const statusEl = document.getElementById('memberStatusFilter');
+        const sizeEl = document.getElementById('memberPageSize');
+        if (statusEl) statusEl.value = filterVal;
+        if (sizeEl) sizeEl.value = pageSizeVal;
+        memberSortBy = sortByVal;
+        memberSortOrder = modalSortDirection;
+        memberPage = 1;
+        updateFilterButtonIndicator('memberFilterBtn', filterVal !== 'all' || memberSortBy !== 'first_name' || memberSortOrder !== 'asc');
+        fetchMembers();
+    } else if (currentOrderFilterTab === 'attendance') {
+        const dateEl = document.getElementById('attendanceDateFilter');
+        const sizeEl = document.getElementById('attendancePageSize');
+        if (dateEl) dateEl.value = filterVal;
+        if (sizeEl) sizeEl.value = pageSizeVal;
+        attendanceSortBy = sortByVal;
+        attendanceSortOrder = modalSortDirection;
+        attendancePage = 1;
+        updateFilterButtonIndicator('attendanceFilterBtn', filterVal !== 'today' || attendanceSortBy !== 'check_in_time' || attendanceSortOrder !== 'desc');
+        fetchAttendance();
+    } else if (currentOrderFilterTab === 'payments') {
+        const statusEl = document.getElementById('paymentStatusFilter');
+        const sizeEl = document.getElementById('paymentPageSize');
+        if (statusEl) statusEl.value = filterVal;
+        if (sizeEl) sizeEl.value = pageSizeVal;
+        paymentSortBy = sortByVal;
+        paymentSortOrder = modalSortDirection;
+        paymentPage = 1;
+        updateFilterButtonIndicator('paymentFilterBtn', filterVal !== 'all' || paymentSortBy !== 'created_at' || paymentSortOrder !== 'desc');
+        fetchPayments();
+    }
+
+    closeModal('orderFilterModal');
+}
+
+function resetOrderModalFilters() {
+    if (currentOrderFilterTab === 'members') {
+        const statusEl = document.getElementById('memberStatusFilter');
+        const sizeEl = document.getElementById('memberPageSize');
+        if (statusEl) statusEl.value = 'all';
+        if (sizeEl) sizeEl.value = '25';
+        memberSortBy = 'first_name';
+        memberSortOrder = 'asc';
+        memberPage = 1;
+        updateFilterButtonIndicator('memberFilterBtn', false);
+        fetchMembers();
+    } else if (currentOrderFilterTab === 'attendance') {
+        const dateEl = document.getElementById('attendanceDateFilter');
+        const sizeEl = document.getElementById('attendancePageSize');
+        if (dateEl) dateEl.value = 'today';
+        if (sizeEl) sizeEl.value = '25';
+        attendanceSortBy = 'check_in_time';
+        attendanceSortOrder = 'desc';
+        attendancePage = 1;
+        updateFilterButtonIndicator('attendanceFilterBtn', false);
+        fetchAttendance();
+    } else if (currentOrderFilterTab === 'payments') {
+        const statusEl = document.getElementById('paymentStatusFilter');
+        const sizeEl = document.getElementById('paymentPageSize');
+        if (statusEl) statusEl.value = 'all';
+        if (sizeEl) sizeEl.value = '25';
+        paymentSortBy = 'created_at';
+        paymentSortOrder = 'desc';
+        paymentPage = 1;
+        updateFilterButtonIndicator('paymentFilterBtn', false);
+        fetchPayments();
+    }
+    closeModal('orderFilterModal');
+}
+
+function updateFilterButtonIndicator(btnId, hasActiveFilters) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const dot = btn.querySelector('.active-filter-dot');
+    if (hasActiveFilters) {
+        btn.classList.add('active');
+        if (dot) dot.style.display = 'inline-block';
+    } else {
+        btn.classList.remove('active');
+        if (dot) dot.style.display = 'none';
+    }
+}
+
+window.openOrderFilterModal = openOrderFilterModal;
+window.setModalSortDirection = setModalSortDirection;
+window.applyOrderModalFilters = applyOrderModalFilters;
+window.resetOrderModalFilters = resetOrderModalFilters;
 
 // Members tab directory loading
 async function fetchMembers() {
@@ -1623,7 +1912,7 @@ async function triggerWhatsAppModal(paymentId) {
         document.getElementById('whatsappTriggerLink').onclick = function(e) {
             if (!waUrl) {
                 e.preventDefault();
-                alert("Member does not have a valid WhatsApp number.");
+                showToast("Member does not have a valid WhatsApp number.", "warning");
                 return;
             }
             closeModal('whatsappModal');
@@ -1787,7 +2076,7 @@ async function downloadRevenueList() {
         const rows = data.data || [];
 
         if (rows.length === 0) {
-            alert('No revenue recorded for this month.');
+            showToast('No revenue recorded for this month.', 'warning');
             return;
         }
 
@@ -1836,6 +2125,7 @@ async function fetchGymSettings() {
         updateGymLogoPreviewUI(logoUrl);
         renderGymBranding(logoUrl, gymSettings.gym_name);
         renderDashboardGymImage(logoUrl);
+        drawSettingsQR();
     } catch (err) {
         console.error('Gym settings loading error', err);
     }
@@ -1950,7 +2240,7 @@ function renderGymBranding(logoUrl, gymName) {
         if (logoUrl) {
             sidebarLogoEl.innerHTML = `<img src="${logoUrl}" style="width:100%; height:100%; object-fit:cover; border-radius: 8px;" alt="Gym Logo">`;
         } else {
-            sidebarLogoEl.innerHTML = `⚡`;
+            sidebarLogoEl.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
         }
     }
     const brandNameEl = document.querySelector('.brand-title-fitzone .brand-main');
@@ -1997,16 +2287,24 @@ function copyQRToken() {
 }
 
 async function regenerateQRToken() {
-    if (!confirm("Regenerating will invalidate all existing QR codes. Members will need to refresh scan codes. Are you sure you want to generate a new QR token?")) {
-        return;
-    }
+    const confirmed = await showConfirmDialog({
+        title: 'Regenerate QR Token',
+        message: 'Regenerating will invalidate all existing QR codes. Members will need to refresh scan codes. Are you sure you want to generate a new QR token?',
+        confirmText: 'Regenerate Token',
+        type: 'danger'
+    });
+    if (!confirmed) return;
+
     try {
         const res = await fetch('/api/admin/settings/regenerate-qr-token', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
             showToast('New QR Token generated successfully.');
-            document.getElementById('settingsQRToken').value = data.qr_token;
+            const tokenInput = document.getElementById('settingsQRToken');
+            if (tokenInput) tokenInput.value = data.qr_token;
             gymSettings.qr_token = data.qr_token;
+            drawSettingsQR();
+            drawGymQR();
         } else {
             showToast(data.error || 'Failed to regenerate token', 'error');
         }
@@ -2042,13 +2340,40 @@ function renderDashboardGymImage(imageUrl) {
     }
 }
 
+function fillDemoOwnerCredentials() {
+    const emailInput = document.getElementById('loginEmail');
+    const pwdInput = document.getElementById('loginPassword');
+    const errBox = document.getElementById('loginError');
+    if (emailInput) emailInput.value = 'owner@gymos.com';
+    if (pwdInput) pwdInput.value = 'password123';
+    if (errBox) errBox.style.display = 'none';
+    showToast('Demo owner credentials populated', 'info');
+}
+
 // Setup handlers
 function setupFormHandlers() {
+    // Restore saved email if remember-me was used
+    const savedEmail = localStorage.getItem('gymos_saved_email');
+    const emailInput = document.getElementById('loginEmail');
+    const rememberCheckbox = document.getElementById('rememberEmailCheckbox');
+    if (savedEmail && emailInput) {
+        emailInput.value = savedEmail;
+        if (rememberCheckbox) rememberCheckbox.checked = true;
+    }
+
     // Login
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = document.getElementById('loginEmail').value;
+        const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
+        const rememberMe = document.getElementById('rememberEmailCheckbox')?.checked;
+        const submitBtn = document.getElementById('loginSubmitBtn');
+        const origBtnText = submitBtn ? submitBtn.innerText : 'Sign In';
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Signing In…';
+        }
 
         try {
             const res = await fetch('/api/auth/login', {
@@ -2062,8 +2387,17 @@ function setupFormHandlers() {
                 if (data.user.role !== 'owner') {
                     loginError.innerText = 'Logins here restricted to Gym Owners.';
                     loginError.style.display = 'block';
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = origBtnText; }
                     return;
                 }
+
+                if (rememberMe) {
+                    localStorage.setItem('gymos_saved_email', email);
+                } else {
+                    localStorage.removeItem('gymos_saved_email');
+                }
+                localStorage.setItem('gymos_owner_auth', 'true');
+
                 loginOverlay.style.display = 'none';
                 appLayout.style.display = 'flex';
                 showToast('Login successful', 'success');
@@ -2075,6 +2409,11 @@ function setupFormHandlers() {
         } catch (err) {
             loginError.innerText = 'Unable to connect to server. If using HTTPS, accept the browser security prompt or check server status.';
             loginError.style.display = 'block';
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = origBtnText;
+            }
         }
     });
 
@@ -2085,18 +2424,13 @@ function setupFormHandlers() {
     }
 
     // Profile Trigger / Logout
-    document.querySelector('.owner-profile-card').addEventListener('contextmenu', async (e) => {
-        e.preventDefault();
-        if (confirm("End Owner Session?")) {
-            logoutOwner();
-        }
-    });
-
-    // Add logout hook to profile click just in case
-    document.querySelector('.owner-profile-card').addEventListener('click', () => {
-        // Toggle logout overlay or double click to logout
-        showToast("Right-click profile card to Logout.");
-    });
+    const profileCard = document.querySelector('.owner-profile-card');
+    if (profileCard) {
+        profileCard.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            triggerOwnerLogout(e);
+        });
+    }
 
     // Settings Update
     document.getElementById('settingsForm').addEventListener('submit', async (e) => {
@@ -2195,7 +2529,7 @@ function setupFormHandlers() {
 
                     // 3. Dashboard greeting
                     const greetingUser = document.getElementById('greetingUser');
-                    if (greetingUser) greetingUser.innerText = `${first_name} 👋`;
+                    if (greetingUser) greetingUser.innerText = first_name;
 
                     // 4. Update photo input preview state
                     const profilePreview = document.getElementById('ownerPhotoPreview');
@@ -2409,24 +2743,22 @@ function setupFormHandlers() {
     });
 }
 
-async function logoutOwner() {
-    try {
-        await fetch('/api/auth/logout', { method: 'POST' });
-        if (sseSource) sseSource.close();
-        loginOverlay.style.display = 'flex';
-        appLayout.style.display = 'none';
-        showToast('Logout completed.');
-    } catch (err) {
-        console.error(err);
-    }
+async function logoutOwner(event) {
+    return triggerOwnerLogout(event);
 }
 
 // Inline toggle suspend
 async function toggleSuspendMember(id, currentStatus) {
     closeAllDotsMenus();
     const target = (currentStatus === 'suspended' || currentStatus === 'pending') ? 'active' : 'suspended';
-    const confirmMsg = target === 'suspended' ? 'Suspend this member?' : (currentStatus === 'pending' ? 'Approve this member?' : 'Activate this member?');
-    if (!confirm(confirmMsg)) return;
+    const confirmMsg = target === 'suspended' ? 'Are you sure you want to suspend this member?' : (currentStatus === 'pending' ? 'Approve and activate this member?' : 'Reactivate this member account?');
+    const confirmed = await showConfirmDialog({
+        title: target === 'suspended' ? 'Suspend Member' : 'Activate Member',
+        message: confirmMsg,
+        confirmText: target === 'suspended' ? 'Suspend' : 'Activate',
+        type: target === 'suspended' ? 'warning' : 'info'
+    });
+    if (!confirmed) return;
 
     try {
         const detailRes = await fetch(`/api/admin/members/${id}`);
@@ -2454,7 +2786,13 @@ async function toggleSuspendMember(id, currentStatus) {
 
 async function deleteMember(id) {
     closeAllDotsMenus();
-    if (!confirm('Are you sure you want to permanently delete this member?')) return;
+    const confirmed = await showConfirmDialog({
+        title: 'Delete Member',
+        message: 'Are you sure you want to permanently delete this member? All attendance logs and payment records will be removed.',
+        confirmText: 'Delete Permanently',
+        type: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
         const res = await fetch(`/api/admin/members/${id}`, { method: 'DELETE' });
@@ -2472,7 +2810,13 @@ async function deleteMember(id) {
 }
 
 async function deletePlan(id) {
-    if (!confirm('Delete this plan tier?')) return;
+    const confirmed = await showConfirmDialog({
+        title: 'Delete Plan',
+        message: 'Are you sure you want to delete this membership plan tier?',
+        confirmText: 'Delete Plan',
+        type: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
         const res = await fetch(`/api/admin/plans/${id}`, { method: 'DELETE' });
@@ -2491,11 +2835,12 @@ async function deletePlan(id) {
 
 function drawGymQR() {
     const token = gymSettings.qr_token || 'gymos-token-xyz-123';
-    document.getElementById('qrTokenDisplayTxt').innerText = `Token: ${token}`;
+    const txtEl = document.getElementById('qrTokenDisplayTxt');
+    if (txtEl) txtEl.innerText = `Token: ${token}`;
 
     const container = document.getElementById('gymQRCodeContainer');
-    container.innerHTML = '';
-    if (typeof QRCode !== 'undefined') {
+    if (container && typeof QRCode !== 'undefined') {
+        container.innerHTML = '';
         new QRCode(container, {
             text: token,
             width: 180,
@@ -2507,36 +2852,102 @@ function drawGymQR() {
     }
 }
 
+// Settings Subtab Switching
+function switchSettingsSubtab(subtabKey) {
+    const subtabs = ['profile', 'qr', 'branding', 'owner'];
+    subtabs.forEach(tab => {
+        const tabCap = tab.charAt(0).toUpperCase() + tab.slice(1);
+        const btn = document.getElementById(`subtabBtn${tabCap}`);
+        const pane = document.getElementById(`settingsPane${tabCap}`);
+        if (btn) {
+            if (tab === subtabKey) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+        if (pane) {
+            if (tab === subtabKey) pane.classList.add('active');
+            else pane.classList.remove('active');
+        }
+    });
+
+    if (subtabKey === 'qr') {
+        setTimeout(drawSettingsQR, 50);
+    }
+}
+window.switchSettingsSubtab = switchSettingsSubtab;
+
+function drawSettingsQR() {
+    const token = gymSettings.qr_token || 'gymos-token-xyz-123';
+    const badge = document.getElementById('settingsQRTokenBadge');
+    if (badge) badge.innerText = `Token: ${token}`;
+
+    const container = document.getElementById('settingsQRCodeContainer');
+    if (container && typeof QRCode !== 'undefined') {
+        container.innerHTML = '';
+        new QRCode(container, {
+            text: token,
+            width: 128,
+            height: 128,
+            colorDark: '#0f172a',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    }
+}
+
 function downloadGymQRCode() {
-    const container = document.getElementById('gymQRCodeContainer');
-    const img = container.querySelector('img');
-    const canvas = container.querySelector('canvas');
+    // Check Settings QR container first, then modal container
+    let container = document.getElementById('settingsQRCodeContainer');
+    let img = container ? container.querySelector('img') : null;
+    let canvas = container ? container.querySelector('canvas') : null;
+
+    if (!img && !canvas) {
+        container = document.getElementById('gymQRCodeContainer');
+        if (container) {
+            if (!container.querySelector('img') && !container.querySelector('canvas')) {
+                drawGymQR();
+            }
+            img = container.querySelector('img');
+            canvas = container.querySelector('canvas');
+        }
+    }
+
+    if (!img && !canvas) {
+        drawSettingsQR();
+        container = document.getElementById('settingsQRCodeContainer');
+        if (container) {
+            img = container.querySelector('img');
+            canvas = container.querySelector('canvas');
+        }
+    }
+
     const dataUrl = img ? img.src : (canvas ? canvas.toDataURL('image/png') : null);
 
     if (!dataUrl) {
-        showToast('QR code is not ready yet', 'error');
+        showToast('QR code is not ready yet, please wait a moment.', 'warning');
         return;
     }
 
+    const gymSlug = (gymSettings.gym_name || 'gym').toLowerCase().replace(/[^a-z0-9]/g, '-');
     const link = document.createElement('a');
     link.href = dataUrl;
-    link.download = 'gym-entrance-qr.png';
+    link.download = `${gymSlug}-entrance-qr.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
+    showToast('Gym Entrance QR Code downloaded successfully.', 'success');
 }
 
 function triggerAttendanceExport() {
     const dateStr = document.getElementById('attendanceDateFilter').value || 'all';
-    alert(`CSV Report Generated. Downloading check-in logs for: [${dateStr}]`);
 
     let csvContent = "data:text/csv;charset=utf-8,Member,Phone,Check-In Logs,Verification State,Feedback\n";
     const rows = document.querySelectorAll('#attendanceTableBody tr');
 
     if (rows.length === 1 && rows[0].innerText.includes('No check-in')) {
-        alert("Empty logs. Add check-ins to export logs.");
+        showToast("Empty logs. Add check-ins to export logs.", "warning");
         return;
     }
+    showToast(`Downloading check-in logs for: [${dateStr}]`, "info");
 
     rows.forEach(tr => {
         const cols = tr.querySelectorAll('td');
@@ -2948,7 +3359,7 @@ async function triggerBulkExport() {
 
     if (!selectedSet || selectedSet.size === 0) return;
 
-    alert(`Exporting ${selectedSet.size} selected ${mode} rows as CSV.`);
+    showToast(`Exporting ${selectedSet.size} selected ${mode} rows as CSV.`, 'info');
 
     let csvContent = "data:text/csv;charset=utf-8,";
     if (mode === 'members') {
@@ -3007,12 +3418,18 @@ async function triggerBulkExport() {
 
 async function triggerBulkSuspend() {
     if (currentTab !== 'members') {
-        alert("Bulk Suspend check is only supported for Members list.");
+        showToast("Bulk Suspend check is only supported for Members list.", "warning");
         return;
     }
     if (selectedMembers.size === 0) return;
 
-    if (!confirm(`Are you sure you want to toggle user suspension states for ${selectedMembers.size} selected members?`)) return;
+    const confirmed = await showConfirmDialog({
+        title: 'Bulk Status Update',
+        message: `Are you sure you want to toggle user suspension states for ${selectedMembers.size} selected members?`,
+        confirmText: 'Toggle Status',
+        type: 'warning'
+    });
+    if (!confirmed) return;
 
     let successCount = 0;
     for (const id of selectedMembers) {
@@ -3051,11 +3468,17 @@ async function triggerBulkDelete() {
     if (!selectedSet || selectedSet.size === 0) return;
 
     if (mode !== 'members') {
-        alert("Delete operations are only supported for entire Member accounts.");
+        showToast("Delete operations are only supported for entire Member accounts.", "warning");
         return;
     }
 
-    if (!confirm(`CRITICAL WARNING: Are you sure you want to permanently DELETE ${selectedSet.size} members and clear all their checkin logs and payments?`)) return;
+    const confirmed = await showConfirmDialog({
+        title: 'Permanent Member Deletion',
+        message: `CRITICAL WARNING: Are you sure you want to permanently DELETE ${selectedSet.size} members and clear all their check-in logs and payments?`,
+        confirmText: 'Delete Members',
+        type: 'danger'
+    });
+    if (!confirmed) return;
 
     let deletedCount = 0;
     for (const id of selectedSet) {
@@ -3080,7 +3503,7 @@ function exportMembersCSV() {
         return;
     }
 
-    alert("Downloading current page of Members directory as CSV.");
+    showToast("Downloading current page of Members directory as CSV.", "info");
     let csvContent = "data:text/csv;charset=utf-8,ID,Name,Email,Phone,Joined Date,Status,Plan,Last Checkin\n";
     const rows = document.querySelectorAll('#membersTableBody tr');
 
@@ -3114,7 +3537,7 @@ function exportAttendanceCSV() {
     }
 
     const dateStr = document.getElementById('attendanceDateFilter').value || 'all';
-    alert(`CSV Report Generated. Downloading check-in logs for: [${dateStr}]`);
+    showToast(`Downloading check-in logs for: [${dateStr}]`, "info");
 
     let csvContent = "data:text/csv;charset=utf-8,Member,Phone,Check-In Time,Check-Out Time,Workout Duration\n";
     const rows = document.querySelectorAll('#attendanceTableBody tr');
@@ -3146,7 +3569,7 @@ function exportPaymentsCSV() {
         return;
     }
 
-    alert("Downloading current page of Billings records as CSV.");
+    showToast("Downloading current page of Billings records as CSV.", "info");
     let csvContent = "data:text/csv;charset=utf-8,Receipt ID,Member,Amount,Status,Payment Date\n";
     const rows = document.querySelectorAll('#paymentsTableBody tr');
 
@@ -3196,12 +3619,14 @@ async function fetchAdminLeaderboard() {
                 item.style.border = '1px solid rgba(234, 179, 8, 0.2)';
             }
             
-            const medals = ['🥇', '🥈', '🥉'];
-            const rankBadge = idx < 3 ? medals[idx] : `<span style="font-weight:700; color:var(--text-tertiary); margin-right: 6px;">#${idx + 1}</span>`;
+            const rankColors = ['#eab308', '#94a3b8', '#d97706'];
+            const rankBadge = idx < 3 
+                ? `<span style="display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:${rankColors[idx]}20; color:${rankColors[idx]}; font-size:11px; font-weight:800; border:1px solid ${rankColors[idx]}60;">${idx + 1}</span>`
+                : `<span style="font-weight:700; color:var(--text-tertiary); margin-right: 6px; font-size:12px;">#${idx + 1}</span>`;
 
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 14px;">${rankBadge}</span>
+                    <span>${rankBadge}</span>
                     ${MemberAvatar.html(user, { size: 36 })}
                     <div class="joiner-details">
                         <span class="joiner-name">${user.first_name} ${user.last_name}</span>
@@ -3220,7 +3645,13 @@ async function fetchAdminLeaderboard() {
 }
 
 async function adminApprovePayment(id) {
-    if (!confirm('Approve this payment request?')) return;
+    const confirmed = await showConfirmDialog({
+        title: 'Approve Payment',
+        message: 'Are you sure you want to approve this payment request?',
+        confirmText: 'Approve Payment',
+        type: 'info'
+    });
+    if (!confirmed) return;
     try {
         const res = await fetch(`/api/admin/payments/${id}/approve`, { method: 'POST' });
         const data = await res.json();
@@ -3533,7 +3964,12 @@ async function approvePendingMember(id) {
 }
 
 async function rejectPendingMember(id) {
-    const confirmed = confirm('Reject Request?\n\nAre you sure you want to reject this member request?');
+    const confirmed = await showConfirmDialog({
+        title: 'Reject Member Registration',
+        message: 'Are you sure you want to reject this member request?',
+        confirmText: 'Reject Request',
+        type: 'danger'
+    });
     if (!confirmed) return;
     
     try {
@@ -3686,16 +4122,11 @@ function renderOwnerNotificationsPopover() {
             renderOwnerNotificationsPopover();
         };
 
-        let icon = '🔔';
-        let bg = 'rgba(234, 179, 8, 0.1)';
-        if (n.type === 'welcome') { icon = '🟢'; bg = 'rgba(34, 197, 94, 0.1)'; }
-        else if (n.type === 'payment') { icon = '💰'; bg = 'rgba(59, 130, 246, 0.1)'; }
-        else if (n.type === 'expiry') { icon = '⚠️'; bg = 'rgba(239, 68, 68, 0.1)'; }
-        else if (n.type === 'checkin') { icon = '🏃'; bg = 'rgba(168, 85, 247, 0.1)'; }
-        else if (n.type === 'pending') { icon = '📩'; bg = 'rgba(14, 165, 233, 0.1)'; }
+        const itemIconSvg = getNotificationIconSvg(n.type);
+        const bg = getNotificationIconBg(n.type);
 
         item.innerHTML = `
-            <div class="notif-item-icon-wrapper" style="background-color: ${bg};">${icon}</div>
+            <div class="notif-item-icon-wrapper" style="background-color: ${bg};">${itemIconSvg}</div>
             <div class="notif-item-info">
                 <div class="notif-item-title-row">
                     <span class="notif-item-title">${n.title}</span>
@@ -3707,6 +4138,30 @@ function renderOwnerNotificationsPopover() {
         `;
         container.appendChild(item);
     });
+}
+
+function getNotificationIconSvg(type) {
+    if (type === 'welcome') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+    } else if (type === 'payment') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>`;
+    } else if (type === 'expiry') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+    } else if (type === 'checkin') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>`;
+    } else if (type === 'pending') {
+        return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`;
+    }
+    return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`;
+}
+
+function getNotificationIconBg(type) {
+    if (type === 'welcome') return 'rgba(34, 197, 94, 0.1)';
+    if (type === 'payment') return 'rgba(59, 130, 246, 0.1)';
+    if (type === 'expiry') return 'rgba(239, 68, 68, 0.1)';
+    if (type === 'checkin') return 'rgba(168, 85, 247, 0.1)';
+    if (type === 'pending') return 'rgba(14, 165, 233, 0.1)';
+    return 'rgba(234, 179, 8, 0.1)';
 }
 
 function viewAllNotifications(event) {
@@ -3768,17 +4223,12 @@ function filterNotificationHistory() {
         const card = document.createElement('div');
         card.className = `notif-history-card ${n.read ? '' : 'unread'}`;
 
-        let icon = '🔔';
-        let bg = 'rgba(234, 179, 8, 0.1)';
-        if (n.type === 'welcome') { icon = '🟢'; bg = 'rgba(34, 197, 94, 0.1)'; }
-        else if (n.type === 'payment') { icon = '💰'; bg = 'rgba(59, 130, 246, 0.1)'; }
-        else if (n.type === 'expiry') { icon = '⚠️'; bg = 'rgba(239, 68, 68, 0.1)'; }
-        else if (n.type === 'checkin') { icon = '🏃'; bg = 'rgba(168, 85, 247, 0.1)'; }
-        else if (n.type === 'pending') { icon = '📩'; bg = 'rgba(14, 165, 233, 0.1)'; }
+        const itemIconSvg = getNotificationIconSvg(n.type);
+        const bg = getNotificationIconBg(n.type);
 
         card.innerHTML = `
             <div class="notif-history-left">
-                <div class="notif-item-icon-wrapper" style="background-color: ${bg}; width: 40px; height: 40px; font-size: 18px;">${icon}</div>
+                <div class="notif-item-icon-wrapper" style="background-color: ${bg}; width: 40px; height: 40px;">${itemIconSvg}</div>
                 <div class="notif-history-details">
                     <div class="notif-history-title-row">
                         <span class="notif-history-title">${n.title}</span>
@@ -3829,8 +4279,13 @@ function deleteNotification(id) {
     showToast('Notification deleted', 'info');
 }
 
-function clearAllNotifications() {
-    const confirmed = confirm('Delete All?\n\nAre you sure you want to clear your entire notification history?');
+async function clearAllNotifications() {
+    const confirmed = await showConfirmDialog({
+        title: 'Clear Notification History',
+        message: 'Are you sure you want to clear your entire notification history?',
+        confirmText: 'Clear All',
+        type: 'danger'
+    });
     if (!confirmed) return;
     
     ownerNotificationsList = [];
@@ -3904,7 +4359,12 @@ async function triggerOwnerLogout(event) {
         event.preventDefault();
     }
     
-    const confirmed = confirm('Logout\n\nAre you sure you want to logout?');
+    const confirmed = await showConfirmDialog({
+        title: 'Confirm Logout',
+        message: 'Are you sure you want to log out of the owner admin portal?',
+        confirmText: 'Log Out',
+        type: 'warning'
+    });
     if (!confirmed) return;
 
     try {
@@ -3913,6 +4373,7 @@ async function triggerOwnerLogout(event) {
         if (data.success) {
             // Reset state
             localStorage.removeItem('gymos_owner_notifications');
+            localStorage.removeItem('gymos_owner_auth');
             // Redirect
             loginOverlay.style.display = 'flex';
             appLayout.style.display = 'none';
@@ -3922,6 +4383,7 @@ async function triggerOwnerLogout(event) {
         }
     } catch (err) {
         console.error('Logout error:', err);
+        localStorage.removeItem('gymos_owner_auth');
         // Force redirect to login anyway if network error
         loginOverlay.style.display = 'flex';
         appLayout.style.display = 'none';
@@ -4180,12 +4642,22 @@ async function triggerBulkInteractionModal(type) {
     
     const count = selectedWinBackMemberIds.size;
     if (type === 'whatsapp') {
-        const confirmed = confirm(`Bulk WhatsApp Note\n\nThis will log a WhatsApp follow-up interaction for all ${count} selected members. Proceed?`);
+        const confirmed = await showConfirmDialog({
+            title: 'Bulk WhatsApp Note',
+            message: `This will log a WhatsApp follow-up interaction for all ${count} selected members. Proceed?`,
+            confirmText: 'Log Follow-ups',
+            type: 'info'
+        });
         if (!confirmed) return;
         
         await executeWinBackBulkAction('whatsapp', 'Bulk WhatsApp campaign initiated');
     } else {
-        const confirmed = confirm(`Mark Contacted\n\nThis will mark all ${count} selected members as contacted/followed up. Proceed?`);
+        const confirmed = await showConfirmDialog({
+            title: 'Mark Members Contacted',
+            message: `This will mark all ${count} selected members as contacted/followed up. Proceed?`,
+            confirmText: 'Mark Contacted',
+            type: 'info'
+        });
         if (!confirmed) return;
         
         await executeWinBackBulkAction('contacted', 'Bulk follow-up contact recorded');

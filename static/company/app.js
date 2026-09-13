@@ -32,6 +32,7 @@ function startApp() {
 }
 
 async function logout() {
+    if (!confirm('Are you sure you want to log out of the company portal?')) return;
     await fetch('/api/auth/logout', { method: 'POST' });
     loginOverlay.style.display = 'flex';
     appLayout.style.display = 'none';

@@ -269,7 +269,7 @@ function updateAppHeader(tabName) {
     `;
 
     if (tabName === 'home') {
-        headerLeft.innerHTML = `<p style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.85); margin: 0; display: flex; align-items: center;">Hi, <span id="homeMemberFirstName">${firstName}</span>! 👋</p>`;
+        headerLeft.innerHTML = `<p style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.85); margin: 0; display: flex; align-items: center;">Hi, <span id="homeMemberFirstName">${firstName}</span>!</p>`;
         headerRight.innerHTML = renderNotifBell();
     } else if (tabName === 'activity') {
         headerLeft.innerHTML = `<h2 style="font-size: 18px; font-weight: 800; color: #fff; margin: 0;">Activity</h2>`;
@@ -899,7 +899,7 @@ function renderNotificationsScreen() {
     if (memberNotifications.length === 0) {
         list.innerHTML = `
             <div class="notifications-empty-state">
-                <span aria-hidden="true">🔔</span>
+                <span aria-hidden="true" style="display: flex; justify-content: center; margin-bottom: 8px;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></span>
                 <h3>No notifications yet</h3>
                 <p>Updates about your membership and activity will appear here.</p>
             </div>`;
@@ -1743,7 +1743,7 @@ function connectMemberSse(memberId) {
             const payload = data.payload;
             if (payload.member_id === currentMemberId) {
                 if (payload.status === 'active') {
-                    document.getElementById('pendingTitle').innerText = '🎉 Congratulations!';
+                    document.getElementById('pendingTitle').innerText = 'Congratulations!';
                     document.getElementById('pendingText').innerText = 'Your account has been approved.';
                     
                     const actionArea = document.getElementById('pendingActionArea');
@@ -2354,7 +2354,10 @@ function selectGym(id, name, code) {
     document.getElementById('regGymResultsDropdown').style.display = 'none';
 }
 
-async function logoutMemberApp() {
+async function logoutMemberApp(skipConfirm = false) {
+    if (!skipConfirm && !confirm('Are you sure you want to log out of your account?')) {
+        return;
+    }
     try {
         await fetch('/api/auth/logout', { method: 'POST' });
         activeMemberData = {};
@@ -2480,8 +2483,10 @@ async function fetchLeaderboard() {
             item.style.border = idx === 0 ? '1px solid rgba(234, 179, 8, 0.2)' : '1px solid var(--border-color)';
             item.style.borderRadius = 'var(--radius-sm)';
             
-            const medals = ['🥇', '🥈', '🥉'];
-            const rankBadge = idx < 3 ? medals[idx] : `<span style="font-weight:700; color:var(--text-tertiary); width:18px; display:inline-block; text-align:center;">${idx + 1}</span>`;
+            const rankColors = ['#eab308', '#94a3b8', '#d97706'];
+            const rankBadge = idx < 3 
+                ? `<span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:${rankColors[idx]}20; color:${rankColors[idx]}; font-size:11px; font-weight:800; border:1px solid ${rankColors[idx]}60;">${idx + 1}</span>`
+                : `<span style="font-weight:700; color:var(--text-tertiary); width:18px; display:inline-block; text-align:center;">${idx + 1}</span>`;
             
             item.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -2537,7 +2542,7 @@ async function fetchAndRenderPlans() {
                     <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px; height: 26px; cursor: not-allowed; opacity: 0.6;" disabled>Buy Plan</button>
                 `;
                 warningTextHtml = `
-                    <div style="font-size: 11px; color: var(--warning-dark); font-weight: 600; margin-top: 4px;">⚠️ You already have a payment awaiting gym approval.</div>
+                    <div style="font-size: 11px; color: var(--warning-dark); font-weight: 600; margin-top: 4px; display: flex; align-items: center; gap: 4px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> You already have a payment awaiting gym approval.</div>
                 `;
             } else {
                 actionBtnHtml = `
@@ -3551,7 +3556,7 @@ function renderAchievementsSubScreen() {
         };
         
         card.innerHTML = `
-            <div class="badge-card-icon">${ach.unlocked ? ach.icon : '🔒'}</div>
+            <div class="badge-card-icon">${ach.unlocked ? ach.icon : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'}</div>
             <div class="badge-card-title">${ach.name}</div>
             <div class="badge-card-requirement">${ach.unlocked ? 'Unlocked' : ach.requirement}</div>
         `;
@@ -3645,7 +3650,7 @@ async function renderLeaderboardSubScreen() {
         if (currentMemberRank === 0) {
             motivateText.innerText = "Check in to see where you rank on the leaderboard!";
         } else if (currentMemberRank <= 10) {
-            motivateText.innerText = `🔥 Amazing! You are ranked #${currentMemberRank} in the Top 10! Keep defending your spot.`;
+            motivateText.innerText = `Amazing! You are ranked #${currentMemberRank} in the Top 10! Keep defending your spot.`;
         } else {
             const diff = currentMemberRank - 10;
             motivateText.innerText = `You're just ${diff} more check-ins away from reaching the Top 10!`;
@@ -3802,7 +3807,7 @@ function renderInsightsSubScreen() {
         card.style.gap = '12px';
         
         card.innerHTML = `
-            <div style="font-size: 18px;">💡</div>
+            <div style="color: var(--accent); display: flex; align-items: center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="9" y1="18" x2="15" y2="18"></line><line x1="10" y1="22" x2="14" y2="22"></line><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path></svg></div>
             <div style="flex: 1; font-size: 12.5px; color: var(--text-secondary); line-height: 1.4; font-weight: 500;">
                 ${text}
             </div>
@@ -3964,7 +3969,7 @@ async function renderEmergencyContacts() {
         }
 
         if (!emergencyContacts.length) {
-            container.innerHTML = '<div class="notifications-empty-state"><span aria-hidden="true">☎</span><h3>No Emergency Contacts Added</h3><p>Add an emergency contact so the gym can reach someone if needed.</p></div>';
+            container.innerHTML = '<div class="notifications-empty-state"><span aria-hidden="true" style="display: flex; justify-content: center; margin-bottom: 8px;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg></span><h3>No Emergency Contacts Added</h3><p>Add an emergency contact so the gym can reach someone if needed.</p></div>';
             return;
         }
 
@@ -4160,7 +4165,7 @@ function renderBodyStatsSubScreen() {
             progressTextEl.innerHTML = `Current: ${weightKg} kg &bull; Goal: ${goalKg} kg`;
             const diff = weightKg - goalKg;
             if (diff <= 0) {
-                progressRemEl.innerText = 'Goal Achieved 🎉';
+                progressRemEl.innerText = 'Goal Achieved';
             } else {
                 progressRemEl.innerText = `${parseFloat(diff.toFixed(1))} kg to goal`;
             }

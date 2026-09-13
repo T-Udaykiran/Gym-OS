@@ -19,45 +19,138 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics-compat.js"></script>
     <script src="/shared/firebase-init.js"></script>
+    <script>
+        if (localStorage.getItem('gymos_owner_auth') === 'true') {
+            document.documentElement.classList.add('auth-session-precheck');
+        }
+    </script>
+    <style>
+        html.auth-session-precheck #loginOverlay {
+            display: none !important;
+        }
+        #authSplashLoader {
+            position: fixed;
+            inset: 0;
+            background: #ffffff;
+            z-index: 99998;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 14px;
+        }
+        html.auth-session-precheck #authSplashLoader {
+            display: flex !important;
+        }
+        .splash-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(15, 23, 42, 0.1);
+            border-top-color: #0f172a;
+            border-radius: 50%;
+            animation: spinSplash 0.7s linear infinite;
+        }
+        @keyframes spinSplash {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 
 <body>
 
+    <!-- ================= SPLASH LOADER (PREVENTS REFRESH FLICKER) ================= -->
+    <div id="authSplashLoader">
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 20px; color: #0f172a; letter-spacing: 0.05em;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color: #0f172a; fill: #0f172a;">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>GYM OS</span>
+        </div>
+        <div class="splash-spinner"></div>
+    </div>
+
     <!-- ================= AUTHENTICATION OVERLAY ================= -->
     <div id="loginOverlay" class="login-overlay">
         <div class="login-split-container">
-            <!-- Left panel: Dark illustrations and taglines -->
+            <!-- Left Section: Showcase & Branding -->
             <div class="login-left-panel">
-                <div class="illustration-container">
-                    <img src="/admin/login_illustration.png" alt="Dashboard Mockup Illustration" style="max-width: 90%; max-height: 420px; object-fit: contain;">
+                <div class="brand-badge-pill">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    <span>GYMOS OPERATING SYSTEM</span>
                 </div>
                 
                 <div class="tagline-container">
                     <h2 class="tagline-title">One Platform to Streamline Every Gym Operation</h2>
-                    <p class="tagline-desc">Manage members, attendance, payments, and approvals from one powerful dashboard.</p>
+                    <p class="tagline-desc">Manage members, attendance, billing, and check-in verifications from one unified high-speed dashboard.</p>
+                </div>
+
+                <!-- Showcase Highlights -->
+                <div class="login-feature-list">
+                    <div class="login-feature-item">
+                        <div class="login-feature-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                        </div>
+                        <div class="login-feature-text">
+                            <strong>Real-Time Member Tracking</strong>
+                            <span>Instant active, expired, and pending status directory</span>
+                        </div>
+                    </div>
+                    <div class="login-feature-item">
+                        <div class="login-feature-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        </div>
+                        <div class="login-feature-text">
+                            <strong>Entrance QR Code Check-Ins</strong>
+                            <span>Front-desk scanner with sub-second attendance verification</span>
+                        </div>
+                    </div>
+                    <div class="login-feature-item">
+                        <div class="login-feature-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                        </div>
+                        <div class="login-feature-text">
+                            <strong>Automated Billings & Invoices</strong>
+                            <span>UPI payments, PDF receipts, and pending dues tracking</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="illustration-container">
+                    <img src="/admin/login_illustration.png" alt="Dashboard Mockup Illustration" class="login-hero-img">
                 </div>
             </div>
             
-            <!-- Right panel: Login form and footers -->
+            <!-- Right Section: Login Form -->
             <div class="login-right-panel">
                 <div class="gymos-logo-top">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color: #0f172a; fill: #0f172a; width: 18px; height: 18px;">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
+                    <div class="gymos-icon-box">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </div>
                     <span>GYM OS</span>
                 </div>
                 
                 <div class="login-form-center">
-                    <h2 class="login-title">Welcome Back!</h2>
-                    <p class="login-subtitle">Please enter your details to sign in your account</p>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                        <h2 class="login-title">Welcome Back!</h2>
+                        <button type="button" class="demo-quickfill-badge" onclick="fillDemoOwnerCredentials()" title="Quick fill demo credentials">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                            Demo Fill
+                        </button>
+                    </div>
+                    <p class="login-subtitle">Please enter your credentials to sign in to your owner account</p>
                     
                     <div id="loginError" style="display: none; background-color: var(--danger-light); color: var(--danger-dark); border: 1px solid rgba(239, 68, 68, 0.1); padding: 12px 14px; border-radius: 8px; font-size: 13.5px; font-weight: 500; margin-bottom: 20px;"></div>
                     
-                    <form id="loginForm">
+                    <form id="loginForm" autocomplete="on">
                         <div class="login-input-group">
-                            <label for="loginEmail">Email</label>
-                            <input type="email" id="loginEmail" class="login-input-control" placeholder="johndoe@mail.com" required>
+                            <label for="loginEmail">Email Address</label>
+                            <input type="email" id="loginEmail" name="email" class="login-input-control" placeholder="owner@gymos.com" autocomplete="username email" required>
                         </div>
                         
                         <div class="login-input-group">
@@ -66,9 +159,8 @@
                                 <a href="#" id="forgotPasswordLink" onclick="openForgotPasswordFlow(event)" style="font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none; cursor: pointer;">Forgot Password?</a>
                             </div>
                             <div class="password-wrapper">
-                                <input type="password" id="loginPassword" class="login-input-control" placeholder="minimum 8 character" required>
-                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility()" tabindex="-1">
-                                    <!-- Eye icon -->
+                                <input type="password" id="loginPassword" name="password" class="login-input-control" placeholder="Enter your password" autocomplete="current-password" required>
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility()" tabindex="-1" title="Toggle password visibility">
                                     <svg id="passwordEyeIcon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                         <circle cx="12" cy="12" r="3"></circle>
@@ -77,13 +169,20 @@
                             </div>
                         </div>
 
-                        <button type="submit" class="login-btn-primary">Sign In</button>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #64748b; cursor: pointer; user-select: none;">
+                                <input type="checkbox" id="rememberEmailCheckbox" style="accent-color: var(--gold); width: 16px; height: 16px;">
+                                <span>Remember my email</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="loginSubmitBtn" class="login-btn-primary">Sign In to Dashboard</button>
                     </form>
                 </div>
                 
                 <!-- Footer row -->
                 <div class="login-footer-row">
-                    <span>© 2026 Vikartha Digital Solutions</span>
+                    <span>&copy; 2026 FitZone Gym &bull; GymOS</span>
                     <div class="login-footer-links">
                         <a href="#">Privacy Policy</a>
                         <a href="#">Support</a>
@@ -156,7 +255,9 @@
             </button>
             <div class="brand-section" style="display: flex; align-items: center; justify-content: space-between; position: relative;">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <div class="brand-logo-fitzone">⚡</div>
+                    <div class="brand-logo-fitzone">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                    </div>
                     <div class="brand-title-fitzone">
                         <span class="brand-main">FitZone</span>
                         <span class="brand-sub">Gym Management</span>
@@ -217,14 +318,14 @@
                         </svg>
                         <span class="nav-text">Expiring Soon</span>
                     </a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="win-back" data-tooltip="Win Back Members">
+                <li class="nav-item" style="display: none;"><a class="nav-link" data-tab="win-back" data-tooltip="Win Back Members">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
                         </svg>
                         <span class="nav-text">Win Back Members</span>
                     </a></li>
-                <li class="nav-item"><a class="nav-link" data-tab="revenue-analytics" data-tooltip="Revenue Analytics">
+                <li class="nav-item" style="display: none;"><a class="nav-link" data-tab="revenue-analytics" data-tooltip="Revenue Analytics">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -302,7 +403,9 @@
             <!-- MOBILE TOP BAR -->
             <header class="mobile-top-bar">
                 <div class="mobile-brand">
-                    <span class="brand-logo-fitzone-mini" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; background-color: rgba(234, 179, 8, 0.1); border: 2px solid var(--gold); border-radius: 8px; color: var(--gold); font-size: 13px; font-weight: bold; margin-right: 8px;">⚡</span>
+                    <span class="brand-logo-fitzone-mini" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; background-color: rgba(234, 179, 8, 0.1); border: 2px solid var(--gold); border-radius: 8px; color: var(--gold); margin-right: 8px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                    </span>
                     <span id="mobileBrandText" style="font-weight: 700; font-size: 16px; color: var(--text-primary);">FitZone Admin</span>
                 </div>
                 <button class="mobile-bell-btn" id="mobileBellBtn" onclick="toggleNotificationPopover(event)" type="button" title="Notifications" aria-label="Notifications">
@@ -318,7 +421,7 @@
                 <!-- DASHBOARD SPECIFIC HEADER & UTILITY BAR -->
                 <header class="header-bar-fitzone" style="margin-bottom: 24px;">
                     <div class="greeting-block">
-                        <span class="greeting-text" style="font-size: 13.5px; color: var(--text-secondary); display: block;"><span id="greetingTimePrefix">Good Morning</span>, <strong id="greetingUser">Ramesh 👋</strong></span>
+                        <span class="greeting-text" style="font-size: 13.5px; color: var(--text-secondary); display: block;"><span id="greetingTimePrefix">Good Morning</span>, <strong id="greetingUser">Ramesh</strong></span>
                         <h1 class="gym-title-headline" style="font-size: 24px; font-weight: 800; color: #fff; margin: 4px 0;" id="headerGymName">FitZone Gym</h1>
                         <span id="realTimeHeaderDate" style="font-size: 12px; color: var(--text-tertiary); display: block;"></span>
                     </div>
@@ -400,7 +503,7 @@
                     </div>
 
                     <!-- Total Revenue -->
-                    <div class="kpi-card kpi-card-nav" style="cursor: pointer;" onclick="showTab('revenue-analytics')">
+                    <div class="kpi-card kpi-card-nav" style="cursor: pointer;" onclick="showTab('payments')">
                         <div class="kpi-h-row">
                             <span class="kpi-label">Total Revenue</span>
                             <div class="kpi-badge-icon kpi-avatar-orange" style="background-color: rgba(245, 158, 11, 0.1); color: #f59e0b;">
@@ -412,7 +515,7 @@
                             <span id="statRevenueGrowthArrow">↑</span> <span id="statRevenueGrowthVal">0%</span>
                             <span style="font-weight: normal; color: var(--text-tertiary); font-size: 11px;">vs last month</span>
                         </span>
-                        <button class="kpi-nav-btn" type="button" title="View Revenue Analytics" aria-label="View Revenue Analytics">
+                        <button class="kpi-nav-btn" type="button" title="View Payments" aria-label="View Payments">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
                         </button>
                     </div>
@@ -455,8 +558,8 @@
                         </button>
                     </div>
 
-                    <!-- Win Back Members -->
-                    <div class="kpi-card kpi-card-nav" style="cursor: pointer;" onclick="showTab('win-back')">
+                    <!-- Win Back Members (Hidden) -->
+                    <div class="kpi-card kpi-card-nav" style="display: none;" onclick="showTab('win-back')">
                         <div class="kpi-h-row">
                             <span class="kpi-label">Win Back Members</span>
                             <div class="kpi-badge-icon" style="background-color: rgba(239, 68, 68, 0.1); color: #ef4444; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
@@ -653,20 +756,31 @@
                                         <input type="text" id="memberSearch" placeholder="Search by name or phone..."
                                             oninput="resetMemberPageAndFetch()">
                                     </div>
-                                    <select id="memberStatusFilter" class="input-control"
-                                        style="padding: 10px 14px; font-size: 13.5px; margin-bottom: 0;"
-                                        onchange="resetMemberPageAndFetch()">
-                                        <option value="">All Statuses</option>
-                                        <option value="active">Active Members</option>
-                                        <option value="suspended">Suspended Members</option>
-                                        <option value="expired">Expired Members</option>
-                                        <option value="pending">Pending Approvals</option>
-                                    </select>
+                                    <input type="hidden" id="memberStatusFilter" value="">
+                                    <input type="hidden" id="memberPageSize" value="25">
+                                    <button type="button" class="btn btn-secondary table-filter-btn" id="memberFilterBtn" onclick="openOrderFilterModal('members')" title="Filter & Order Members">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                            <line x1="4" y1="21" x2="4" y2="14"></line>
+                                            <line x1="4" y1="10" x2="4" y2="3"></line>
+                                            <line x1="12" y1="21" x2="12" y2="12"></line>
+                                            <line x1="12" y1="8" x2="12" y2="3"></line>
+                                            <line x1="20" y1="21" x2="20" y2="16"></line>
+                                            <line x1="20" y1="12" x2="20" y2="3"></line>
+                                            <line x1="1" y1="14" x2="7" y2="14"></line>
+                                            <line x1="9" y1="8" x2="15" y2="8"></line>
+                                            <line x1="17" y1="16" x2="23" y2="16"></line>
+                                        </svg>
+                                        <span>Filter & Order</span>
+                                        <span class="active-filter-dot" id="memberFilterIndicator" style="display: none;"></span>
+                                    </button>
                                 </div>
                                 <div class="premium-table-header-right">
                                     <div class="vis-dropdown-relative">
                                         <button class="btn btn-secondary" onclick="toggleVisDropdown('memberVisMenu')"
-                                            style="font-size:13.5px; padding: 10px 14px;">Columns ▾</button>
+                                            style="font-size:13.5px; padding: 10px 14px; display: inline-flex; align-items: center; gap: 6px;">
+                                            <span>Columns</span>
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                        </button>
                                         <div id="memberVisMenu" class="vis-dropdown-menu">
                                             <label class="vis-dropdown-item"><input type="checkbox" checked
                                                     onchange="toggleTableColumn('membersTable', 'col-id')"> Member
@@ -693,15 +807,6 @@
                                     </div>
                                     <button class="btn btn-secondary" onclick="exportMembersCSV()"
                                         style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
-
-                                    <select id="memberPageSize" class="input-control"
-                                        style="padding: 10px 10px; font-size: 13px; width: 80px; margin-bottom: 0;"
-                                        onchange="resetMemberPageAndFetch()">
-                                        <option value="10">10</option>
-                                        <option value="25" selected>25</option>
-                                        <option value="50">50</option>
-                                        <option value="100">100</option>
-                                    </select>
 
                                     <button class="btn btn-primary" onclick="openModal('addMemberModal')"
                                         style="font-size:13.5px; padding: 10px 18px; font-weight:600;"><span
@@ -757,14 +862,31 @@
                                 <input type="text" id="attendanceSearch" placeholder="Search check-ins by name/phone..."
                                     oninput="resetAttendancePageAndFetch()">
                             </div>
-                            <input type="date" id="attendanceDateFilter" class="input-control"
-                                style="padding: 10px 14px; font-size: 13.5px; margin-bottom: 0;"
-                                onchange="resetAttendancePageAndFetch()">
+                            <input type="hidden" id="attendanceDateFilter" value="">
+                            <input type="hidden" id="attendancePageSize" value="25">
+                            <button type="button" class="btn btn-secondary table-filter-btn" id="attendanceFilterBtn" onclick="openOrderFilterModal('attendance')" title="Filter & Order Attendance">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                                </svg>
+                                <span>Filter & Order</span>
+                                <span class="active-filter-dot" id="attendanceFilterIndicator" style="display: none;"></span>
+                            </button>
                         </div>
                         <div class="premium-table-header-right">
                             <div class="vis-dropdown-relative">
                                 <button class="btn btn-secondary" onclick="toggleVisDropdown('attendanceVisMenu')"
-                                    style="font-size:13.5px; padding: 10px 14px;">Columns ▾</button>
+                                    style="font-size:13.5px; padding: 10px 14px; display: inline-flex; align-items: center; gap: 6px;">
+                                    <span>Columns</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                </button>
                                 <div id="attendanceVisMenu" class="vis-dropdown-menu">
                                     <label class="vis-dropdown-item"><input type="checkbox" checked
                                             onchange="toggleTableColumn('attendanceTable', 'col-phone')"> Phone</label>
@@ -783,15 +905,6 @@
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                                 Monthly View
                             </button>
-
-                            <select id="attendancePageSize" class="input-control"
-                                style="padding: 10px 10px; font-size: 13px; width: 80px; margin-bottom: 0;"
-                                onchange="resetAttendancePageAndFetch()">
-                                <option value="10">10</option>
-                                <option value="25" selected>25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
                         </div>
                     </div>
 
@@ -838,15 +951,23 @@
                                 <input type="text" id="paymentSearch" placeholder="Search invoices..."
                                     oninput="resetPaymentPageAndFetch()">
                             </div>
-                            <select id="paymentStatusFilter" class="input-control"
-                                style="padding: 10px 14px; font-size: 13.5px; margin-bottom: 0;"
-                                onchange="resetPaymentPageAndFetch()">
-                                <option value="">All Billings</option>
-                                <option value="paid">Paid Receipts</option>
-                                <option value="pending">Pending Bills</option>
-                                <option value="overdue">Overdue Reminders</option>
-                                <option value="pending_approval">Pending Approval</option>
-                            </select>
+                            <input type="hidden" id="paymentStatusFilter" value="">
+                            <input type="hidden" id="paymentPageSize" value="25">
+                            <button type="button" class="btn btn-secondary table-filter-btn" id="paymentFilterBtn" onclick="openOrderFilterModal('payments')" title="Filter & Order Payments">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                                </svg>
+                                <span>Filter & Order</span>
+                                <span class="active-filter-dot" id="paymentFilterIndicator" style="display: none;"></span>
+                            </button>
                         </div>
                         <div class="premium-table-header-right">
                             <div class="vis-dropdown-relative">
@@ -867,15 +988,6 @@
                             </div>
                             <button class="btn btn-secondary" onclick="exportPaymentsCSV()"
                                 style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
-
-                            <select id="paymentPageSize" class="input-control"
-                                style="padding: 10px 10px; font-size: 13px; width: 80px; margin-bottom: 0;"
-                                onchange="resetPaymentPageAndFetch()">
-                                <option value="10">10</option>
-                                <option value="25" selected>25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
 
                             <button class="btn btn-primary" onclick="openModal('recordPaymentModal')"
                                 style="font-size:13.5px; padding: 10px 18px;">Record Manual Payment</button>
@@ -954,6 +1066,7 @@
                 <div class="premium-table-card">
                     <div class="premium-table-header">
                         <div class="premium-table-header-left">
+                            <span id="expiringSoonTotalInfo" style="font-size:13.5px; font-weight:600; color:var(--text-secondary);">Total: 0 members</span>
                         </div>
                         <div class="premium-table-header-right">
                             <button class="btn btn-secondary" onclick="downloadExpiringSoonCSV()" style="font-size:13.5px; padding: 10px 14px;">Export CSV</button>
@@ -973,6 +1086,10 @@
                             <tbody id="expiringSoonTableBody"></tbody>
                         </table>
                     </div>
+                    <div class="premium-table-footer">
+                        <div class="pagination-info" id="expiringSoonFooterTotalInfo">Total: 0 members</div>
+                    </div>
+                </div>
             </section>
 
             <!-- ================= TAB: WIN BACK MEMBERS ================= -->
@@ -1422,108 +1539,195 @@
                     <h2>Settings</h2>
                     <p>Configure GymOS preferences and system settings.</p>
                 </div>
-                <div class="card" style="max-width: 650px;">
-                    <form id="settingsForm">
-                        <div class="input-group">
-                            <label for="settingsGymCode">Gym ID</label>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="settingsGymCode" class="input-control" style="text-transform: uppercase;" placeholder="e.g. FITZONE-X7K2">
-                                <button type="button" class="btn btn-secondary" style="white-space: nowrap;" onclick="copyGymCode()">Copy</button>
-                            </div>
-                            <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">Share this
-                                with members so they can find your gym when they register. Editing it takes effect
-                                immediately - members already registered are unaffected.</small>
-                        </div>
-                        <div class="input-group">
-                            <label for="settingsGymName">Gym / Business Name</label>
-                            <input type="text" id="settingsGymName" class="input-control" required>
-                        </div>
-                        <div class="input-group">
-                            <label for="settingsGymPhone">WhatsApp / Phone Number</label>
-                            <input type="text" id="settingsGymPhone" class="input-control">
-                        </div>
-                        <div class="input-group">
-                            <label for="settingsGymAddress">Physical Address</label>
-                            <input type="text" id="settingsGymAddress" class="input-control">
-                        </div>
-                        <div class="input-group">
-                            <label for="settingsQRToken">Universal Gym Check-In QR Token</label>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="settingsQRToken" class="input-control" disabled style="background-color: var(--bg-hover); font-family: monospace; font-weight: 600;" placeholder="gymos-token-...">
-                                <button type="button" class="btn btn-secondary" style="white-space: nowrap;" onclick="copyQRToken()">Copy</button>
-                                <button type="button" class="btn btn-secondary" style="white-space: nowrap; color: var(--danger-dark); border-color: rgba(239,68,68,0.3);" onclick="regenerateQRToken()">Regenerate</button>
-                            </div>
-                            <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px; display: block;">🔒 System Generated — Modifying this token invalidates all existing QR codes. Members will need to refresh scan codes.</small>
-                        </div>
 
-                        <div class="input-group">
-                            <label>Gym Logo</label>
-                            <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
-                                <div id="gymLogoPreviewContainer" style="width: 64px; height: 64px; border-radius: 12px; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0;">
-                                    <img id="gymLogoPreview" src="" alt="Gym Logo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-                                    <span id="gymLogoFallback" style="font-weight: 700; font-size: 24px; color: var(--accent);">⚡</span>
-                                </div>
-                                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                        <label for="gymLogoFileInput" class="btn btn-secondary" style="cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; margin-bottom: 0;">
-                                            Upload Logo
-                                        </label>
-                                        <input type="file" id="gymLogoFileInput" accept="image/png, image/jpeg, image/webp" style="display: none;" onchange="handleGymLogoSelect(event)">
-                                        <button type="button" id="btnRemoveGymLogo" class="btn btn-ghost" style="font-size: 13px; color: var(--danger-dark); display: none;" onclick="removeGymLogo()">Remove Logo</button>
-                                    </div>
-                                    <small style="color: var(--text-tertiary); font-size: 12px;">PNG, JPG or WEBP. Maximum file size 2MB.</small>
-                                </div>
-                            </div>
-                        <div class="input-group">
-                            <label for="settingsGymEmail">Contact Email Address</label>
-                            <input type="email" id="settingsGymEmail" class="input-control" placeholder="gym@example.com">
-                        </div>
-                        <div class="input-group">
-                            <label for="settingsGymGST">GST / Tax Number (optional)</label>
-                            <input type="text" id="settingsGymGST" class="input-control" placeholder="e.g. 27AAAAA1111A1Z1">
-                        </div>
-                        <div class="input-group">
-                            <label for="settingsReceiptFooter">Custom Receipt Footer</label>
-                            <textarea id="settingsReceiptFooter" class="input-control" rows="3" placeholder="Thank you message, terms, or policy details..."></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary" style="margin-top: 12px;">Save Changes</button>
-                    </form>
+                <!-- Settings Subtab Navigation -->
+                <div class="settings-subtab-bar">
+                    <button type="button" class="settings-subtab-btn active" id="subtabBtnProfile" onclick="switchSettingsSubtab('profile')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                        <span>Gym Profile</span>
+                    </button>
+                    <button type="button" class="settings-subtab-btn" id="subtabBtnQR" onclick="switchSettingsSubtab('qr')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        <span>Entrance QR Code</span>
+                    </button>
+                    <button type="button" class="settings-subtab-btn" id="subtabBtnBranding" onclick="switchSettingsSubtab('branding')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        <span>Branding & Receipts</span>
+                    </button>
+                    <button type="button" class="settings-subtab-btn" id="subtabBtnOwner" onclick="switchSettingsSubtab('owner')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        <span>Owner Profile</span>
+                    </button>
                 </div>
 
-                <div class="card" style="max-width: 650px; margin-top: 24px;">
-                    <h3>Owner Profile</h3>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Configure your administrator name and profile photo.</p>
-                    <form id="ownerProfileForm">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px;">
-                            <div class="input-group" style="margin-bottom: 0;">
-                                <label for="settingsOwnerFirstName">First Name</label>
-                                <input type="text" id="settingsOwnerFirstName" class="input-control" placeholder="First Name">
-                            </div>
-                            <div class="input-group" style="margin-bottom: 0;">
-                                <label for="settingsOwnerLastName">Last Name</label>
-                                <input type="text" id="settingsOwnerLastName" class="input-control" placeholder="Last Name">
-                            </div>
-                        </div>
-                        <div class="input-group">
-                            <label>Profile Photo</label>
-                            <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
-                                <div id="ownerPhotoPreviewContainer" style="width: 50px; height: 50px; border-radius: 50%; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0;">
-                                    <img id="ownerPhotoPreview" src="" alt="Owner Photo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-                                    <span id="ownerPhotoFallback" style="font-weight: 700; font-size: 18px; color: var(--accent);">OW</span>
+                <form id="settingsForm">
+                    <!-- Pane 1: Gym Profile -->
+                    <div class="settings-subtab-pane active" id="settingsPaneProfile">
+                        <div class="card" style="max-width: 700px;">
+                            <h3 style="margin-top: 0; margin-bottom: 6px; font-size: 16px;">Gym Information</h3>
+                            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 20px;">Basic business identity and member discovery code.</p>
+                            
+                            <div class="input-group">
+                                <label for="settingsGymCode">Gym ID</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="settingsGymCode" class="input-control" style="text-transform: uppercase;" placeholder="e.g. FITZONE-X7K2">
+                                    <button type="button" class="btn btn-secondary" style="white-space: nowrap;" onclick="copyGymCode()">Copy</button>
                                 </div>
-                                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
-                                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                        <label for="ownerPhotoFileInput" class="btn btn-secondary" style="cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; margin-bottom: 0;">
-                                            Upload Photo
-                                        </label>
-                                        <input type="file" id="ownerPhotoFileInput" accept="image/png, image/jpeg, image/webp" style="display: none;" onchange="handleOwnerPhotoSelect(event)">
-                                        <button type="button" id="btnRemoveOwnerPhoto" class="btn btn-ghost" style="font-size: 13px; color: var(--danger-dark); display: none;" onclick="removeOwnerPhoto()">Remove</button>
+                                <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px;">Share this with members so they can find your gym when they register. Editing it takes effect immediately - members already registered are unaffected.</small>
+                            </div>
+                            <div class="input-group">
+                                <label for="settingsGymName">Gym / Business Name</label>
+                                <input type="text" id="settingsGymName" class="input-control" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="settingsGymPhone">WhatsApp / Phone Number</label>
+                                <input type="text" id="settingsGymPhone" class="input-control">
+                            </div>
+                            <div class="input-group">
+                                <label for="settingsGymAddress">Physical Address</label>
+                                <input type="text" id="settingsGymAddress" class="input-control">
+                            </div>
+                            <div class="input-group">
+                                <label for="settingsGymEmail">Contact Email Address</label>
+                                <input type="email" id="settingsGymEmail" class="input-control" placeholder="gym@example.com">
+                            </div>
+                            <div class="input-group">
+                                <label for="settingsGymGST">GST / Tax Number (optional)</label>
+                                <input type="text" id="settingsGymGST" class="input-control" placeholder="e.g. 27AAAAA1111A1Z1">
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="margin-top: 8px;">Save Profile Changes</button>
+                        </div>
+                    </div>
+
+                    <!-- Pane 2: Entrance QR Code -->
+                    <div class="settings-subtab-pane" id="settingsPaneQR">
+                        <div class="card" style="max-width: 700px;">
+                            <h3 style="margin-top: 0; margin-bottom: 6px; font-size: 16px;">Universal Gym Check-In QR</h3>
+                            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 20px;">Desk QR code for member attendance tracking and instant check-ins.</p>
+
+                            <div class="input-group">
+                                <label for="settingsQRToken">Universal Gym Check-In QR Token</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="settingsQRToken" class="input-control" disabled style="background-color: var(--bg-hover); font-family: monospace; font-weight: 600;" placeholder="gymos-token-...">
+                                    <button type="button" class="btn btn-secondary" style="white-space: nowrap;" onclick="copyQRToken()">Copy</button>
+                                    <button type="button" class="btn btn-secondary" style="white-space: nowrap; color: var(--danger-dark); border-color: rgba(239,68,68,0.3);" onclick="regenerateQRToken()">Regenerate</button>
+                                </div>
+                                <small style="color: var(--text-tertiary); font-size: 12px; margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                                    System Generated — Modifying this token invalidates all existing QR codes. Members will need to refresh scan codes.
+                                </small>
+                            </div>
+
+                            <!-- Settings Download QR Code Card -->
+                            <div style="padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card); margin-bottom: 24px; box-shadow: var(--shadow-sm);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                                    <div>
+                                        <h4 style="margin: 0; font-size: 14.5px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                                            Gym Entrance Check-In QR Code
+                                        </h4>
+                                        <p style="margin: 4px 0 0 0; font-size: 12.5px; color: var(--text-secondary);">Download or display this QR code at your reception desk for seamless member check-ins.</p>
+                                    </div>
+                                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                        <button type="button" class="btn btn-primary" onclick="downloadGymQRCode()" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 8px 16px; font-weight: 600;">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                            <span>Download QR Code</span>
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" onclick="openModal('gymQRModal')" style="font-size: 13px; padding: 8px 14px;">
+                                            Full Screen
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap; background: var(--bg-raised); padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                    <div id="settingsQRCodeContainer" style="background: white; padding: 10px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; min-width: 128px; min-height: 128px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+                                        <!-- QR Code canvas renders here -->
+                                    </div>
+                                    <div style="flex: 1; min-width: 200px;">
+                                        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Desk Scanner Active</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px;">Members scan this desk QR code using the GymOS Member PWA to log their attendance.</div>
+                                        <div id="settingsQRTokenBadge" style="display: inline-block; font-family: monospace; font-size: 11.5px; background: var(--bg-hover); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color); color: var(--text-secondary); font-weight: 600;">
+                                            Token: -
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                            <button type="submit" class="btn btn-primary">Save Settings</button>
                         </div>
-                        <button type="submit" id="btnUpdateOwnerProfile" class="btn btn-primary" style="margin-top: 12px;">Update Profile</button>
-                    </form>
+                    </div>
+
+                    <!-- Pane 3: Branding & Receipts -->
+                    <div class="settings-subtab-pane" id="settingsPaneBranding">
+                        <div class="card" style="max-width: 700px;">
+                            <h3 style="margin-top: 0; margin-bottom: 6px; font-size: 16px;">Visual Branding & Receipts</h3>
+                            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 20px;">Upload your gym logo and customize printable member receipts.</p>
+
+                            <div class="input-group">
+                                <label>Gym Logo</label>
+                                <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                                    <div id="gymLogoPreviewContainer" style="width: 64px; height: 64px; border-radius: 12px; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0;">
+                                        <img id="gymLogoPreview" src="" alt="Gym Logo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                        <span id="gymLogoFallback" style="font-weight: 700; font-size: 24px; color: var(--accent); display: flex; align-items: center; justify-content: center;">
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                        </span>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+                                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                            <label for="gymLogoFileInput" class="btn btn-secondary" style="cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; margin-bottom: 0;">
+                                                Upload Logo
+                                            </label>
+                                            <input type="file" id="gymLogoFileInput" accept="image/png, image/jpeg, image/webp" style="display: none;" onchange="handleGymLogoSelect(event)">
+                                            <button type="button" id="btnRemoveGymLogo" class="btn btn-ghost" style="font-size: 13px; color: var(--danger-dark); display: none;" onclick="removeGymLogo()">Remove Logo</button>
+                                        </div>
+                                        <small style="color: var(--text-tertiary); font-size: 12px;">PNG, JPG or WEBP. Maximum file size 2MB.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label for="settingsReceiptFooter">Custom Receipt Footer</label>
+                                <textarea id="settingsReceiptFooter" class="input-control" rows="3" placeholder="Thank you message, terms, or policy details..."></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="margin-top: 8px;">Save Branding</button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Pane 4: Owner Profile -->
+                <div class="settings-subtab-pane" id="settingsPaneOwner">
+                    <div class="card" style="max-width: 700px;">
+                        <h3 style="margin-top: 0; margin-bottom: 6px; font-size: 16px;">Owner Profile</h3>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Configure your administrator name and profile photo.</p>
+                        <form id="ownerProfileForm">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px;">
+                                <div class="input-group" style="margin-bottom: 0;">
+                                    <label for="settingsOwnerFirstName">First Name</label>
+                                    <input type="text" id="settingsOwnerFirstName" class="input-control" placeholder="First Name">
+                                </div>
+                                <div class="input-group" style="margin-bottom: 0;">
+                                    <label for="settingsOwnerLastName">Last Name</label>
+                                    <input type="text" id="settingsOwnerLastName" class="input-control" placeholder="Last Name">
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label>Profile Photo</label>
+                                <div style="display: flex; align-items: center; gap: 16px; margin-top: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-card);">
+                                    <div id="ownerPhotoPreviewContainer" style="width: 50px; height: 50px; border-radius: 50%; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0;">
+                                        <img id="ownerPhotoPreview" src="" alt="Owner Photo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                        <span id="ownerPhotoFallback" style="font-weight: 700; font-size: 18px; color: var(--accent);">OW</span>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+                                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                            <label for="ownerPhotoFileInput" class="btn btn-secondary" style="cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; margin-bottom: 0;">
+                                                Upload Photo
+                                            </label>
+                                            <input type="file" id="ownerPhotoFileInput" accept="image/png, image/jpeg, image/webp" style="display: none;" onchange="handleOwnerPhotoSelect(event)">
+                                            <button type="button" id="btnRemoveOwnerPhoto" class="btn btn-ghost" style="font-size: 13px; color: var(--danger-dark); display: none;" onclick="removeOwnerPhoto()">Remove</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" id="btnUpdateOwnerProfile" class="btn btn-primary" style="margin-top: 12px;">Update Profile</button>
+                        </form>
+                    </div>
                 </div>
             </section>
 
@@ -2143,6 +2347,102 @@
                 <div style="background-color: var(--bg-raised); border-radius: var(--radius-sm); padding: 6px 12px; font-size: 13px; font-weight: 500; font-family: monospace;"
                     id="qrTokenDisplayTxt">Token: -</div>
                 <button class="btn btn-secondary" onclick="downloadGymQRCode()" style="margin-top: 4px;">Download QR Image</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= CUSTOM UI CONFIRM MODAL ================= -->
+    <div id="customConfirmModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 420px; text-align: center;">
+            <div id="customConfirmIcon" class="ui-dialog-icon warning">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            </div>
+            <h3 id="customConfirmTitle" style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">Confirm Action</h3>
+            <p id="customConfirmMessage" style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 24px; white-space: pre-line;">Are you sure you want to proceed?</p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button type="button" class="btn btn-secondary" style="flex: 1; padding: 10px 16px; font-weight: 600;" onclick="handleCustomConfirmCancel()">Cancel</button>
+                <button type="button" id="customConfirmSubmitBtn" class="btn btn-primary" style="flex: 1; padding: 10px 16px; font-weight: 600;" onclick="handleCustomConfirmOk()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= CUSTOM UI ALERT MODAL ================= -->
+    <div id="customAlertModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 400px; text-align: center;">
+            <div id="customAlertIcon" class="ui-dialog-icon info">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            </div>
+            <h3 id="customAlertTitle" style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">Notification</h3>
+            <p id="customAlertMessage" style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 24px; white-space: pre-line;"></p>
+            <button type="button" class="btn btn-primary" style="width: 100%; padding: 10px 16px; font-weight: 600;" onclick="closeModal('customAlertModal')">Got It</button>
+        </div>
+    </div>
+
+    <!-- ================= ORDER & FILTER MODAL ================= -->
+    <div id="orderFilterModal" class="modal-overlay">
+        <div class="modal-container" style="max-width: 440px; padding: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(59,130,246,0.1); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+                    </div>
+                    <div>
+                        <h3 id="orderModalTitle" style="font-size: 17px; font-weight: 700; margin: 0; color: var(--text-primary);">Filter & Sort</h3>
+                        <p id="orderModalSubtitle" style="font-size: 12px; color: var(--text-secondary); margin: 2px 0 0 0;">Customize table ordering and filters</p>
+                    </div>
+                </div>
+                <button type="button" class="modal-close" onclick="closeModal('orderFilterModal')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <!-- Tab Specific Filter Section (Dynamic) -->
+                <div id="orderModalFilterGroup" class="input-group" style="margin-bottom: 0;">
+                    <label id="orderModalFilterLabel" style="font-size: 13px; font-weight: 600;">Status Filter</label>
+                    <select id="orderModalFilterSelect" class="input-control">
+                        <!-- Populated dynamically based on active tab -->
+                    </select>
+                </div>
+
+                <!-- Sort Field Selection -->
+                <div class="input-group" style="margin-bottom: 0;">
+                    <label style="font-size: 13px; font-weight: 600;">Sort By</label>
+                    <select id="orderModalSortBy" class="input-control">
+                        <!-- Populated dynamically based on active tab -->
+                    </select>
+                </div>
+
+                <!-- Sort Direction -->
+                <div class="input-group" style="margin-bottom: 0;">
+                    <label style="font-size: 13px; font-weight: 600;">Sort Direction</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <button type="button" id="btnSortDesc" class="sort-dir-btn active" onclick="setModalSortDirection('desc')">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+                            <span>Descending</span>
+                        </button>
+                        <button type="button" id="btnSortAsc" class="sort-dir-btn" onclick="setModalSortDirection('asc')">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                            <span>Ascending</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Rows Per Page -->
+                <div class="input-group" style="margin-bottom: 0;">
+                    <label style="font-size: 13px; font-weight: 600;">Rows Per Page</label>
+                    <select id="orderModalPageSize" class="input-control">
+                        <option value="10">10 rows per page</option>
+                        <option value="25">25 rows per page</option>
+                        <option value="50">50 rows per page</option>
+                        <option value="100">100 rows per page</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 24px;">
+                <button type="button" class="btn btn-secondary" style="flex: 1; font-weight: 600;" onclick="resetOrderModalFilters()">Reset</button>
+                <button type="button" class="btn btn-primary" style="flex: 2; font-weight: 600;" onclick="applyOrderModalFilters()">Apply</button>
             </div>
         </div>
     </div>

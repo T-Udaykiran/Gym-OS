@@ -84,7 +84,7 @@
                         <button type="submit" class="auth-capsule-btn primary-btn" style="margin-top: 10px;">Login</button>
                     </form>
 
-                    <button id="secondaryLoginBtn" class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showRegisterView()">New to NGYM? Sign In</button>
+                    <button id="secondaryLoginBtn" class="auth-capsule-btn secondary-btn" style="margin-top: 14px;" onclick="showRegisterView()">New to NGYM? Sign Up</button>
                 </div>
 
                 <!-- 2b. FORGOT PASSWORD SCREEN -->
@@ -122,7 +122,7 @@
                 </div>
 
                 <!-- 3. REGISTER SCREEN -->
-                <div id="authRegisterView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.85) 100%), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=600&auto=format&fit=crop'); background-size: cover; background-position: center; justify-content: flex-end; padding: 24px 20px 40px; z-index: 5;">
+                <div id="authRegisterView" class="auth-subview" style="display: none; flex-direction: column; height: 100%; background: linear-gradient(180deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.95) 100%), url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=600&auto=format&fit=crop'); background-size: cover; background-position: center; justify-content: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 32px 20px 60px; z-index: 5;">
                     <div style="margin-bottom: 20px;">
                         <h1 id="registerGymName" style="font-size: 28px; font-weight: 900; color: #fff; letter-spacing: -0.02em; margin: 0;">Join NGYM</h1>
                         <p style="font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px; margin-bottom: 0;">Create your fitness profile today</p>
@@ -132,36 +132,36 @@
 
                     <form id="authRegisterForm" onsubmit="event.preventDefault();" style="display: flex; flex-direction: column; gap: 12px;">
                         <div class="input-block" style="display: flex; flex-direction: column; position: relative;">
-                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Select Your Gym</label>
-                            <input type="text" id="regGymSearchInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Search by Gym ID or gym name" autocomplete="off" oninput="handleGymSearchInput()" required>
+                            <label style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 6px; font-weight: 600; text-align: left;">Select Your Gym</label>
+                            <input type="text" id="regGymSearchInput" style="border-radius: 12px; height: 48px; background: #1c1c1e; border: 1.5px solid #3a3a3c; padding: 0 16px; font-size: 14px; color: #ffffff; width: 100%; box-sizing: border-box; outline: none;" placeholder="Search by Gym ID or gym name" autocomplete="off" oninput="handleGymSearchInput()" required>
                             <input type="hidden" id="regGymIdInput">
-                            <div id="regGymResultsDropdown" style="display:none; position:absolute; top: 100%; left:0; right:0; margin-top:6px; background:#1c1c1e; border:1.5px solid rgba(255,255,255,0.15); border-radius:14px; max-height:180px; overflow-y:auto; z-index:20;"></div>
+                            <div id="regGymResultsDropdown" style="display:none; position:absolute; top: 100%; left:0; right:0; margin-top:6px; background:#1c1c1e; border:1.5px solid rgba(255,255,255,0.2); border-radius:14px; max-height:180px; overflow-y:auto; z-index:20;"></div>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
-                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Full Name</label>
-                            <input type="text" id="regFullNameInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter Your Full Name" required>
+                            <label style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 6px; font-weight: 600; text-align: left;">Full Name</label>
+                            <input type="text" id="regFullNameInput" style="border-radius: 12px; height: 48px; background: #1c1c1e; border: 1.5px solid #3a3a3c; padding: 0 16px; font-size: 14px; color: #ffffff; width: 100%; box-sizing: border-box; outline: none;" placeholder="Enter Your Full Name" required>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
-                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Email Address</label>
-                            <input type="email" id="regEmailInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter email address" required>
+                            <label style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 6px; font-weight: 600; text-align: left;">Email Address</label>
+                            <input type="email" id="regEmailInput" style="border-radius: 12px; height: 48px; background: #1c1c1e; border: 1.5px solid #3a3a3c; padding: 0 16px; font-size: 14px; color: #ffffff; width: 100%; box-sizing: border-box; outline: none;" placeholder="Enter email address" required>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
-                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Phone Number</label>
-                            <input type="text" id="regPhoneInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter phone number" required>
+                            <label style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 6px; font-weight: 600; text-align: left;">Phone Number</label>
+                            <input type="text" id="regPhoneInput" style="border-radius: 12px; height: 48px; background: #1c1c1e; border: 1.5px solid #3a3a3c; padding: 0 16px; font-size: 14px; color: #ffffff; width: 100%; box-sizing: border-box; outline: none;" placeholder="Enter phone number" required>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
-                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Emergency Contact Name</label>
-                            <input type="text" id="regEmergencyNameInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter emergency contact name" required>
+                            <label style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 6px; font-weight: 600; text-align: left;">Emergency Contact Name</label>
+                            <input type="text" id="regEmergencyNameInput" style="border-radius: 12px; height: 48px; background: #1c1c1e; border: 1.5px solid #3a3a3c; padding: 0 16px; font-size: 14px; color: #ffffff; width: 100%; box-sizing: border-box; outline: none;" placeholder="Enter emergency contact name" required>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
-                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Emergency Contact Number</label>
-                            <input type="tel" id="regEmergencyNumberInput" pattern="[6-9][0-9]{9}" title="Enter a valid 10-digit mobile number" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter emergency contact number" required>
+                            <label style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 6px; font-weight: 600; text-align: left;">Emergency Contact Number</label>
+                            <input type="tel" id="regEmergencyNumberInput" pattern="[6-9][0-9]{9}" title="Enter a valid 10-digit mobile number" style="border-radius: 12px; height: 48px; background: #1c1c1e; border: 1.5px solid #3a3a3c; padding: 0 16px; font-size: 14px; color: #ffffff; width: 100%; box-sizing: border-box; outline: none;" placeholder="Enter emergency contact number" required>
                         </div>
                         <div class="input-block" style="display: flex; flex-direction: column;">
-                            <label style="font-size: 12.5px; color: rgba(255,255,255,0.6); margin-bottom: 6px; font-weight: 600; text-align: left;">Create Password</label>
-                            <input type="password" id="regPasswordInput" style="border-radius: 24px; height: 48px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255,255,255,0.15); padding: 0 20px; font-size: 13.5px; color: #fff; width: 100%; box-sizing: border-box;" placeholder="Enter password" required>
+                            <label style="font-size: 12px; color: rgba(255,255,255,0.75); margin-bottom: 6px; font-weight: 600; text-align: left;">Create Password</label>
+                            <input type="password" id="regPasswordInput" style="border-radius: 12px; height: 48px; background: #1c1c1e; border: 1.5px solid #3a3a3c; padding: 0 16px; font-size: 14px; color: #ffffff; width: 100%; box-sizing: border-box; outline: none;" placeholder="Enter password" required>
                         </div>
-                        <button type="submit" style="border-radius: 24px; height: 48px; background: #1c1c1e; border: 1.5px solid rgba(255,255,255,0.15); color: #fff; font-size: 14.5px; font-weight: 800; cursor: pointer; margin-top: 12px; width: 100%; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Join</button>
+                        <button type="submit" style="border-radius: 12px; height: 48px; background: var(--accent, #c7ff24); border: none; color: #000; font-size: 14.5px; font-weight: 800; cursor: pointer; margin-top: 12px; width: 100%; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Join</button>
                     </form>
 
                     <div style="text-align: center; margin-top: 24px; font-size: 13.5px; color: rgba(255,255,255,0.6); cursor: pointer;" onclick="showLoginView()">Have an account? <strong style="color: #fff; font-weight: 700;">Sign In</strong></div>
@@ -405,7 +405,7 @@
             <div id="memberAppWrapper" style="display: none; flex-direction: column; height: 100%; overflow: hidden;">
                 <header class="app-header" id="memberAppHeader" style="border-bottom: 1px solid rgba(255,255,255,0.05); background-color: #0b0b0b; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; min-height: 54px; box-sizing: border-box; flex-shrink: 0;">
                     <div id="headerLeftArea" style="display: flex; align-items: center; gap: 10px;">
-                        <p style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.85); margin: 0; display: flex; align-items: center;">Hi, <span id="homeMemberFirstName">User</span>! 👋</p>
+                        <p style="font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.85); margin: 0; display: flex; align-items: center;">Hi, <span id="homeMemberFirstName">User</span>!</p>
                     </div>
 
                     <div id="headerRightArea" style="display: flex; align-items: center; gap: 10px;">
@@ -857,7 +857,7 @@
                                     <div style="border-top: 1px solid var(--border-color); padding-top: 12px;">
                                         <span style="font-size: 10px; color: var(--text-tertiary); text-transform: uppercase;">Workout Notes</span>
                                         <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.4; margin-top: 4px; font-style: italic;">
-                                            💪 Standard high-intensity training session at GymOS. Consistency is the key to progress!
+                                            Standard high-intensity training session at GymOS. Consistency is the key to progress!
                                         </p>
                                     </div>
                                 </div>
@@ -997,7 +997,7 @@
 
                             <!-- Empty State -->
                             <div id="subHistoryEmptyState" class="empty-state-container" style="display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 80px 20px;">
-                                <div style="font-size: 40px; margin-bottom: 16px;">🏋️</div>
+                                <div style="margin-bottom: 16px; color: var(--text-tertiary);"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M6 5v14M18 5v14M2 9v6M22 9v6M6 12h12"/></svg></div>
                                 <h4 style="font-size: 17px; font-weight: 800; color: var(--text-primary); margin: 0 0 6px 0;">No Attendance History Yet</h4>
                                 <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0; line-height: 1.4; max-width: 260px;">Your completed gym sessions will appear here after your first check-in.</p>
                             </div>
@@ -1361,7 +1361,7 @@
 
                             <!-- Weight Journey Empty State -->
                             <div id="statsEmptyState" style="display: none; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; margin-bottom: 20px;">
-                                <span style="font-size: 32px; margin-bottom: 12px;">📈</span>
+                                <span style="margin-bottom: 12px; color: var(--accent); display: flex; justify-content: center;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></span>
                                 <h4 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0 0 6px 0;">Weight Journey Starts Here</h4>
                                 <p style="font-size: 12.5px; color: rgba(255,255,255,0.5); margin: 0; line-height: 1.5;">Keep updating your weight regularly to see your progress over time.</p>
                             </div>
@@ -1490,7 +1490,7 @@
 
                 <div id="checkoutConfirmModal" class="member-modal" role="dialog" aria-modal="true" aria-labelledby="checkoutConfirmTitle" style="display:none; z-index: 2000;">
                     <div class="member-modal-card" style="text-align: center; max-width: 320px; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 24px 20px;">
-                        <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); border: 1.5px solid rgba(239, 68, 68, 0.25); color: #ef4444; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 24px;">🏃</div>
+                        <div style="width: 54px; height: 54px; border-radius: 50%; background: rgba(239, 68, 68, 0.1); border: 1.5px solid rgba(239, 68, 68, 0.25); color: #ef4444; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg></div>
                         <h3 id="checkoutConfirmTitle" style="font-size: 20px; font-weight: 800; color: #fff; margin: 0 0 8px 0;">End Workout?</h3>
                         <p style="font-size: 13.5px; color: rgba(255, 255, 255, 0.6); margin: 0 0 24px 0; line-height: 1.5;">Are you sure you want to check out?</p>
                         
@@ -1503,7 +1503,7 @@
 
                 <div id="cameraInstructionsModal" class="member-modal" role="dialog" aria-modal="true" style="display:none; z-index: 2000;">
                     <div class="member-modal-card" style="text-align: left; max-width: 320px;">
-                        <div class="member-modal-icon" style="background-color: var(--accent); color: white; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">⚙</div>
+                        <div class="member-modal-icon" style="background-color: var(--accent); color: white; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></div>
                         <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary); text-align: center;">Camera Permissions Guide</h3>
                         <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px;">
                             <strong>iOS (Safari):</strong> Go to <em>Settings</em> > <em>Safari</em> > <em>Camera</em>, and set permissions to <strong>Allow</strong>.

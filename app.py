@@ -957,17 +957,34 @@ def admin_stats():
     cursor = conn.cursor()
     gym_id = session["gym_id"]
 
-    # 1. Total Members
-    cursor.execute("SELECT COUNT(*) FROM members WHERE gym_id = ? AND status NOT IN ('pending', 'rejected')", (gym_id,))
-    t_members = cursor.fetchone()[0]
-
-    # 2. Active Members (Active status and active membership duration)
-    today = now_ist().strftime("%Y-%m-%d")
+    # 1. Members counts (Total, New this week, Pending registrations) in 1 query
+    week_start = (now_ist() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
-        SELECT COUNT(distinct member_id) FROM memberships
-        WHERE gym_id = ? AND status = 'active' AND end_date >= ?
-    """, (gym_id, today))
-    act_members = cursor.fetchone()[0]
+        SELECT
+            COUNT(CASE WHEN status NOT IN ('pending', 'rejected') THEN 1 END) as total_members,
+            COUNT(CASE WHEN status NOT IN ('pending', 'rejected') AND joined_at >= ? THEN 1 END) as new_members_week,
+            COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_regs_count
+        FROM members
+        WHERE gym_id = ?
+    """, (week_start, gym_id))
+    m_counts = cursor.fetchone()
+    t_members = m_counts[0] or 0
+    new_members_week = m_counts[1] or 0
+    pending_regs_count = m_counts[2] or 0
+
+    # 2. Active Members & Expiring Members in 1 query
+    today = now_ist().strftime("%Y-%m-%d")
+    next_week = (now_ist() + timedelta(days=7)).strftime("%Y-%m-%d")
+    cursor.execute("""
+        SELECT
+            COUNT(DISTINCT CASE WHEN substring(end_date from 1 for 10) >= ? THEN member_id END) as active_members,
+            COUNT(CASE WHEN substring(end_date from 1 for 10) >= ? AND substring(end_date from 1 for 10) <= ? THEN 1 END) as expiring_members
+        FROM memberships
+        WHERE gym_id = ? AND status = 'active'
+    """, (today, today, next_week, gym_id))
+    ms_counts = cursor.fetchone()
+    act_members = ms_counts[0] or 0
+    expiring_members = ms_counts[1] or 0
 
     # 3. Today's Checkins
     today_start = now_ist().strftime("%Y-%m-%d 00:00:00")
@@ -975,69 +992,81 @@ def admin_stats():
         SELECT COUNT(*) FROM attendance
         WHERE gym_id = ? AND status = 'success' AND check_in_time >= ?
     """, (gym_id, today_start))
-    today_checkins = cursor.fetchone()[0]
+    today_checkins = cursor.fetchone()[0] or 0
 
-    # 4. Today's Revenue
+    # 4. Revenue & Payments stats in 1 aggregated query
+    now_dt = now_ist()
+    month_start = now_dt.strftime("%Y-%m-01 00:00:00")
+    if now_dt.month == 1:
+        last_month_start = f"{now_dt.year - 1}-12-01 00:00:00"
+        last_month_end = f"{now_dt.year}-01-01 00:00:00"
+    else:
+        last_month_start = f"{now_dt.year}-{str(now_dt.month - 1).zfill(2)}-01 00:00:00"
+        last_month_end = month_start
+
     cursor.execute("""
-        SELECT SUM(amount) FROM payments
+        SELECT
+            SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) as lifetime_revenue,
+            SUM(CASE WHEN status = 'paid' AND payment_date >= ? THEN amount ELSE 0 END) as today_revenue,
+            SUM(CASE WHEN status = 'paid' AND payment_date >= ? THEN amount ELSE 0 END) as monthly_revenue,
+            SUM(CASE WHEN status = 'paid' AND payment_date >= ? AND payment_date < ? THEN amount ELSE 0 END) as last_month_revenue,
+            COUNT(CASE WHEN status IN ('pending', 'overdue') THEN 1 END) as pending_payments,
+            SUM(CASE WHEN status IN ('pending', 'overdue') THEN amount ELSE 0 END) as pending_amount,
+            COUNT(CASE WHEN status = 'pending_approval' THEN 1 END) as pending_approvals
+        FROM payments
+        WHERE gym_id = ?
+    """, (today_start, month_start, last_month_start, last_month_end, gym_id))
+    p_row = cursor.fetchone()
+    lifetime_revenue = p_row[0] or 0.0
+    today_revenue = p_row[1] or 0.0
+    monthly_revenue = p_row[2] or 0.0
+    last_month_revenue = p_row[3] or 0.0
+    pending_payments = p_row[4] or 0
+    pending_amount = p_row[5] or 0.0
+    pending_approvals = p_row[6] or 0
+
+    if last_month_revenue > 0:
+        growth_rate = round(((monthly_revenue - last_month_revenue) / last_month_revenue) * 100, 1)
+    else:
+        growth_rate = 100.0 if monthly_revenue > 0 else 0.0
+
+    # 5. Chart Data: Monthly Revenue Last 6 Months (in 1 single query)
+    six_months_ago = (now_ist() - timedelta(days=180)).strftime("%Y-%m-01 00:00:00")
+    cursor.execute("""
+        SELECT substring(payment_date from 1 for 7) as ym, SUM(amount) as rev
+        FROM payments
         WHERE gym_id = ? AND status = 'paid' AND payment_date >= ?
-    """, (gym_id, today_start))
-    today_revenue = cursor.fetchone()[0] or 0.0
+        GROUP BY substring(payment_date from 1 for 7)
+    """, (gym_id, six_months_ago))
+    rev_by_month = {row[0]: (row[1] or 0.0) for row in cursor.fetchall()}
 
-    # 5. Monthly Revenue (Current Month)
-    month_start = now_ist().strftime("%Y-%m-01 00:00:00")
-    cursor.execute("""
-        SELECT SUM(amount) FROM payments
-        WHERE gym_id = ? AND status = 'paid' AND payment_date >= ?
-    """, (gym_id, month_start))
-    monthly_revenue = cursor.fetchone()[0] or 0.0
-
-    # 6. Pending / Overdue Payments
-    cursor.execute("SELECT COUNT(*), SUM(amount) FROM payments WHERE gym_id = ? AND status IN ('pending', 'overdue')", (gym_id,))
-    row_pending = cursor.fetchone()
-    pending_payments = row_pending[0] or 0
-    pending_amount = row_pending[1] or 0.0
-
-    # 6b. Pending Approval Payments
-    cursor.execute("SELECT COUNT(*) FROM payments WHERE gym_id = ? AND status = 'pending_approval'", (gym_id,))
-    pending_approvals = cursor.fetchone()[0] or 0
-
-    # 7. Memberships Expiring (within 7 Days)
-    next_week = (now_ist() + timedelta(days=7)).strftime("%Y-%m-%d")
-    cursor.execute("""
-        SELECT COUNT(*) FROM memberships
-        WHERE gym_id = ? AND status = 'active' AND end_date >= ? AND end_date <= ?
-    """, (gym_id, today, next_week))
-    expiring_members = cursor.fetchone()[0]
-
-    # 8. New Members This Week
-    week_start = (now_ist() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute("SELECT COUNT(*) FROM members WHERE gym_id = ? AND joined_at >= ? AND status NOT IN ('pending', 'rejected')", (gym_id, week_start))
-    new_members_week = cursor.fetchone()[0]
-
-    # 9. Chart Data: Monthly Revenue Last 6 Months
     revenue_chart = []
     for i in range(5, -1, -1):
         target_month = (now_ist() - timedelta(days=i*30))
-        m_start = target_month.strftime("%Y-%m-01 00:00:00")
-        m_end = (target_month + timedelta(days=31)).strftime("%Y-%m-01 00:00:00")
-        m_label = target_month.strftime("%b")
+        ym_key = target_month.strftime("%Y-%m")
+        revenue_chart.append({
+            "month": target_month.strftime("%b"),
+            "revenue": rev_by_month.get(ym_key, 0.0)
+        })
 
-        cursor.execute("SELECT SUM(amount) FROM payments WHERE gym_id = ? AND status = 'paid' AND payment_date >= ? AND payment_date < ?", (gym_id, m_start, m_end))
-        rev = cursor.fetchone()[0] or 0.0
-        revenue_chart.append({"month": m_label, "revenue": rev})
+    # 6. Chart Data: Attendance Last 7 Days (in 1 single query)
+    seven_days_ago = (now_ist() - timedelta(days=6)).strftime("%Y-%m-%d 00:00:00")
+    cursor.execute("""
+        SELECT substring(check_in_time from 1 for 10) as dt, COUNT(*) as cnt
+        FROM attendance
+        WHERE gym_id = ? AND status = 'success' AND check_in_time >= ?
+        GROUP BY substring(check_in_time from 1 for 10)
+    """, (gym_id, seven_days_ago))
+    att_by_day = {row[0]: row[1] for row in cursor.fetchall()}
 
-    # 10. Chart Data: Attendance Last 7 Days
     attendance_chart = []
     for i in range(6, -1, -1):
         target_day = (now_ist() - timedelta(days=i))
-        d_start = target_day.strftime("%Y-%m-%d 00:00:00")
-        d_end = target_day.strftime("%Y-%m-%d 23:59:59")
-        d_label = target_day.strftime("%a")
-
-        cursor.execute("SELECT COUNT(*) FROM attendance WHERE gym_id = ? AND status = 'success' AND check_in_time >= ? AND check_in_time <= ?", (gym_id, d_start, d_end))
-        cnt = cursor.fetchone()[0]
-        attendance_chart.append({"day": d_label, "count": cnt})
+        dt_key = target_day.strftime("%Y-%m-%d")
+        attendance_chart.append({
+            "day": target_day.strftime("%a"),
+            "count": att_by_day.get(dt_key, 0)
+        })
 
     # 11. Pending Payments List
     cursor.execute("""
@@ -1399,7 +1428,7 @@ def admin_dashboard_expiring_soon():
         FROM memberships ms
         JOIN members m ON ms.member_id = m.id
         LEFT JOIN plans pl ON ms.plan_id = pl.id
-        WHERE ms.gym_id = ? AND ms.status = 'active' AND ms.end_date >= ? AND ms.end_date <= ?
+        WHERE ms.gym_id = ? AND ms.status = 'active' AND substring(ms.end_date from 1 for 10) >= ? AND substring(ms.end_date from 1 for 10) <= ?
         ORDER BY ms.end_date ASC
     """, (session["gym_id"], today, next_week))
     rows = [dict(r) for r in cursor.fetchall()]
